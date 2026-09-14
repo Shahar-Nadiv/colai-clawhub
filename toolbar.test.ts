@@ -5065,11 +5065,14 @@ describe("what the plugin ships", () => {
      * them compiled anything.
      *
      * So the binary is staged into `bin/` before the package is packed, and that is what
-     * ships. The container run under `test/` is what would notice if the host ever
-     * stopped forcing it; nothing here reads OpenClaw's source to find out.
+     * ships — gzipped, because the registry takes files up to 10 MB and the binary is
+     * over 12. It is laid out on first use instead of on install; `src/unpack.ts` says
+     * why that is not the same thing as a postinstall. The container run under `test/` is
+     * what would notice if the host ever stopped forcing `--ignore-scripts`; nothing here
+     * reads OpenClaw's source to find out.
      */
     expect(manifest.scripts?.postinstall, "a postinstall here can never run").toBeUndefined();
-    expect(shipped("bin/"), "the built toolbar travels in the tarball").toBe(true);
+    expect(shipped("bin/colai-toolbar.gz"), "the built toolbar travels in the tarball").toBe(true);
     // Two ways to produce it, and they are not interchangeable: one for working on it
     // here, one for the copy strangers get. Which is which is settled by the test below
     // about publishing; this only asserts both exist.

@@ -19,11 +19,13 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { gzipSync } from "node:zlib";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const IMAGE = "colai-release-build:jammy";
@@ -113,7 +115,25 @@ try {
     `${JSON.stringify({ image: IMAGE, glibc, at: new Date().toISOString().slice(0, 10), sha256: digest }, null, 2)}\n`,
   );
 
+  /*
+   * And the archive, which is what actually ships.
+   *
+   * The registry takes files up to 10 MB and this binary is over 12, so the uncompressed
+   * one cannot be published — see `src/unpack.ts`. Level 9 because this runs once at
+   * release time and every install pays for the difference.
+   *
+   * Both are written: the binary because everything local reads it — the digest, the
+   * glibc floor, the fresh-install harness — and the archive because `files` ships that.
+   */
+  const archive = `${staged}.gz`;
+  writeFileSync(archive, gzipSync(readFileSync(staged), { level: 9 }));
+
+  const asMegabytes = (bytes) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   console.log(`colai: staged at bin/colai-toolbar, runs on glibc ${glibc} and newer.`);
+  console.log(
+    `colai: ships as bin/colai-toolbar.gz — ` +
+      `${asMegabytes(statSync(staged).size)} unpacked, ${asMegabytes(statSync(archive).size)} packed.`,
+  );
   console.log(`colai: sha256 ${digest}`);
 } finally {
   // Belt to the braces of the container clearing its own `target/`: anything left that

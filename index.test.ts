@@ -4,15 +4,17 @@
 // runs `register`, because the failure it protects against — a plugin that installs,
 // loads, and quietly registers nothing — leaves no other trace.
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { gzipSync } from "node:zlib";
 import { describe, expect, it as test } from "vitest";
 import colai from "./index.js";
 import { notWhatWasBuilt } from "./src/digest.js";
 import { toolbarOnScreen } from "./src/running.js";
 import { screenTrouble } from "./src/screen.js";
 import { Toolbar } from "./src/toolbar-process.js";
+import { layOutTheToolbar } from "./src/unpack.js";
 import { createTestPluginApi } from "./test/plugin-api.js";
 
 type Service = { id: string; start: (ctx: unknown) => void; stop?: (ctx: unknown) => void };
@@ -141,6 +143,8 @@ describe("the plugin OpenClaw loads", () => {
   });
 });
 
+const sha = (bytes: string) => createHash("sha256").update(bytes).digest("hex");
+
 describe("what gets spawned is what was built", () => {
   /*
    * The package ships a native program that runs as the user, photographs the screen and
@@ -162,8 +166,6 @@ describe("what gets spawned is what was built", () => {
     return binary;
   }
 
-  const sha = (bytes: string) => createHash("sha256").update(bytes).digest("hex");
-
   test("a binary that matches its digest is allowed through", () => {
     expect(notWhatWasBuilt(staged("toolbar", sha("toolbar")))).toBeNull();
   });
@@ -179,6 +181,64 @@ describe("what gets spawned is what was built", () => {
     // Straight out of `target/`, never staged, nothing to compare against. Refusing it
     // would mean refusing to run the thing somebody just compiled.
     expect(notWhatWasBuilt(staged("freshly compiled"))).toBeNull();
+  });
+});
+
+describe("the toolbar is laid out before it is spawned", () => {
+  /*
+   * The binary ships compressed and is unpacked on first use. Two reasons this is worth
+   * testing rather than trusting: it writes an executable, and it is the one path where
+   * two callers can arrive at once — the CLI and the autostart both ask for the toolbar.
+   */
+  function packed(bytes: string): { archive: string; binary: string } {
+    const dir = mkdtempSync(join(tmpdir(), "colai-unpack-"));
+    const binary = join(dir, "colai-toolbar");
+    const archive = `${binary}.gz`;
+    writeFileSync(archive, gzipSync(Buffer.from(bytes)));
+    return { archive, binary };
+  }
+
+  test("the archive becomes an executable with the bytes that went in", () => {
+    const { archive, binary } = packed("a whole toolbar");
+    expect(layOutTheToolbar(archive, binary)).toBeNull();
+    expect(readFileSync(binary, "utf8")).toBe("a whole toolbar");
+    // Without this the plugin installs, unpacks, and then cannot spawn what it unpacked.
+    expect(statSync(binary).mode & 0o111).toBeTruthy();
+  });
+
+  test("a binary already there is left exactly as it is", () => {
+    // Every run after the first, and the case where somebody has put their own build
+    // there on purpose. Re-unpacking would silently overwrite it.
+    const { archive, binary } = packed("shipped");
+    writeFileSync(binary, "the one already here");
+    expect(layOutTheToolbar(archive, binary)).toBeNull();
+    expect(readFileSync(binary, "utf8")).toBe("the one already here");
+  });
+
+  test("a corrupt archive is refused by name, not left half written", () => {
+    const { archive, binary } = packed("fine");
+    writeFileSync(archive, "not gzip at all");
+    expect(layOutTheToolbar(archive, binary)).toContain("could not unpack");
+    // The gate after this hashes whatever is on disk, so a partial file here would be
+    // caught — but it would be caught as "wrong digest", which reads like tampering.
+    expect(existsSync(binary)).toBe(false);
+  });
+
+  test("nowhere to write says so, and says what to do about it", () => {
+    const { archive, binary } = packed("a whole toolbar");
+    const refusal = layOutTheToolbar(archive, join(binary, "beneath-a-file", "colai-toolbar"));
+    expect(refusal).toContain("could not write the toolbar");
+    expect(refusal).toContain("writable");
+  });
+
+  test("what is unpacked is what the digest gate then checks", () => {
+    // The two halves meet here: unpack writes the file, `notWhatWasBuilt` hashes it.
+    // Nothing verifies the archive itself, on purpose — this is the test that says the
+    // bytes still get checked.
+    const { archive, binary } = packed("a whole toolbar");
+    writeFileSync(`${binary}.sha256`, `${sha("a whole toolbar")}\n`);
+    expect(layOutTheToolbar(archive, binary)).toBeNull();
+    expect(notWhatWasBuilt(binary)).toBeNull();
   });
 });
 
@@ -408,9 +468,26 @@ describe("what the published package promises", () => {
   test("everything the toolbar needs at runtime is in the tarball", () => {
     // `files` is an allowlist. Dropping one of these produces a plugin that installs
     // cleanly and then does nothing, which no other test would notice.
-    for (const needed of ["bin/", "dist/", "toolbar/ui/", "openclaw.plugin.json"]) {
+    for (const needed of [
+      "bin/colai-toolbar.gz",
+      "bin/colai-toolbar.sha256",
+      "dist/",
+      "toolbar/ui/",
+      "openclaw.plugin.json",
+    ]) {
       expect(manifest.files, `${needed} must ship`).toContain(needed);
     }
+  });
+
+  test("the binary ships compressed, because uncompressed it cannot be published", () => {
+    /*
+     * The registry takes files up to 10 MB and the binary is over 12, so `bin/` — which
+     * would sweep the uncompressed one in — produces a tarball that packs cleanly and is
+     * then rejected on upload with a bare `413`. That failure arrives at the very last
+     * step, from a server, with nothing naming the file, so it is worth failing here.
+     */
+    expect(manifest.files).not.toContain("bin/");
+    expect(manifest.files).not.toContain("bin/colai-toolbar");
   });
 
   test("the entry the manifest names is one the host can resolve", () => {

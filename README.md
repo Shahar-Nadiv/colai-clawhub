@@ -23,6 +23,10 @@ openclaw plugins install @colai/toolbar
 The toolbar ships already built, so nothing compiles on your machine and no Rust toolchain
 is needed. It starts with the Gateway and puts itself on screen.
 
+It travels compressed and unpacks itself the first time it is asked for, which means the
+plugin's own directory has to be writable on that first run — it is, on a normal install.
+The unpacked binary is checked against the digest shipped with it before anything runs.
+
 ```bash
 openclaw colai show      # put it on screen
 openclaw colai hide      # put it away

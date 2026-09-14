@@ -102,7 +102,7 @@ console.log(`  ${report.entryCount} files, ${megabytes(report.size)} packed`);
 const shipped = new Set(report.files.map((file) => file.path));
 const needed = [
   "dist/index.js",
-  "bin/colai-toolbar",
+  "bin/colai-toolbar.gz",
   "bin/colai-toolbar.sha256",
   "README.md",
   "LICENSE",

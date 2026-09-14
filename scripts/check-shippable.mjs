@@ -35,7 +35,18 @@ const digestFile = `${binary}.sha256`;
 const OLDEST_SUPPORTED = "2.35";
 
 /** What the tarball is useless without, whatever else is in it. */
-const MUST_SHIP = ["bin/", "dist/", "toolbar/ui/", "openclaw.plugin.json", "README.md", "LICENSE"];
+// `bin/colai-toolbar.gz` and not `bin/`: the uncompressed binary is over the registry's
+// 10 MB per-file limit and cannot be published, so shipping the directory would ship a
+// tarball nobody can upload. See `src/unpack.ts`.
+const MUST_SHIP = [
+  "bin/colai-toolbar.gz",
+  "bin/colai-toolbar.sha256",
+  "dist/",
+  "toolbar/ui/",
+  "openclaw.plugin.json",
+  "README.md",
+  "LICENSE",
+];
 
 function older(left, right) {
   const [leftMajor, leftMinor] = left.split(".").map(Number);

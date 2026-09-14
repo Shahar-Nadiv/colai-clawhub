@@ -27,6 +27,9 @@ send it with a picture of exactly what you meant.
 - It says which of `xprop` and `xwininfo` is missing, and how to install them, instead of
   silently failing to name the window a mark was made on.
 - A missing runtime library surfaces as the loader's own message naming the library.
+- The binary travels compressed and unpacks on first use, so the plugin's directory must
+  be writable the first time the toolbar is asked for. What is unpacked is checked against
+  the digest shipped beside it before it is ever run.
 
 Proved on Ubuntu 22.04, Debian 12 and Debian 13, installed from the packed tarball into a
 machine that had never seen it, drawn on a screen of that machine's own, and uninstalled

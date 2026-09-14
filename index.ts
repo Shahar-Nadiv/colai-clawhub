@@ -19,6 +19,7 @@ import { notWhatWasBuilt } from "./src/digest.js";
 import { whereabouts } from "./src/running.js";
 import { screenTrouble } from "./src/screen.js";
 import { Toolbar } from "./src/toolbar-process.js";
+import { layOutTheToolbar } from "./src/unpack.js";
 
 /**
  * The package root, whichever file is running.
@@ -93,8 +94,19 @@ function logFile(stateDir: string): string {
 }
 
 function toolbarBinary(): string | null {
+  // The shipped one arrives compressed and is laid out on first use — see `unpack.ts`
+  // for why. A checkout and a `cargo build` have no archive and skip straight past this.
+  const shipped = join(here, "bin/colai-toolbar");
+  const archive = `${shipped}.gz`;
+  if (!existsSync(shipped) && existsSync(archive)) {
+    const trouble = layOutTheToolbar(archive, shipped);
+    if (trouble) {
+      console.error(`The colai toolbar ${trouble}`);
+      return null;
+    }
+  }
   const paths = [
-    join(here, "bin/colai-toolbar"),
+    shipped,
     join(here, "toolbar/src-tauri/target/release/colai-toolbar"),
     join(here, "toolbar/src-tauri/target/debug/colai-toolbar"),
   ];
