@@ -7,13 +7,13 @@ import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createTestPluginApi } from "./test/plugin-api.js";
 import { describe, expect, it as test } from "vitest";
 import colai from "./index.js";
 import { notWhatWasBuilt } from "./src/digest.js";
 import { toolbarOnScreen } from "./src/running.js";
 import { screenTrouble } from "./src/screen.js";
 import { Toolbar } from "./src/toolbar-process.js";
+import { createTestPluginApi } from "./test/plugin-api.js";
 
 type Service = { id: string; start: (ctx: unknown) => void; stop?: (ctx: unknown) => void };
 type CliRegistration = { descriptors?: { name: string }[] };
