@@ -5,3 +5,8 @@ bin/
 dist/
 node_modules/
 toolbar/src-tauri/target/
+
+# Where `clawhub package pack` puts the tarball it uploads. It is the build output
+# again, 5 MB of it, and committing one would put a stale copy of the plugin in the
+# repository people read to check what the plugin is.
+.pack/

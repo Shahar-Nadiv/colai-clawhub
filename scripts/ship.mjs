@@ -14,14 +14,25 @@
 // So this is a thing you run, on purpose, and then publish:
 //
 //     npm run ship
-//     npx clawhub@0.23.3 package publish . --dry-run
-//     npx clawhub@0.23.3 package publish .
+//     npx clawhub@0.23.3 package pack . --pack-destination .pack
+//     npx clawhub@0.23.3 package publish .pack/<tarball> --source-repo <owner/repo> \
+//       --source-commit <sha>
 //
-// The argument is a *source*, not a package name: a folder, or `owner/repo` on GitHub.
-// `colai/toolbar` looked like a package name and was read as a GitHub repository, which
-// answered `GitHub repo not found`. It has to be the folder, because the binary and the
-// built runtime are not in the repository — they are gitignored, and a GitHub-sourced
-// publish would ship a plugin with no toolbar in it.
+// Two details that each cost a rejected publish.
+//
+// The argument is a *source*, not a package name: a folder, `owner/repo` on GitHub, or a
+// packed `.tgz`. `colai/toolbar` looked like a package name, was read as a GitHub
+// repository, and answered `GitHub repo not found`.
+//
+// And it has to be the packed tarball, not the folder. Publishing a folder uploads every
+// file as its own multipart part — for this package 92 of them and 13.6 MB of raw bytes,
+// which the registry refuses with a bare `413 Request Entity Too Large`. The tarball is
+// one 5.3 MB part because it is compressed, and it is the only path with a fallback: over
+// 18 MB the CLI stages it to storage first rather than failing.
+//
+// Publishing a tarball cannot read the git checkout it came from, so the provenance has to
+// be passed. It must name a commit that is *pushed* — ClawHub records it as the source a
+// reviewer reads, and a local-only SHA points at nothing.
 //
 // It is deliberately not a hook of any kind, and it is not called `prepublish` either:
 // npm still treats that name as a lifecycle in some versions and runs it on `npm
@@ -111,6 +122,31 @@ if (!runtime.includes(digest)) {
   process.exit(1);
 }
 
+// The commit a reviewer would be sent to. Reported rather than assumed: a publish that
+// names an unpushed SHA is provenance pointing at nothing.
+const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" });
+const sha = head.status === 0 ? head.stdout.trim() : "<sha>";
+const pushed =
+  spawnSync("git", ["branch", "-r", "--contains", sha], {
+    cwd: root,
+    encoding: "utf8",
+  }).stdout?.trim() ?? "";
+if (sha !== "<sha>" && !pushed) {
+  console.error(`\ncolai: HEAD (${sha.slice(0, 12)}) is not on any remote branch.`);
+  console.error("Push it first — ClawHub records it as the source people read.");
+  process.exit(1);
+}
+
 console.log("\ncolai: ready to publish.");
-console.log("  npx clawhub@0.23.3 package publish . --dry-run");
-console.log("  npx clawhub@0.23.3 package publish .");
+console.log("  npx clawhub@0.23.3 package pack . --pack-destination .pack");
+// The name npm gives the tarball: scope folded into the filename, `@` dropped.
+const tarball = `${report.name.replace("@", "").replace("/", "-")}-${report.version}.tgz`;
+// `owner/repo` out of the remote, whichever spelling it is written in.
+const remote = spawnSync("git", ["remote", "get-url", "origin"], { cwd: root, encoding: "utf8" });
+const repo =
+  remote.stdout
+    ?.trim()
+    .replace(/\.git$/, "")
+    .match(/[:/]([^/]+\/[^/]+)$/)?.[1] ?? "<owner/repo>";
+console.log(`  npx clawhub@0.23.3 package publish .pack/${tarball} \\`);
+console.log(`    --source-repo ${repo} --source-commit ${sha}`);
