@@ -19,7 +19,7 @@
 # Usage:
 #   ./fresh-install.sh                    every variant
 #   ./fresh-install.sh jammy              one variant
-#   ./fresh-install.sh --display jammy    pass this desktop's screen in, so it can draw
+#   ./fresh-install.sh --draws jammy      start a screen inside it, so it can draw
 #   ./fresh-install.sh --keep jammy       leave the image behind, for iterating
 #
 # Variants are distributions now, not toolchain combinations. `jammy` is the one that
@@ -33,14 +33,15 @@ plugin="$(cd "$here/.." && pwd)"
 # container that had already mounted it — which fails as `EISDIR` several steps later and
 # reads like a packaging bug rather than what it is.
 work="$(mktemp -d "${TMPDIR:-/tmp}/colai-fresh-install-XXXXXX")"
-share_display=0
+# Give the container a screen of its own and ask the X server what landed on it.
+check_draws=0
 # Images are removed as each variant finishes; `--keep` holds on to them for iterating.
 keep_images=0
 declare -a wanted=()
 
 for arg in "$@"; do
   case "$arg" in
-    --display) share_display=1 ;;
+    --draws) check_draws=1 ;;
     --keep) keep_images=1 ;;
     -*) echo "unknown option: $arg" >&2; exit 2 ;;
     *) wanted+=("$arg") ;;
@@ -112,10 +113,23 @@ for variant in "${wanted[@]}"; do
   # Which of the two outcomes above this variant is entitled to.
   declare -a wants=(-e "WANT_RUNTIME=$with_runtime")
 
+  # The last mile, and the only check here that asks whether anything appears.
+  #
+  # Everything else proves the toolbar *refuses* correctly — no screen, no Wayland, no
+  # libraries. None of it proves it draws, which is the entire product.
+  #
+  # The screen is made up inside the container. An earlier version passed this desktop's X
+  # socket in and compared photographs of it before and after, which answered a question
+  # about one window by capturing everything else on the developer's screen and writing it
+  # to a temporary directory. A private screen and a direct question to the X server is
+  # both less and better: a photograph can only say something changed, and the server can
+  # say which window, how big, and whether it is actually mapped.
+  #
+  # Only where the runtime libraries are installed. A variant built without them is
+  # supposed to fail in the loader, and that has nothing to do with drawing.
   declare -a screen=()
-  if [ "$share_display" = "1" ] && [ -n "${DISPLAY:-}" ]; then
-    # The last mile: a toolbar compiled inside the container, drawn on this desktop.
-    screen=(-e "DISPLAY=$DISPLAY" -v /tmp/.X11-unix:/tmp/.X11-unix)
+  if [ "$check_draws" = "1" ] && [ "$with_runtime" = "1" ]; then
+    screen=(-e "WANT_DRAW=1")
   fi
 
   began=$(date +%s)
@@ -147,37 +161,95 @@ for variant in "${wanted[@]}"; do
         # machine at all still starts with ELF, so the check could not fail on the one
         # class of bug it exists to catch.
         #
-        # It runs it now, and reads what came out. There is no display in here, so a
-        # binary that loads must refuse with the sentence it promises; one that cannot
-        # load says so through the dynamic loader instead.
+        # It runs it now, and reads what came out. With no display — every variant but
+        # \`--draws\` — a binary that loads must refuse with the sentence it promises, and
+        # one that cannot load says so through the dynamic loader instead. With a screen,
+        # refusing is the wrong answer and the question becomes what it put on it.
         #
-        said=\$(\"\$binary\" show 2>&1 </dev/null; true)
-        echo \"said: \$said\"
-        if echo \"\$said\" | grep -q 'error while loading shared libraries'; then
-          if [ \"\$WANT_RUNTIME\" = '1' ]; then
-            echo 'CANNOT LOAD — the runtime libraries are installed and it still will not start'
+        if [ \"\${WANT_DRAW:-0}\" = '1' ]; then
+          # A screen of this container's own, thrown away with it.
+          Xvfb :99 -screen 0 1920x1080x24 >/tmp/xvfb.log 2>&1 &
+          for _ in \$(seq 1 20); do xdpyinfo -display :99 >/dev/null 2>&1 && break; sleep 1; done
+          if ! xdpyinfo -display :99 >/dev/null 2>&1; then
+            echo 'NO SCREEN — Xvfb never came up, so this proves nothing:'
+            cat /tmp/xvfb.log
             exit 1
           fi
-          # The variant with no runtime libraries. What matters is that the failure names
-          # a library — that name is the only thing telling somebody what to install.
+          # \`show\` runs the event loop and does not return, so it goes to the background.
+          DISPLAY=:99 \"\$binary\" show --pidfile /tmp/colai.pid >/tmp/colai.log 2>&1 &
+          drew=\$!
+          sleep 8
+          if ! kill -0 \$drew 2>/dev/null; then
+            echo 'IT EXITED instead of drawing:'; cat /tmp/colai.log; exit 1
+          fi
           #
-          # Which library it names is not fixed and must not be asserted: the loader
-          # stops at the first one it cannot find, and on a base image with nothing
-          # installed that is \`libX11.so.6\` long before it ever reaches WebKitGTK.
-          if ! echo \"\$said\" | grep -qE 'lib[A-Za-z0-9_.+-]*\\.so'; then
-            echo 'the loader failed without naming what is missing'
+          # Ask the server what is on it.
+          #
+          # \`-root -tree\` and not a window-manager query: there is no window manager on
+          # this screen, and the overlay is override-redirect anyway, so it never appears
+          # in \`_NET_CLIENT_LIST\`. The tree is the server's own record of every window.
+          #
+          # The title is \`colai\`, set in \`colai.rs\`. Nothing else has a client here.
+          id=\$(DISPLAY=:99 xwininfo -root -tree 2>/dev/null \
+               | grep -i '\"colai\"' | grep -oE '0x[0-9a-f]+' | head -1)
+          if [ -z \"\$id\" ]; then
+            echo 'NO WINDOW — it stayed alive with a screen and put nothing on it:'
+            DISPLAY=:99 xwininfo -root -tree 2>/dev/null | head -20
+            cat /tmp/colai.log
+            kill \$drew 2>/dev/null || true
             exit 1
           fi
-          echo \"and where it cannot load, it names what is missing: \$(echo \"\$said\" | grep -oE 'lib[A-Za-z0-9_.+-]*\\.so[0-9.]*' | head -1)\"
-        elif echo \"\$said\" | grep -q 'no screen to draw on'; then
-          if [ \"\$WANT_RUNTIME\" != '1' ]; then
-            echo 'it started without the libraries it is supposed to need'
+          # A window can exist and be unmapped, or be one pixel. Neither is a toolbar.
+          about=\$(DISPLAY=:99 xwininfo -id \"\$id\" 2>/dev/null)
+          kill \$drew 2>/dev/null || true
+          if ! echo \"\$about\" | grep -q 'Map State: IsViewable'; then
+            echo 'NOT VIEWABLE — the window exists but is not on the screen:'
+            echo \"\$about\"
             exit 1
           fi
-          echo 'and it runs here: loaded, started, and refused a machine with no screen'
+          wide=\$(echo \"\$about\" | awk '/Width:/{print \$2}')
+          tall=\$(echo \"\$about\" | awk '/Height:/{print \$2}')
+          if [ \"\${wide:-0}\" -lt 40 ] || [ \"\${tall:-0}\" -lt 40 ]; then
+            echo \"TOO SMALL — \${wide}x\${tall} is not a toolbar:\"
+            echo \"\$about\"
+            exit 1
+          fi
+          #
+          # What this does not prove: what WebKit painted inside that window. The X server
+          # knows the window and nothing about its contents, and the screenshot this
+          # replaced did not prove it either — it compared the whole desktop, so a moved
+          # cursor passed it. Painting is the toolbar's own test suite's job.
+          echo \"and it draws: \$id, \${wide}x\${tall}, mapped and viewable\"
+          said='drew'
         else
-          echo 'UNEXPECTED — it neither ran nor failed in a way this test understands'
-          exit 1
+          said=\$(\"\$binary\" show 2>&1 </dev/null; true)
+          echo \"said: \$said\"
+          if echo \"\$said\" | grep -q 'error while loading shared libraries'; then
+            if [ \"\$WANT_RUNTIME\" = '1' ]; then
+              echo 'CANNOT LOAD — the runtime libraries are installed and it still will not start'
+              exit 1
+            fi
+            # The variant with no runtime libraries. What matters is that the failure names
+            # a library — that name is the only thing telling somebody what to install.
+            #
+            # Which library it names is not fixed and must not be asserted: the loader
+            # stops at the first one it cannot find, and on a base image with nothing
+            # installed that is \`libX11.so.6\` long before it ever reaches WebKitGTK.
+            if ! echo \"\$said\" | grep -qE 'lib[A-Za-z0-9_.+-]*\\.so'; then
+              echo 'the loader failed without naming what is missing'
+              exit 1
+            fi
+            echo \"and where it cannot load, it names what is missing: \$(echo \"\$said\" | grep -oE 'lib[A-Za-z0-9_.+-]*\\.so[0-9.]*' | head -1)\"
+          elif echo \"\$said\" | grep -q 'no screen to draw on'; then
+            if [ \"\$WANT_RUNTIME\" != '1' ]; then
+              echo 'it started without the libraries it is supposed to need'
+              exit 1
+            fi
+            echo 'and it runs here: loaded, started, and refused a machine with no screen'
+          else
+            echo 'UNEXPECTED — it neither ran nor failed in a way this test understands'
+            exit 1
+          fi
         fi
         echo
         echo '--- uninstall'
@@ -217,8 +289,9 @@ for row in "${results[@]}"; do
 done
 echo "=================================================================="
 echo
-echo "A container has no screen, so none of this proves the overlay draws."
-echo "Run one variant with --display for that, at least once."
+if [ "$check_draws" != "1" ]; then
+  echo "None of this proves the overlay draws: run one variant with --draws for that."
+fi
 
 # The images are gigabytes each and exist for one run. Kept only when something failed,
 # because that is when somebody wants to go and look inside one.

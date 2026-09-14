@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 — unreleased
+## 0.1.0 — 2026-09-14
 
 First public release.
 
@@ -29,4 +29,6 @@ send it with a picture of exactly what you meant.
 - A missing runtime library surfaces as the loader's own message naming the library.
 
 Proved on Ubuntu 22.04, Debian 12 and Debian 13, installed from the packed tarball into a
-machine that had never seen it, and uninstalled again leaving nothing behind.
+machine that had never seen it, drawn on a screen of that machine's own, and uninstalled
+again leaving nothing behind. The Fedora and Arch dependency lines above were run in clean
+containers of those distributions.

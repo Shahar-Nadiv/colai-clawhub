@@ -47,11 +47,16 @@ to change it.
 sudo apt install libwebkit2gtk-4.1-0 libsoup-3.0-0 libgtk-3-0 x11-utils
 
 # Fedora
-sudo dnf install webkit2gtk4.1 libsoup3 gtk3 xorg-x11-utils
+sudo dnf install webkit2gtk4.1 libsoup3 gtk3 xprop xwininfo
 
 # Arch
 sudo pacman -S webkit2gtk-4.1 libsoup3 gtk3 xorg-xprop xorg-xwininfo
 ```
+
+Each of those three lines has been run in a clean container of that distribution and
+checked for the four libraries and the two programs it is supposed to provide. Fedora used
+to say `xorg-x11-utils` here, which no longer exists — Fedora split it, and `xprop` and
+`xwininfo` are now packages of their own.
 
 ### Why not Wayland
 

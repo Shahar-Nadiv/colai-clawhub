@@ -109,8 +109,8 @@ pub(crate) fn grumble_about_tools() {
     }
     eprintln!(
         "[colai] Marks will still work, but they will not say which window they were made \
-         on. Install them with: sudo apt install x11-utils   (Fedora: dnf install xorg-x11-utils, \
-         Arch: pacman -S xorg-xprop xorg-xwininfo)"
+         on. Install them with: sudo apt install x11-utils   (Fedora: dnf install xprop \
+         xwininfo, Arch: pacman -S xorg-xprop xorg-xwininfo)"
     );
 }
 

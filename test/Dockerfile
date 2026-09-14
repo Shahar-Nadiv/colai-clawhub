@@ -5,10 +5,10 @@
 # the fork this plugin was cut from, because the toolbar carries a copied Gateway client
 # and testing it only against its own source is exactly the blind spot that copy has.
 #
-# There is no display in here. This proves packaging, the pre-flight checks, install and
-# uninstall, and — since the binary now refuses a machine with no screen rather than
-# crashing on one — that the shipped binary actually loads and runs here.
-# `fresh-install.sh --display` passes this desktop's X socket through for the last mile.
+# By default there is no display in here. This proves packaging, the pre-flight checks,
+# install and uninstall, and — since the binary now refuses a machine with no screen rather
+# than crashing on one — that the shipped binary actually loads and runs here.
+# `fresh-install.sh --draws` starts Xvfb inside the container for the last mile.
 #
 # The base is an argument, and that is the whole reason this file changed. It was pinned to
 # Debian 13, whose glibc is 2.41 — so the test could not fail on a binary built against a
@@ -40,11 +40,17 @@ RUN npm install -g "openclaw@${OPENCLAW_VERSION}" && openclaw --version
 #
 # `WITH_RUNTIME=0` is a variant of its own: a machine that has none of this must produce a
 # loader error somebody can act on, rather than a window that never appears.
+#
+# `xvfb` is here so the `--draws` check has a screen that belongs to nobody. It is not part
+# of what a user installs — `x11-utils` is, and is listed in the README — but a screen the
+# container makes up is the only way to ask whether the toolbar draws without borrowing the
+# developer's desktop, and borrowing it meant photographing it.
 ARG WITH_RUNTIME=1
 RUN if [ "$WITH_RUNTIME" = "1" ]; then \
       apt-get update \
       && apt-get install -y --no-install-recommends \
         libwebkit2gtk-4.1-0 libgtk-3-0 libsoup-3.0-0 libayatana-appindicator3-1 x11-utils \
+        xvfb \
       && rm -rf /var/lib/apt/lists/*; \
     fi
 
