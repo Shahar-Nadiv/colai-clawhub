@@ -15,7 +15,25 @@
 # and `--remap-path-prefix` cannot reach that one: it rewrites what rustc emits, and this
 # is not that. The author's home directory therefore shipped inside every copy. Here the
 # context is `/build`, which says nothing about anybody.
-FROM ubuntu:22.04
+# **Which Ubuntu 22.04.** A tag is a moving pointer: `ubuntu:22.04` is rebuilt whenever its
+# contents change, so two builds a month apart start from different bytes and no third
+# party — including whoever wrote this — can rebuild a release and compare it with what was
+# published. The Rust toolchain below was already pinned for exactly that reason; the base
+# it runs on was not, which made the pin below a statement about one ingredient of a recipe
+# whose others were "whatever is in the shop".
+#
+# Pinned to the digest that built the shipped 0.1.0 binary. A digest names bytes, not a
+# moving target, and `22.04` is kept beside it because a bare digest tells a reader nothing
+# about what it is — Docker verifies the digest and ignores the tag.
+#
+# Moving it is a deliberate act: change the digest, rebuild, and expect the binary to
+# change. `docker pull ubuntu:22.04` prints the current one.
+#
+# This is necessary for a reproducible build and not sufficient: the apt packages installed
+# below still float, so a rebuild months from now gets whatever `apt-get` serves that day
+# and the binary will differ. Pinning those too is the next step, and it is a larger one —
+# every version has to be found and they expire from the archive.
+FROM ubuntu:22.04@sha256:829f6df217bcbae2b371026e81711d1a787c61b2967ad09d015063663ebafbf7
 
 ENV DEBIAN_FRONTEND=noninteractive
 
