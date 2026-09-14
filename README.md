@@ -1,4 +1,4 @@
-<img src="https://raw.githubusercontent.com/Shahar-Nadiv/colai-clawhub/main/media/colai.png" alt="" width="48" align="left">
+<img src="https://raw.githubusercontent.com/Shahar-Nadiv/colai-clawhub/main/media/colai.png" alt="" width="72" align="left">
 
 # colai toolbar
 
