@@ -62,6 +62,10 @@
     "extensions": [
       "./index.ts"
     ],
+    "build": {
+      "openclawVersion": "2026.9.1",
+      "pluginSdkVersion": "2026.9.1"
+    },
     "install": {
       "clawhubSpec": "clawhub:@colai/toolbar",
       "defaultChoice": "clawhub",

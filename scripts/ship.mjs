@@ -14,8 +14,14 @@
 // So this is a thing you run, on purpose, and then publish:
 //
 //     npm run ship
-//     npx clawhub@0.23.3 package publish colai/toolbar --dry-run
-//     npx clawhub@0.23.3 package publish colai/toolbar
+//     npx clawhub@0.23.3 package publish . --dry-run
+//     npx clawhub@0.23.3 package publish .
+//
+// The argument is a *source*, not a package name: a folder, or `owner/repo` on GitHub.
+// `colai/toolbar` looked like a package name and was read as a GitHub repository, which
+// answered `GitHub repo not found`. It has to be the folder, because the binary and the
+// built runtime are not in the repository — they are gitignored, and a GitHub-sourced
+// publish would ship a plugin with no toolbar in it.
 //
 // It is deliberately not a hook of any kind, and it is not called `prepublish` either:
 // npm still treats that name as a lifecycle in some versions and runs it on `npm
@@ -106,5 +112,5 @@ if (!runtime.includes(digest)) {
 }
 
 console.log("\ncolai: ready to publish.");
-console.log("  npx clawhub@0.23.3 package publish colai/toolbar --dry-run");
-console.log("  npx clawhub@0.23.3 package publish colai/toolbar");
+console.log("  npx clawhub@0.23.3 package publish . --dry-run");
+console.log("  npx clawhub@0.23.3 package publish .");

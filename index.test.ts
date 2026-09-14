@@ -388,6 +388,23 @@ describe("what the published package promises", () => {
     expect(spec.slice("clawhub:".length)).toBe(manifest.name);
   });
 
+  test("the manifest carries what ClawHub refuses a publish without", () => {
+    /*
+     * `clawhub package publish` validates these two before it will upload anything, and
+     * the message it gives is the field path and nothing else. Both were missing, and the
+     * first thing that said so was a rejected publish — which is late, and is the kind of
+     * thing this file exists to catch instead.
+     *
+     * `openclawVersion` is what the plugin was built against, and it has to be a version
+     * rather than a range: ClawHub records it as `builtWith`, a fact about one build.
+     * `pluginApi` is the range of hosts it claims, which is a different statement.
+     */
+    const build = manifest.openclaw.build ?? {};
+    expect(build.openclawVersion).toBe("2026.9.1");
+    expect(build.openclawVersion).not.toMatch(/[<>=^~*]/);
+    expect(manifest.openclaw.compat?.pluginApi).toBeTruthy();
+  });
+
   test("everything the toolbar needs at runtime is in the tarball", () => {
     // `files` is an allowlist. Dropping one of these produces a plugin that installs
     // cleanly and then does nothing, which no other test would notice.
