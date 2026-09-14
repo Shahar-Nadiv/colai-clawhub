@@ -14,6 +14,7 @@
 import { spawn } from "node:child_process";
 import { mkdirSync, openSync } from "node:fs";
 import { dirname } from "node:path";
+import { withoutSomebodyElsesLibraries } from "./environment.js";
 import { toolbarOnScreen } from "./running.js";
 
 /** How long a toolbar gets to go before it is given up on. */
@@ -55,6 +56,8 @@ export class Toolbar {
       says.warn(`colai: could not open ${log}: ${String(error)}`);
     }
 
+    const given = withoutSomebodyElsesLibraries();
+
     // Detached: this is a window somebody looks at for hours, and closing the Gateway
     // should not take it off the screen mid-sentence.
     const started = spawn(this.binary, ["show", "--pidfile", this.pidfile], {
@@ -64,7 +67,10 @@ export class Toolbar {
       // setting, and the arguments here are words the toolbar acts on. Absent means the
       // toolbar's own default, which is the whole of the behaviour when nobody has
       // chosen — so an unset option and an empty string mean the same thing.
-      env: hotkey ? { ...process.env, COLAI_HOTKEY: hotkey } : process.env,
+      //
+      // Not `process.env` itself: a Gateway started from inside a snap hands down library
+      // and module paths that kill a system GTK program at startup. See `environment.ts`.
+      env: hotkey ? { ...given, COLAI_HOTKEY: hotkey } : given,
     });
     started.unref();
     // Without this a spawn that fails outright — the binary vanished under us, or is not
@@ -104,6 +110,9 @@ export class Toolbar {
     const asked = spawn(this.binary, ["quit", "--pidfile", this.pidfile], {
       detached: true,
       stdio: "ignore",
+      // The same binary, so the same startup. Without this a snap-confined Gateway can
+      // put a toolbar on screen and then be unable to take it off again.
+      env: withoutSomebodyElsesLibraries(),
     });
     // Same reason as in `start`: an unheard error event is thrown, not logged. Nothing to
     // say here beyond not throwing — the wait below is what decides whether it worked,

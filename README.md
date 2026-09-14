@@ -1,6 +1,12 @@
+<img src="https://raw.githubusercontent.com/Shahar-Nadiv/colai-clawhub/main/media/colai.png" alt="" width="48" align="left">
+
 # colai toolbar
 
 Point at anything on your screen and hand it to an agent.
+
+<img src="https://raw.githubusercontent.com/Shahar-Nadiv/colai-clawhub/main/media/toolbar.png" alt="The colai rail over a desktop, with the drawing tools open" width="620">
+
+[**Watch it in 30 seconds**](https://github.com/Shahar-Nadiv/colai-clawhub/blob/main/media/toolbar.mp4?raw=1)
 
 A small rail that floats over every application on your desktop. Draw a box round a thing,
 point at a thing, measure it, pick a colour off it, record a few seconds of it — then say

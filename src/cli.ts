@@ -19,6 +19,7 @@ import { spawn } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
 import { notWhatWasBuilt } from "./digest.js";
+import { withoutSomebodyElsesLibraries } from "./environment.js";
 import { toolbarOnScreen, whereabouts } from "./running.js";
 import { screenTrouble } from "./screen.js";
 
@@ -61,6 +62,10 @@ async function tellTheToolbar(
   const started = spawn(binary, [word, "--pidfile", whereabouts()], {
     detached: true,
     stdio: ["ignore", "ignore", "pipe"],
+    // Both doors again. `openclaw colai show` typed into a snap-packaged terminal
+    // inherits that snap's library paths exactly as the Gateway does, and the toolbar
+    // dies the same way. See `environment.ts`.
+    env: withoutSomebodyElsesLibraries(),
   });
 
   // Kept rather than printed as it arrives, so a toolbar that starts normally and warns

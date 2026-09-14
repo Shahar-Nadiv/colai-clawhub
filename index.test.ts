@@ -11,6 +11,7 @@ import { gzipSync } from "node:zlib";
 import { describe, expect, it as test } from "vitest";
 import colai from "./index.js";
 import { notWhatWasBuilt } from "./src/digest.js";
+import { withoutSomebodyElsesLibraries } from "./src/environment.js";
 import { toolbarOnScreen } from "./src/running.js";
 import { screenTrouble } from "./src/screen.js";
 import { Toolbar } from "./src/toolbar-process.js";
@@ -181,6 +182,78 @@ describe("what gets spawned is what was built", () => {
     // Straight out of `target/`, never staged, nothing to compare against. Refusing it
     // would mean refusing to run the thing somebody just compiled.
     expect(notWhatWasBuilt(staged("freshly compiled"))).toBeNull();
+  });
+});
+
+describe("the toolbar is not handed somebody else's libraries", () => {
+  /*
+   * Found by installing the published package into a Gateway started from inside a
+   * snap-packaged editor, which is an ordinary thing to do on Ubuntu. The toolbar died
+   * before drawing with `symbol lookup error: /snap/core20/.../libpthread.so.0:
+   * undefined symbol: __libc_pthread_init, version GLIBC_PRIVATE` and exit 127 — no
+   * window, and nothing in that sentence a person could act on.
+   *
+   * Nothing was missing and nothing was mispackaged: the same binary started normally
+   * with those variables gone. A snap rewrites where GTK modules, GIO modules, locales
+   * and libraries are found, everything it launches inherits that, and a system GTK
+   * program handed a snap's libraries against the system libc does not survive it.
+   */
+  const snapped = {
+    DISPLAY: ":1",
+    HOME: "/home/somebody",
+    LD_LIBRARY_PATH: "/snap/code/263/usr/lib/x86_64-linux-gnu",
+    GTK_PATH: "/snap/code/263/usr/lib/x86_64-linux-gnu/gtk-3.0",
+    LOCPATH: "/snap/code/263/usr/lib/locale",
+    GIO_MODULE_DIR: "/snap/code/263/usr/lib/x86_64-linux-gnu/gio/modules",
+  };
+
+  test("a snap's loader paths are dropped", () => {
+    const given = withoutSomebodyElsesLibraries(snapped);
+    for (const name of ["LD_LIBRARY_PATH", "GTK_PATH", "LOCPATH", "GIO_MODULE_DIR"]) {
+      expect(given[name], `${name} points into a snap`).toBeUndefined();
+    }
+  });
+
+  test("everything the toolbar actually reads survives", () => {
+    // It needs the screen and the home directory to start at all, and the Gateway's own
+    // variables to find the Gateway. Emptying the environment would be a worse bug.
+    const given = withoutSomebodyElsesLibraries(snapped);
+    expect(given.DISPLAY).toBe(":1");
+    expect(given.HOME).toBe("/home/somebody");
+  });
+
+  test("the same names are left alone when they point somewhere real", () => {
+    /*
+     * Dropped by value, not by name. Plenty of people set `LD_LIBRARY_PATH` on purpose —
+     * this machine has a ROS workspace in it — and a plugin that silently deletes it
+     * would be making a different mess for the same reason.
+     */
+    const deliberate = { LD_LIBRARY_PATH: "/opt/ros/jazzy/lib", GTK_PATH: "/usr/lib/gtk-3.0" };
+    expect(withoutSomebodyElsesLibraries(deliberate)).toEqual(deliberate);
+  });
+
+  test("a snap on the end of a real list still counts", () => {
+    // Snap wrappers prepend rather than replace, so the poison is usually one entry
+    // among several and a whole-value comparison would miss it.
+    const mixed = { LD_LIBRARY_PATH: "/opt/ros/jazzy/lib:/snap/core20/current/lib" };
+    expect(withoutSomebodyElsesLibraries(mixed).LD_LIBRARY_PATH).toBeUndefined();
+  });
+
+  test("a path merely mentioning snap is not a snap path", () => {
+    // `/home/me/snapshots` is not `/snap/`. Matching the word anywhere would take it.
+    const innocent = { LD_LIBRARY_PATH: "/home/me/snapshots/lib:/usr/lib/unsnapped" };
+    expect(withoutSomebodyElsesLibraries(innocent)).toEqual(innocent);
+  });
+
+  test("both doors use it — the Gateway's and the command's", () => {
+    // The plugin spawns the toolbar on autostart and the CLI spawns it on `show`. A fix
+    // on one is a toolbar that works until somebody types the documented command.
+    for (const file of ["src/toolbar-process.ts", "src/cli.ts"]) {
+      const source = readFileSync(new URL(file, import.meta.url), "utf8");
+      expect(source, `${file} spawns with the cleaned environment`).toContain(
+        "withoutSomebodyElsesLibraries",
+      );
+    }
   });
 });
 
