@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-open-settings"
+description = "Enables the colai_open_settings command without any pre-configured scope."
+commands.allow = ["colai_open_settings"]
+
+[[permission]]
+identifier = "deny-colai-open-settings"
+description = "Denies the colai_open_settings command without any pre-configured scope."
+commands.deny = ["colai_open_settings"]

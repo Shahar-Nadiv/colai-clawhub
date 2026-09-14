@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "colai",
+  "version": "0.1.0",
+  "identifier": "ai.colai.toolbar",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https://cdn.21st.dev; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'",
+      "freezePrototype": true,
+      "capabilities": [
+        {
+          "identifier": "colai-overlay",
+          "description": "The colai toolbar over the desktop: shape itself, read the frontmost application, give the screen back.",
+          "local": true,
+          "windows": ["colai-overlay"],
+          "permissions": [
+            "allow-colai-overlay",
+            "core:event:allow-listen",
+            "core:event:allow-unlisten",
+            "opener:allow-open-url",
+            "opener:allow-default-urls"
+          ]
+        }
+      ]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "appimage"],
+    "category": "Utility",
+    "shortDescription": "Point at anything on screen and hand it to an agent.",
+    "longDescription": "colai draws a toolbar over the desktop. Point at, box or draw on anything on screen, say what you want done with it, and send it to an agent through OpenClaw."
+  }
+}

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-take-keyboard"
+description = "Enables the colai_take_keyboard command without any pre-configured scope."
+commands.allow = ["colai_take_keyboard"]
+
+[[permission]]
+identifier = "deny-colai-take-keyboard"
+description = "Denies the colai_take_keyboard command without any pre-configured scope."
+commands.deny = ["colai_take_keyboard"]

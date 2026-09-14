@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-frontmost"
+description = "Enables the colai_frontmost command without any pre-configured scope."
+commands.allow = ["colai_frontmost"]
+
+[[permission]]
+identifier = "deny-colai-frontmost"
+description = "Denies the colai_frontmost command without any pre-configured scope."
+commands.deny = ["colai_frontmost"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-libraries"
+description = "Enables the colai_libraries command without any pre-configured scope."
+commands.allow = ["colai_libraries"]
+
+[[permission]]
+identifier = "deny-colai-libraries"
+description = "Denies the colai_libraries command without any pre-configured scope."
+commands.deny = ["colai_libraries"]

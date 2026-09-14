@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-points"
+description = "Enables the colai_points command without any pre-configured scope."
+commands.allow = ["colai_points"]
+
+[[permission]]
+identifier = "deny-colai-points"
+description = "Denies the colai_points command without any pre-configured scope."
+commands.deny = ["colai_points"]

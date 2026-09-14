@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-start-here"
+description = "Enables the colai_start_here command without any pre-configured scope."
+commands.allow = ["colai_start_here"]
+
+[[permission]]
+identifier = "deny-colai-start-here"
+description = "Denies the colai_start_here command without any pre-configured scope."
+commands.deny = ["colai_start_here"]

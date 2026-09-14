@@ -1,0 +1,82 @@
+{
+  "name": "@colai/toolbar",
+  "version": "0.1.0",
+  "description": "Point at anything on screen and hand it to an agent",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "openclaw-plugin",
+    "toolbar",
+    "screen",
+    "annotation",
+    "linux"
+  ],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md",
+    "index.ts",
+    "src/",
+    "dist/",
+    "bin/",
+    "openclaw.plugin.json",
+    "toolbar/ui/",
+    "toolbar/src-tauri/src/",
+    "toolbar/src-tauri/permissions/",
+    "toolbar/src-tauri/icons/",
+    "toolbar/src-tauri/Cargo.toml",
+    "toolbar/src-tauri/Cargo.lock",
+    "toolbar/src-tauri/build.rs",
+    "toolbar/src-tauri/tauri.conf.json"
+  ],
+  "dependencies": {
+    "zod": "4.4.3"
+  },
+  "scripts": {
+    "build": "node scripts/build-runtime.mjs && node scripts/build-toolbar.mjs",
+    "ship": "node scripts/ship.mjs",
+    "prepack": "node scripts/check-shippable.mjs && node scripts/build-runtime.mjs",
+    "test": "vitest run",
+    "build:runtime": "node scripts/build-runtime.mjs",
+    "build:toolbar": "node scripts/build-toolbar.mjs",
+    "build:release": "node scripts/build-release.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "openclaw": "2026.9.1",
+    "vitest": "4.1.11"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "install": {
+      "clawhubSpec": "clawhub:@colai/toolbar",
+      "defaultChoice": "clawhub",
+      "minHostVersion": ">=2026.9.1"
+    },
+    "compat": {
+      "pluginApi": ">=2026.9.1"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shahar-Nadiv/colai-clawhub.git"
+  },
+  "homepage": "https://github.com/Shahar-Nadiv/colai-clawhub#readme",
+  "bugs": {
+    "url": "https://github.com/Shahar-Nadiv/colai-clawhub/issues"
+  }
+}

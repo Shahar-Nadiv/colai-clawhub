@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-at-work"
+description = "Enables the colai_at_work command without any pre-configured scope."
+commands.allow = ["colai_at_work"]
+
+[[permission]]
+identifier = "deny-colai-at-work"
+description = "Denies the colai_at_work command without any pre-configured scope."
+commands.deny = ["colai_at_work"]

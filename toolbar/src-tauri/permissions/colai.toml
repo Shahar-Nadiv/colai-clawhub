@@ -1,0 +1,48 @@
+# Colai's overlay and settings commands.
+#
+# One window, one grant, and the grant is the point.
+#
+# The overlay covers the whole screen and reads what is in front of it. Everything it
+# can do is here, and nothing else is. If the page in it were ever compromised, that is
+# the whole blast radius.
+#
+# It was two grants when the toolbar lived inside the OpenClaw desktop app: the second
+# let an ordinary window of that app summon this one. There is no other window now.
+
+[[permission]]
+identifier = "allow-colai-overlay"
+description = "Lets the overlay shape itself, read which application is in front, and give the screen back."
+commands.allow = [
+  "colai_shape",
+  "colai_frontmost",
+  "colai_screens",
+  "colai_take_keyboard",
+  "colai_allowed",
+  "colai_agents",
+  "colai_sessions",
+  "colai_threads",
+  "colai_capture_mark",
+  "colai_forget_marks",
+  "colai_cut_recording",
+  "colai_send",
+  "colai_unwatch",
+  "colai_watch",
+  "colai_stop",
+  "colai_points",
+  "colai_said",
+  "colai_rewind",
+  "colai_start_here",
+  "colai_automate",
+  "colai_showing",
+  "colai_describe_files",
+  "colai_at_work",
+  "colai_models",
+  "colai_in_front",
+  "colai_library_search",
+  "colai_libraries",
+  "colai_pick_files",
+  "colai_pick_folder",
+  "colai_search_files",
+  "colai_release",
+  "colai_open_settings",
+]

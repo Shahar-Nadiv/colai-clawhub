@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>Toolbar</title>
+    <link rel="stylesheet" href="fonts/fonts.css" />
+    <link rel="stylesheet" href="toolbar.css" />
+  </head>
+  <body>
+    <!--
+      The toolbar: point at anything on screen and hand it to an agent.
+
+      A sibling of Quick Chat rather than part of the Control UI — both are small
+      always-on-top surfaces over the desktop, both are plain HTML and JavaScript here,
+      and neither belongs in the dashboard's window.
+
+      The rail is built by toolbar.js rather than written out, because every button is
+      the same shape and the tool list is the thing worth reading. What is markup here is
+      what is genuinely structural: the rail, the flyouts, the agent menu, and the line
+      that appears when something has gone wrong.
+    -->
+    <div id="rail-wrap" class="rail-wrap">
+      <div id="rail" class="rail" role="toolbar" aria-label="OpenClaw toolbar">
+        <span
+          id="grip"
+          class="grip"
+          title="Drag toolbar · double click to put it away"
+          aria-label="Drag toolbar. Double click to put it away."
+          aria-expanded="true"
+          >⠿</span
+        >
+        <span class="divider" data-divider></span>
+        <!-- Tool buttons are inserted here. -->
+        <span class="divider" data-divider></span>
+        <span class="divider" data-divider></span>
+
+        <div id="fly-shape" class="flyout" role="menu" hidden></div>
+        <div id="fly-design" class="flyout flyout-wide" role="menu" hidden></div>
+        <div id="fly-git" class="flyout flyout-wide" role="menu" hidden></div>
+        <div id="fly-record" class="flyout" role="menu" hidden></div>
+        <div id="fly-draw" class="flyout" role="menu" hidden></div>
+        <div id="fly-row" class="flyout flyout-wide" role="menu" hidden></div>
+        <div id="fly-points" class="flyout flyout-send" role="menu" hidden></div>
+        <div id="fly-how" class="flyout flyout-wide" role="menu" hidden></div>
+        <div
+          id="fly-automate"
+          class="flyout flyout-send"
+          role="dialog"
+          aria-label="Create an automation"
+          hidden
+        ></div>
+        <!--
+          Where the work lives once it has stopped living on somebody's screen: what is
+          waiting to be sent, what has been sent, what came back, and the way back to an
+          earlier prompt. Hung off the send key like every other menu on this rail, and
+          living inside the rail so it travels with it — a window loose on the desktop
+          had to work out which screen it belonged on, and got it wrong.
+        -->
+        <div id="work" class="work" role="dialog" aria-label="Work" hidden></div>
+        <!--
+          An agent that has asked something and stopped.
+
+          A dialog rather than a menu, and it is not toggled by a key: it is here because
+          something is waiting, and it goes when that has been answered or dismissed.
+          Hung off the agents key, which is the one that says who is talking — the same
+          place the question came from.
+        -->
+        <div id="fly-ask" class="ask" role="dialog" aria-label="Answer the agent" hidden></div>
+        <!--
+          The heading is outside the menu and names it, rather than sitting inside as an
+          item that cannot be chosen. A paragraph among the options is counted as one by
+          anything reading the list, so the menu announced one more choice than it had.
+        -->
+        <div id="fly-agents" class="agents" hidden>
+          <p class="agents-title" id="agents-title">Select who receives your edits</p>
+          <div
+            id="agent-rows"
+            class="agent-rows scrolls"
+            role="menu"
+            aria-labelledby="agents-title"
+          ></div>
+          <!--
+            Which model answers, and how hard it thinks. They belong to the conversation
+            rather than to the message, and they are already stored that way — so they
+            sit with the choice of who is answering rather than in the composer, where
+            they cost a row of a panel that is short of rows.
+          -->
+          <div id="agent-answer" class="agent-answer"></div>
+        </div>
+      </div>
+
+      <!--
+        What the agent is doing, while it is doing it.
+
+        Hung off the end of the rail, which is where the crab is: the mascot already says
+        that something is working and this says what. A child of the wrap rather than of
+        the rail, because it must not make the rail wider — the pill is a fixed strip of
+        furniture somebody has positioned, and a line of text growing out of it sideways
+        would move every key under the pointer.
+      -->
+      <p id="doing" class="doing" role="status" hidden></p>
+
+      <!--
+        The first run: four things about this toolbar that cannot be discovered by
+        looking at it. Shown once, and again from the tray for anybody who dismissed it
+        before reading it.
+      -->
+      <div id="tips" class="tips" role="dialog" aria-label="Four things worth knowing" hidden></div>
+
+      <p id="trouble" class="trouble" role="status" hidden></p>
+    </div>
+
+    <!--
+      What the tools draw. Under the rail in paint order, so a mark made near the
+      toolbar never covers the buttons that made it.
+    -->
+    <svg
+      id="marks"
+      class="marks"
+      viewBox="0 0 1 1"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    ></svg>
+    <div id="pins" class="pins" aria-hidden="true"></div>
+
+    <!--
+      What a recording is recording, while it records it.
+
+      Deliberately outside the marks layer: everything in there is drawn *on* the region
+      it is about, and this has to stay off it. The frames are what the region looked
+      like, and a toolbar that photographed its own outline would be answering a
+      question about itself.
+
+      It is also the one thing that stays visible while the page hides itself to be
+      photographed, which is what the stylesheet's `visibility` is for.
+    -->
+
+    <div id="recording" class="recording" hidden>
+      <div id="recording-area" class="recording-area">
+        <p id="recording-left" class="recording-left" role="status"></p>
+      </div>
+    </div>
+
+    <div id="capture" class="capture" hidden></div>
+
+    <!--
+      What to do with the mark just made.
+
+      A sibling of the rail rather than a child of it, because it belongs to the region
+      somebody marked and not to the toolbar; it opens where they were looking. The
+      shape measurement takes the union of the two, so the pointer can reach both.
+    -->
+    <div id="popup" class="popup" role="dialog" aria-label="What to do with this mark" hidden></div>
+
+    <!--
+      The library, which is a window rather than a menu because what it offers is
+      recognised by its picture and not by its name. Centred on the screen rather than
+      hung off a key: it is not about the rail, it is about the mark that opened it.
+    -->
+
+    <!--
+      Saying that something came back, to somebody who was looking elsewhere — which is
+      the whole point of marking on the screen and carrying on working.
+    -->
+    <div id="toasts" class="toasts" role="status" aria-live="polite" hidden></div>
+
+    <!-- Marks on their way to the window. Inert, and gone a third of a second later. -->
+    <div id="flights" class="flights" aria-hidden="true"></div>
+
+    <div id="library" class="library" role="dialog" aria-label="Choose from a library" hidden></div>
+
+    <!--
+      Classic scripts sharing one global scope. Every one of them is declarations and
+      nothing else — no listener is registered and no element is touched while any of
+      these load — so the order below is for reading rather than for correctness. Only
+      toolbar.js runs anything, which is why it is last: its `start` mounts the page and
+      calls each of the others' `listenFor…` in turn.
+    -->
+    <script src="toolbar-tools.js"></script>
+    <script src="toolbar-rail.js"></script>
+    <script src="toolbar-mark.js"></script>
+    <script src="toolbar-live.js"></script>
+    <script src="toolbar-answers.js"></script>
+    <script src="toolbar-compose.js"></script>
+    <script src="toolbar-library.js"></script>
+    <script src="toolbar-work.js"></script>
+    <script src="toolbar-toast.js"></script>
+    <script src="toolbar-send.js"></script>
+    <script src="toolbar-dock.js"></script>
+    <script src="toolbar.js"></script>
+  </body>
+</html>

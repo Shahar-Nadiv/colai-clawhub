@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-cut-recording"
+description = "Enables the colai_cut_recording command without any pre-configured scope."
+commands.allow = ["colai_cut_recording"]
+
+[[permission]]
+identifier = "deny-colai-cut-recording"
+description = "Denies the colai_cut_recording command without any pre-configured scope."
+commands.deny = ["colai_cut_recording"]

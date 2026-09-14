@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-agents"
+description = "Enables the colai_agents command without any pre-configured scope."
+commands.allow = ["colai_agents"]
+
+[[permission]]
+identifier = "deny-colai-agents"
+description = "Denies the colai_agents command without any pre-configured scope."
+commands.deny = ["colai_agents"]

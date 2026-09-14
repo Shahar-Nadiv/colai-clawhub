@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-models"
+description = "Enables the colai_models command without any pre-configured scope."
+commands.allow = ["colai_models"]
+
+[[permission]]
+identifier = "deny-colai-models"
+description = "Denies the colai_models command without any pre-configured scope."
+commands.deny = ["colai_models"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-rewind"
+description = "Enables the colai_rewind command without any pre-configured scope."
+commands.allow = ["colai_rewind"]
+
+[[permission]]
+identifier = "deny-colai-rewind"
+description = "Denies the colai_rewind command without any pre-configured scope."
+commands.deny = ["colai_rewind"]

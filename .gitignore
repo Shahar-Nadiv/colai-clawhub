@@ -1,0 +1,7 @@
+# Build output. The binary is 13 MB and is rebuilt from `release/Dockerfile`; what a
+# reviewer needs is the source it was built from, and what a user needs is the npm
+# tarball, which carries it.
+bin/
+dist/
+node_modules/
+toolbar/src-tauri/target/

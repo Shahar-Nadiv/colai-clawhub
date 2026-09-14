@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-watch"
+description = "Enables the colai_watch command without any pre-configured scope."
+commands.allow = ["colai_watch"]
+
+[[permission]]
+identifier = "deny-colai-watch"
+description = "Denies the colai_watch command without any pre-configured scope."
+commands.deny = ["colai_watch"]

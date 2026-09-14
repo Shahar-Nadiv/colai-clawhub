@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-forget-marks"
+description = "Enables the colai_forget_marks command without any pre-configured scope."
+commands.allow = ["colai_forget_marks"]
+
+[[permission]]
+identifier = "deny-colai-forget-marks"
+description = "Denies the colai_forget_marks command without any pre-configured scope."
+commands.deny = ["colai_forget_marks"]

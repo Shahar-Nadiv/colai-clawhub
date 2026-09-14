@@ -1,0 +1,3046 @@
+/*
+ * The toolbar's own styling, in the app's colours.
+ *
+ * Same palette and the same `--accent` hook Quick Chat uses, so the two overlays look
+ * like one application and both follow the app when its accent changes. The layout is
+ * the toolbar's own — a pill of tools, with flyouts and popups beside it.
+ */
+
+/*
+ * The palette, taken from the Control UI rather than invented beside it.
+ *
+ * These names and values are OpenClaw's own — `ui/src/styles/base.css`. The toolbar is a
+ * separate bundle and cannot import that stylesheet, so it declares the same tokens; the
+ * point is that they are now the *same* tokens, under the same names. Before this the
+ * toolbar carried forty unrelated hexes, which could drift from the app without anybody
+ * being able to see that they had.
+ *
+ * `--accent` stays a variable because Quick Chat sets it at runtime from the app's own
+ * accent; an inline style on the root element still beats this block. Until now nothing
+ * set it on this page, so every use quietly fell through to a hard-coded coral.
+ */
+:root {
+  /* How long a key takes to fold away, in one place.
+     The page re-measures the clickable region every frame while the rail is changing
+     size and stops when it believes the motion has — so it needs this number too, and it
+     reads it from here rather than restating it. Two spellings of one duration is how the
+     toolbar ends up answering the pointer where a button used to be. */
+  --fold-time: 220ms;
+
+  --accent: #ff5c5c;
+  --accent-hover: #ff7070;
+  --accent-foreground: #fafafa;
+
+  --card: #161920;
+  --popover: #191c24;
+  --bg-elevated: #191c24;
+  --bg-hover: #1f2330;
+  --border: #1e2028;
+  --border-strong: #2e3040;
+  --chrome-strong: rgb(14 16 21 / 98%);
+
+  /* The primary button is a darker fill inside a brighter border, not the accent flat.
+     Measured off the design, where a flat accent is the one thing that looked wrong
+     beside it. */
+  --accent-fill: #d13c3c;
+
+  --text-strong: #f4f4f5;
+  --text: #bcbcc0;
+  --muted: #8b8b94;
+  /* One step below `--muted`, for a timestamp beside a name. The Control UI has no
+     token for it because it has no surface this dense.
+
+     It was `var(--muted-dim)` — itself — which is not a colour. Nine rules asked for it
+     and got nothing, so nine of the quietest things on the surface inherited whatever
+     was above them and came out at full strength: timestamps as loud as the names beside
+     them, which is the whole distinction this token exists to draw. */
+  --muted-dim: #6c6c75;
+
+  --ok: #22c55e;
+  --warn: #f59e0b;
+  --danger: #f87171;
+
+  /* The faces the rest of OpenClaw uses, bundled beside this file. Named, because the
+     panel switches between them constantly — a count is mono, the sentence beside it is
+     not — and `system-ui` in twenty places was the largest single reason this did not
+     look like the design. */
+  --font-body: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+:root {
+  font-family: var(--font-body);
+  color: var(--text-strong);
+  background: transparent;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/*
+ * `hidden` means hidden, whatever else a rule here says.
+ *
+ * The browser's own `[hidden] { display: none }` is the weakest rule there is: any
+ * `display` in this file beats it, and `all: unset` throws it away entirely. Both have
+ * happened — twice on the rail's keys, and then the library window, which set
+ * `display: flex` and so was drawn even while the page believed it was hidden. It sat in
+ * the corner of somebody's screen as an empty dark box, permanently, looking like a bug
+ * in a toolbar it had nothing to do with.
+ *
+ * One rule, stated once and loudly, instead of remembering to write it per element.
+ */
+[hidden] {
+  display: none !important;
+}
+
+/*
+ * Nothing on the path to the rail may paint.
+ *
+ * This document is a sheet of glass over somebody's desktop. A background anywhere
+ * between the window and the toolbar puts a sheet of colour over their work, which is
+ * the one thing an overlay must never do.
+ */
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+/* ── the rail ─────────────────────────────────────────────────────────────── */
+
+.rail-wrap {
+  position: absolute;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+}
+
+.rail {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: gap var(--fold-time) cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 7px 9px;
+  border-radius: 999px;
+  /*
+   * Nearly solid, not glass.
+   *
+   * `backdrop-filter` cannot work here: an overlay has nothing behind it *within the
+   * window*, and on a transparent window it forces a compositing layer that samples the
+   * desktop and blends it back — an editor's text was legible through a pill set to 94%
+   * opaque. The inset highlight and the shadow are what keep this reading as a surface.
+   */
+  background: var(--chrome-strong);
+  border: 1px solid rgb(255 255 255 / 12%);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 6%) inset,
+    0 18px 44px rgb(0 0 0 / 55%);
+}
+.rail-wrap[data-vertical="true"] .rail {
+  flex-direction: column;
+  padding: 9px 7px;
+}
+
+.grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 34px;
+  cursor: grab;
+  /* A little room from the claw when they are the only two things left. */
+  margin-right: 0;
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: -1px;
+  touch-action: none;
+  /* The same curve and length the rail settles on, so the handle turns with it rather
+     than arriving after it. */
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .grip {
+    transition: none;
+  }
+}
+.rail-wrap[data-vertical="true"] .grip {
+  width: 34px;
+  height: 22px;
+  transform: rotate(90deg);
+}
+
+.divider {
+  width: 1px;
+  height: 22px;
+  margin: 0 4px;
+  background: rgb(255 255 255 / 12%);
+  transition:
+    width var(--fold-time) cubic-bezier(0.4, 0, 0.2, 1),
+    height var(--fold-time) cubic-bezier(0.4, 0, 0.2, 1),
+    margin var(--fold-time) cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 110ms ease-in;
+}
+/*
+ * Away: the grip and the claw, and nothing between them.
+ *
+ * The keys close themselves — they wear `data-folded`, the same fold the exact tools
+ * use, so this only has to deal with the lines that were separating them. A divider
+ * left standing between two things that are gone is a mark for nothing.
+ */
+.rail-wrap[data-away="true"] .divider {
+  width: 0;
+  height: 0;
+  margin: 0;
+  opacity: 0;
+}
+/* The gap goes with them, but only once they have gone: closing it at the start pulls
+   the keys together while they are still shrinking, which reads as a jump. Opening is
+   the other way round — the gap comes back the moment they rejoin the layout, and eases
+   open beside them rather than appearing all at once between keys that are still shut. */
+.rail-wrap[data-away-done="true"] .rail {
+  gap: 0;
+}
+/*
+ * And then they leave the layout altogether.
+ *
+ * Collapsing a key to zero width is what makes the fold read as folding, but fifteen
+ * zero-width items in a pill two pixels wide is an overflow, and an overflowing flex row
+ * places its items where neither the pill nor the eye expects them. Once the animation
+ * has run there is nothing left to animate, so they stop being laid out at all and the
+ * pill is exactly the grip and the claw.
+ *
+ * Held until the fold has finished, the same way `.key[data-folded]` holds `visibility`,
+ * so nothing vanishes before it has closed.
+ */
+.rail-wrap[data-away-done="true"] .key[data-folded],
+.rail-wrap[data-away-done="true"] .divider {
+  display: none;
+}
+.rail-wrap[data-vertical="true"] .divider {
+  width: 22px;
+  height: 1px;
+  margin: 4px 0;
+}
+
+.key {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+  transition:
+    background 160ms ease-out,
+    color 160ms ease-out;
+}
+/*
+ * Folding the exact tools shut, and opening them out again — on the rail, in place.
+ *
+ * They close rather than disappear: width to nothing, padding to nothing, and a small
+ * shrink on the way out, so the six read as one motion instead of six things blinking
+ * off. The negative margin cancels the gap that sits before each of them — without it,
+ * six collapsed keys leave a twenty-four pixel hole where they used to be.
+ *
+ * The two directions are not mirror images, because they do not look the same. Opening,
+ * the glyphs come in with the space they are taking, or the rail spends half the
+ * animation as a wide empty gap. Closing, they fade out first and the gap shuts after
+ * them, so nothing is dragged sideways while it is still legible.
+ *
+ * `visibility` is what keeps this honest for anything not looking at pixels. It does
+ * not animate, but it obeys a delay: held until the width has finished closing on the
+ * way out, dropped at once on the way in. So a folded key leaves the tab order and the
+ * screen reader exactly when it leaves the screen, and never before it.
+ */
+.key[data-folded="false"] {
+  max-width: 140px;
+  max-height: 34px;
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    max-width var(--fold-time) cubic-bezier(0.4, 0, 0.2, 1),
+    max-height var(--fold-time) cubic-bezier(0.4, 0, 0.2, 1),
+    min-width var(--fold-time) cubic-bezier(0.4, 0, 0.2, 1),
+    padding var(--fold-time) cubic-bezier(0.4, 0, 0.2, 1),
+    margin var(--fold-time) cubic-bezier(0.4, 0, 0.2, 1),
+    transform var(--fold-time) cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 200ms ease-out,
+    background 160ms ease-out,
+    color 160ms ease-out,
+    visibility 0s;
+}
+.key[data-folded="true"] {
+  max-width: 0;
+  max-height: 0;
+  min-width: 0;
+  padding: 0;
+  opacity: 0;
+  visibility: hidden;
+  overflow: hidden;
+  transform: scale(0.7);
+  transition:
+    max-width var(--fold-time) cubic-bezier(0.4, 0, 0.2, 1),
+    max-height var(--fold-time) cubic-bezier(0.4, 0, 0.2, 1),
+    min-width var(--fold-time) cubic-bezier(0.4, 0, 0.2, 1),
+    padding var(--fold-time) cubic-bezier(0.4, 0, 0.2, 1),
+    margin var(--fold-time) cubic-bezier(0.4, 0, 0.2, 1),
+    transform var(--fold-time) cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 110ms ease-in,
+    visibility 0s linear var(--fold-time);
+}
+/* The gap runs along the rail, so which margin cancels it depends on which way the
+   rail is lying. */
+.rail-wrap[data-vertical="false"] .key[data-folded="true"] {
+  margin-left: -4px;
+}
+.rail-wrap[data-vertical="true"] .key[data-folded="true"] {
+  margin-top: -4px;
+}
+/* The caret turns with them, so the key says which way the next click goes. */
+.caret {
+  transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.key[data-turn="true"] .caret {
+  transform: rotate(180deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .key[data-folded],
+  .caret {
+    transition: none;
+  }
+}
+
+/*
+ * Something is working.
+ *
+ * Green, and deliberately not the accent: on this rail the accent means "this is the
+ * thing in your hand", and a run is not a selection — it is somebody else's work
+ * happening while you do something else. A ring rather than a fill, because the key
+ * still has its own job and still has to read as itself.
+ *
+ * Slow, because it is a state and not an event. A fast pulse says "look at me now",
+ * which is exactly wrong for a thing that will take a minute.
+ */
+.agents-key[data-working="true"] {
+  box-shadow:
+    0 0 0 1.5px color-mix(in srgb, var(--ok) 55%, transparent),
+    0 0 14px color-mix(in srgb, var(--ok) 35%, transparent);
+  animation: working 2.6s ease-in-out infinite;
+}
+.agents-key[data-working="true"] .agents-running {
+  color: var(--ok);
+}
+@keyframes working {
+  50% {
+    box-shadow:
+      0 0 0 1.5px color-mix(in srgb, var(--ok) 90%, transparent),
+      0 0 22px color-mix(in srgb, var(--ok) 55%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agents-key[data-working="true"] {
+    animation: none;
+  }
+}
+
+/*
+ * ── the mascot, and what the whole Gateway is doing ──────────────────────────
+ *
+ * One light for every agent at once, including the ones somebody is not looking at.
+ * Same shape as the glow on the agents key, because it is the same kind of claim; only
+ * the colour differs, so the colour is the only thing these rules change.
+ *
+ * Green is work underway and asks nothing of anybody. Blue is stopped, waiting on a
+ * person. Red is a run that fell over. Ranked in the page, not here — a stylesheet that
+ * decided which one showed would be deciding it twice.
+ */
+.home-key[data-mood] {
+  box-shadow:
+    0 0 0 1.5px rgb(var(--mood) / 55%),
+    0 0 14px rgb(var(--mood) / 35%);
+  animation: minding 2.6s ease-in-out infinite;
+}
+.home-key[data-mood="working"] {
+  --mood: 52 199 89;
+}
+.home-key[data-mood="waiting"] {
+  --mood: 64 156 255;
+}
+.home-key[data-mood="trouble"] {
+  --mood: 255 99 99;
+}
+.home-key[data-mood] {
+  color: rgb(var(--mood));
+}
+@keyframes minding {
+  50% {
+    box-shadow:
+      0 0 0 1.5px rgb(var(--mood) / 90%),
+      0 0 22px rgb(var(--mood) / 55%);
+  }
+}
+
+/*
+ * And while it is working, it walks.
+ *
+ * In place, and cute rather than energetic: this is a state that will last a minute, and
+ * a thing that jiggles urgently for a minute is a thing somebody covers up.
+ *
+ * The rock is the part that reads. At seventeen pixels the legs are two nubs mostly
+ * hidden under the body, so a leg-only gait is invisible — what carries at this size is
+ * the whole body tilting toward whichever leg is planted, which is also what walking
+ * actually looks like. The legs still take turns underneath; they sell the tilt rather
+ * than perform it.
+ *
+ * Only while it is green. A crab merrily scuttling under a red light would be the
+ * toolbar contradicting itself.
+ *
+ * `data-walking` rather than the tray key's own state, because the same crab walks in
+ * more than one place now — the tray icon at seventeen pixels and the pin waiting on a
+ * reply at fourteen. One trigger, so the second place did not have to restate the gait.
+ */
+.crab-leg,
+.crab-claw,
+.crab-body {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+/* One stride pair. Everything below is a division of it, so the parts cannot drift. */
+[data-walking="true"] .crab-body {
+  animation: crab-walk 0.68s ease-in-out infinite;
+}
+[data-walking="true"] .crab-leg-a {
+  animation: crab-step 0.68s ease-in-out infinite;
+}
+[data-walking="true"] .crab-leg-b {
+  animation: crab-step 0.68s ease-in-out -0.34s infinite;
+}
+/* Counter to the leg on their own side, so it looks pleased with itself rather than
+   merely mobile. */
+[data-walking="true"] .crab-claw-a {
+  animation: crab-wave 0.68s ease-in-out -0.34s infinite;
+}
+[data-walking="true"] .crab-claw-b {
+  animation: crab-wave 0.68s ease-in-out infinite;
+}
+@keyframes crab-walk {
+  0%,
+  50%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  /* Leaning onto the right leg while the left one is up, and the other way after. */
+  25% {
+    transform: translateY(0.3px) rotate(3deg);
+  }
+  75% {
+    transform: translateY(0.3px) rotate(-3deg);
+  }
+}
+@keyframes crab-step {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-0.9px);
+  }
+}
+@keyframes crab-wave {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-0.55px) rotate(-8deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-key[data-mood],
+  [data-walking] .crab-leg,
+  [data-walking] .crab-claw,
+  [data-walking] .crab-body {
+    animation: none;
+  }
+}
+
+/* The way to stop it, on the rail only while there is something to stop. */
+.stop-key {
+  color: rgb(255 132 132);
+}
+.stop-key:hover:not([disabled]) {
+  color: var(--card);
+  background: var(--danger);
+}
+
+.key:hover:not([disabled]):not([aria-pressed="true"]) {
+  background: rgb(255 255 255 / 8%);
+  color: var(--text-strong);
+}
+.key[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--card);
+}
+.key[disabled] {
+  color: rgb(255 255 255 / 28%);
+  cursor: default;
+}
+.key:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* The logo carries its own weight; it does not need the dimming the tools use. */
+.home-key {
+  color: #b9b9be;
+}
+.home-key:hover:not([disabled]) {
+  color: var(--text-strong);
+}
+
+.caret {
+  font-size: 9px;
+  opacity: 0.6;
+  margin-left: 1px;
+}
+
+.agents-key {
+  gap: 8px;
+  padding: 0 10px 0 8px;
+  text-align: left;
+}
+.agents-name {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.1;
+}
+.rail-wrap[data-vertical="true"] .agents-name {
+  display: none;
+}
+.agents-running {
+  font-size: 9.5px;
+  opacity: 0.6;
+  font-family: var(--font-mono);
+}
+/*
+ * Who is receiving, as a face.
+ *
+ * On an upright rail the name beside it is hidden for width, and this used to be the
+ * agent's emoji or nothing at all — so the control was a naked caret that said nothing
+ * and was barely worth aiming at. A disc with an emoji or an initial in it is legible
+ * at that size and is the same face the menu shows.
+ */
+.running-dots {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 7px;
+  background: rgb(255 255 255 / 10%);
+  font-size: 12px;
+  line-height: 1;
+}
+.key[aria-pressed="true"] .running-dots {
+  background: rgb(0 0 0 / 14%);
+}
+.rail-wrap[data-vertical="true"] .agents-key {
+  gap: 3px;
+  padding: 0 6px;
+}
+
+.agent-avatar-dot {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 8%);
+  font-size: 13px;
+}
+.agent-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A session with a run still going. The ring pulses; the row does not move, because a
+   list that shifts under the pointer is a list you cannot click. */
+.agent-avatar-dot[data-busy="true"] {
+  box-shadow: 0 0 0 2px var(--accent);
+  animation: breathe 1.8s ease-in-out infinite;
+}
+@keyframes breathe {
+  50% {
+    box-shadow: 0 0 0 2px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-avatar-dot[data-busy="true"] {
+    animation: none;
+  }
+}
+
+/* A still picture of the rail as it was, dissolving while the new one arrives. It is
+   drawn and never touched: the pointer belongs to the rail underneath it. */
+.ghost {
+  position: absolute;
+  pointer-events: none;
+}
+
+/* ── flyouts ──────────────────────────────────────────────────────────────── */
+
+.flyout,
+.agents {
+  position: absolute;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--chrome-strong);
+  border: 1px solid rgb(255 255 255 / 12%);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 60%);
+}
+.flyout {
+  width: 170px;
+}
+.flyout-wide {
+  width: 250px;
+}
+.agents {
+  width: 330px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.row {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--text-strong);
+}
+.row:hover {
+  background: rgb(255 255 255 / 8%);
+}
+.row[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.row-key {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  opacity: 0.5;
+}
+
+.agents-title {
+  margin: 0;
+  padding: 12px 16px 8px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* A list inside a menu that has more in it than the screen has room for.
+   It scrolls rather than running off the bottom, and `boxAround` takes it as a leaf for
+   exactly that reason: its rows below the fold still report boxes past its edge, and
+   counting them would claim a strip of desktop that shows nothing. */
+.scrolls {
+  max-height: 46vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.scrolls::-webkit-scrollbar {
+  width: 8px;
+}
+.scrolls::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgb(255 255 255 / 16%);
+}
+
+.agent-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0 6px 6px;
+}
+
+/* A folder that opens, and the conversations sitting inside it. */
+.twist {
+  flex-shrink: 0;
+  width: 26px;
+  text-align: center;
+  font-size: 9px;
+  color: var(--muted);
+  transition: transform 160ms ease-out;
+}
+.twist[data-open="true"] {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .twist {
+    transition: none;
+  }
+}
+.row-project .agent-name {
+  font-weight: 500;
+}
+/* Indented by exactly the folder's own twist, so the names line up under it. */
+.row-nested {
+  padding-left: 26px;
+}
+
+/* A heading inside the list, telling the two kinds of receiver apart. */
+.row-group {
+  margin: 6px 0 2px;
+  padding: 0 10px;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.row-group:first-child {
+  margin-top: 2px;
+}
+.agent-empty {
+  padding: 0 16px 14px;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* ── sending what was marked ──────────────────────────────────────────────── */
+
+.send-key {
+  /* The count sits on top of this rather than beside it, so the key is the same size
+     whether anything is waiting or not. See `.send-many`. */
+  position: relative;
+  gap: 4px;
+  padding: 0 8px;
+}
+/* Lit only when something is actually waiting to go. A badge that is always there stops
+   being a count and becomes decoration. */
+.send-key[data-waiting="true"] {
+  color: var(--text-strong);
+}
+/*
+ * The count, laid over the key rather than laid out beside it.
+ *
+ * In the flex row it was part of the rail's width, so the whole pill grew the moment
+ * anything was marked — and grew again at ten marks, when the number took a second digit.
+ * A toolbar that changes size while somebody is using it reads as a glitch, and it is not
+ * only a visual one: a new width means the rail is measured and placed again, and a new
+ * set of rectangles crosses to the window manager, on every single mark.
+ *
+ * Out of flow, the key is 34px whether anything is waiting or not.
+ */
+.send-many {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  /* Against the pill behind it, not against the key: the badge overhangs the key's edge,
+     and without this the two reds touch and read as one shape. */
+  border: 1.5px solid var(--chrome-strong);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  line-height: 11px;
+  text-align: center;
+  color: var(--card);
+  background: var(--accent);
+  pointer-events: none;
+}
+.send-many:empty {
+  display: none;
+}
+
+.flyout-send {
+  width: 320px;
+  padding: 0 0 6px;
+}
+.flyout-send .agents-title {
+  padding: 12px 14px 6px;
+}
+.flyout-send > .row,
+.flyout-send > .mode-row,
+.flyout-send > .file-add,
+.flyout-send > .popup-note,
+.flyout-send > .popup-foot,
+.flyout-send > .popup-warn,
+.flyout-send > .agent-empty {
+  margin-left: 8px;
+  margin-right: 8px;
+  width: calc(100% - 16px);
+}
+
+/* What the toolbar noticed is in front, offered rather than taken. */
+.suggest-row {
+  cursor: pointer;
+  gap: 8px;
+  margin-top: 4px;
+  border: 1px dashed rgb(255 255 255 / 18%);
+}
+.suggest-row:hover {
+  border-color: var(--accent);
+}
+
+/* A mark waiting to be sent, and the tick that decides whether it goes this time. */
+/*
+ * A mark waiting to be sent, and what somebody wants said about it.
+ *
+ * Two lines, because they are two different questions — whether it goes, and what it is
+ * for — and one line of a three-hundred-pixel panel cannot hold both without the note
+ * ending up too narrow to write in.
+ */
+.mark-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  height: auto;
+  padding-top: 7px;
+  padding-bottom: 7px;
+  cursor: default;
+}
+.mark-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+}
+/* The same number it wears on the glass and carries in the message. */
+.mark-number {
+  flex-shrink: 0;
+  min-width: 15px;
+  height: 15px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--card);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 15px;
+  text-align: center;
+}
+.mark-number:empty {
+  display: none;
+}
+.mark-note {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: rgb(255 255 255 / 5%);
+  color: var(--text-strong);
+  font-size: 12px;
+}
+.mark-note::placeholder {
+  color: var(--muted-dim);
+}
+.mark-note:focus {
+  background: rgb(255 255 255 / 9%);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.mark-tick {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.mark-shot {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 26px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 5px;
+  background: rgb(255 255 255 / 8%);
+}
+.mark-shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* A file or folder coming along, and how far along it is coming. */
+.file-row {
+  gap: 8px;
+}
+.file-row .agent-name {
+  flex: 1;
+}
+/* Named rather than carried: still going, still readable, just not in the message. */
+.file-row[data-carried="false"] {
+  border: 1px dashed rgb(255 255 255 / 16%);
+}
+.file-drop {
+  all: unset;
+  flex-shrink: 0;
+  padding: 0 3px;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.file-drop:hover {
+  color: var(--text-strong);
+}
+.file-add {
+  align-items: center;
+}
+.file-hint {
+  flex-shrink: 0;
+  padding-left: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* A row that is a way out of a panel rather than a thing to pick in it. Quieter, so it
+   does not read as another item on the list above it. */
+.row-quiet {
+  justify-content: center;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.row-quiet:hover {
+  color: var(--text-strong);
+}
+
+/* A row with something else on the end of it. The row keeps the whole width it had; the
+   dots sit beside it rather than inside, because a row is a button and a button cannot
+   hold another one. */
+.row-line {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.row-line > .row {
+  flex: 1;
+  min-width: 0;
+}
+.row-more {
+  all: unset;
+  flex: 0 0 auto;
+  padding: 0 7px;
+  height: 30px;
+  line-height: 30px;
+  border-radius: 7px;
+  color: var(--muted-dim);
+  cursor: pointer;
+}
+.row-more:hover {
+  color: var(--text-strong);
+  background: rgb(255 255 255 / 8%);
+}
+/* A row that says what it does under what it is called. Two lines, because a verb and
+   its consequence are not the same size of thing and squeezing them side by side wraps
+   the half somebody reads first. */
+.row-stacked {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  height: auto;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+/* A choice that needs its mark beside it rather than above it: the icon on the left,
+   the name and what it means stacked to its right. */
+.how-row {
+  height: auto;
+  padding-top: 7px;
+  padding-bottom: 7px;
+  align-items: flex-start;
+}
+.how-row svg {
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+.how-words {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.row-under {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/*
+ * One of somebody's own prompts, to be picked out of several.
+ *
+ * Given up to three lines rather than clipped to one. A prompt is recognised by reading
+ * it, and a list of rows all ending in the same ellipsis is a list nobody can choose
+ * from — which is what a single line of a three-hundred-pixel panel produces.
+ */
+.prompt-list {
+  display: flex;
+  flex-direction: column;
+  padding: 0 8px;
+}
+.prompt-row {
+  align-items: flex-start;
+  text-align: left;
+  width: 100%;
+}
+.prompt-said {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.row[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.mode-row {
+  display: flex;
+  gap: 4px;
+  padding: 8px 0 2px;
+}
+.chip {
+  all: unset;
+  flex: 1;
+  padding: 5px 0;
+  border-radius: 7px;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--muted);
+  background: rgb(255 255 255 / 6%);
+  cursor: pointer;
+}
+.chip:hover {
+  color: var(--text-strong);
+}
+/* ── the automation panel ─────────────────────────────────────────────────── */
+
+/* A chip row that names what it is choosing between. The label is not a chip, so it
+   does not take a share of the row the way `flex: 1` would give it one. */
+.chip-label {
+  flex: 0 0 auto;
+  align-self: center;
+  padding-right: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.cron-line {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 0 8px;
+}
+.cron-line .popup-note {
+  margin: 0;
+}
+.cron-line .mode-row {
+  flex: 1;
+  padding: 0;
+}
+.cron-amount {
+  flex: 0 0 68px;
+  width: 68px;
+  text-align: center;
+}
+/* What the schedule comes to, said back. Quiet until it is a schedule, then lit — the
+   one line in the panel that changes as somebody types. */
+.cron-summary {
+  margin: 6px 8px 2px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 5%);
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.cron-summary[data-ready="true"] {
+  color: var(--text-strong);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+/* A fact about how automations work, not a warning about this one. Said quietly, in
+   the margin, where the rest of the panel's small print would be if it had any. */
+.cron-bare {
+  margin: 8px 8px 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.flyout-send > .cron-summary,
+.flyout-send > .cron-line {
+  width: auto;
+}
+
+/* Four words where the mode chips have one each. Smaller and given room to breathe,
+   rather than four labels touching their own edges. */
+.design-row .chip {
+  padding: 5px 3px;
+  font-size: 10.5px;
+  letter-spacing: 0.1px;
+}
+.chip[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--card);
+}
+
+/* ── the popup that opens on a mark ───────────────────────────────────────── */
+
+/*
+ * A mark on its way to the window.
+ *
+ * Inert and brief. The layer takes no pointer events and is not part of the clickable
+ * region: it is a third of a second of explanation, not a thing to press.
+ */
+.flights {
+  position: fixed;
+  inset: 0;
+  z-index: 85;
+  pointer-events: none;
+}
+.flight {
+  position: absolute;
+  display: block;
+  width: 54px;
+  height: 38px;
+  border-radius: 6px;
+  overflow: hidden;
+  transform: translate(-50%, -50%);
+  background: var(--chrome-strong);
+  border: 1px solid var(--accent);
+  box-shadow: 0 10px 26px rgb(0 0 0 / 55%);
+}
+.flight img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/*
+ * ── an answer saying so ──────────────────────────────────────────────────────
+ *
+ * Low on the screen and out of the way. It says who and the first line of what, and it
+ * leaves on its own: a notification that has to be dismissed is a second thing to do.
+ */
+.toasts {
+  position: fixed;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+}
+.toast {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 320px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  background: var(--chrome-strong);
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-left: 3px solid var(--accent);
+  box-shadow: 0 18px 44px rgb(0 0 0 / 60%);
+  animation: toast-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.toast:hover {
+  border-color: rgb(255 255 255 / 24%);
+}
+.toast-who {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+}
+/* Two lines of it. Enough to know whether it wants you now, not enough to read instead
+   of opening it. */
+.toast-said {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-strong);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}
+
+/*
+ * ── the work ─────────────────────────────────────────────────────────────────
+ *
+ * What is waiting, what has been sent, and what came back. Against the side of the
+ * screen rather than the middle of it: the library is opened, used and closed, and this
+ * is meant to stay open while somebody works — a window in the middle of the screen for
+ * an hour is a window in the way.
+ */
+/*
+ * ── how the ask is taken ─────────────────────────────────────────────────────
+ *
+ * One control instead of four chips, and the same decision reachable with `/` without
+ * leaving the field. It sits in the foot beside who receives, because both are the same
+ * kind of fact about the message rather than part of writing it — and a labelled row of
+ * its own gave the rarest choice in the composer the most room.
+ *
+ * `appearance: none` because the platform's own select is a grey slab that ignores every
+ * token on this page.
+ */
+.mode-pick {
+  position: relative;
+  flex-shrink: 0;
+}
+/*
+ * How the ask is taken, as a control the page draws rather than one the platform does.
+ * A `<select>` here was a grey slab that ignored every token on this page and could say
+ * nothing about what a mode means; the menu it opens is the same one `/` opens in the
+ * field, because it is the same choice.
+ */
+.mode-key {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  color: var(--text);
+  cursor: pointer;
+}
+.mode-key:hover {
+  color: var(--text-strong);
+  background: var(--bg-hover);
+}
+.mode-key:focus-visible {
+  outline: 2px solid var(--accent);
+}
+/* Anchored to the key rather than stretched across the composer, and wide enough for the
+   sentence under each name. */
+.mode-menu {
+  left: 0;
+  right: auto;
+  width: 246px;
+}
+
+/* The field, and the menu that opens inside it. Anchored to the field rather than the
+   page so it follows the composer wherever the composer is drawn. */
+.ask-box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.ask-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 4px);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  gap: 1px;
+  border-radius: 9px;
+  background: var(--popover);
+  border: 1px solid rgb(255 255 255 / 12%);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 55%);
+  max-height: 190px;
+  overflow-y: auto;
+}
+.ask-menu-row {
+  all: unset;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ask-menu-row[data-on="true"] {
+  background: rgb(255 255 255 / 8%);
+}
+.ask-menu-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+/* What the mode does to the ask, kept to one line. At two lines each, four modes make a
+   menu taller than the panel it opens in — and a menu that covers everything behind it
+   is worse at explaining itself than one that says a little less. The whole sentence is
+   still on the control's tooltip. */
+.ask-menu-says {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * ── the work panel ───────────────────────────────────────────────────────────
+ *
+ * Every number here was measured off `docs/Design/Colai Work Panel.html` by rendering it
+ * and reading the computed styles, rather than estimated from a picture. Twice I built
+ * this by eye and twice it was wrong in ways that were invisible until the two were put
+ * side by side.
+ *
+ * The accent is spent exactly twice: the exchange asking you, and Send. `--ok`, `--warn`
+ * and `--danger` carry state and never attention.
+ */
+.work {
+  position: absolute;
+  z-index: 78;
+  display: flex;
+  flex-direction: column;
+  /* Fixed, as the design fixes it. It was responsive because I made it so. */
+  width: 394px;
+  max-height: 82vh;
+  border-radius: 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: 0 18px 44px rgb(0 0 0 / 55%);
+  overflow: hidden;
+}
+
+/* The head stacks: a name, and under it a count in mono. One line of sans said both and
+   read as a sentence rather than as a label with a reading under it. */
+.work-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 13px;
+  border-bottom: 1px solid var(--border);
+}
+.work-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.work-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.work-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Two tabs in one pill, the way a segmented control is drawn everywhere else. */
+.work-tabs {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+  padding: 2px;
+  border-radius: 9999px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+}
+.work-tab {
+  all: unset;
+  padding: 0 9px;
+  line-height: 22px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.work-tab[data-on="true"] {
+  background: var(--card);
+  color: var(--text-strong);
+}
+.work-tab:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+.work-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  font-size: 12px;
+  color: var(--text-strong);
+}
+.work-jump {
+  all: unset;
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  cursor: pointer;
+}
+.work-jump:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+/* Not `.scrolls`' 46vh: this is the growing child of a panel that is already capped at
+   82vh, and inheriting a second, smaller cap meant the panel never used more than about
+   half the room it had. */
+.work-log.scrolls {
+  max-height: none;
+}
+.work-log {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  /* Both, and both matter: `min-height: 0` lets a flex child shrink enough to scroll at
+     all, without which the panel clips everything past the first exchange. */
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/*
+ * One exchange, separated by a rule. There is no spine — I invented that, and the design
+ * has never had one: a dot per exchange and a line between them.
+ */
+.work-turn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 13px 13px 14px 26px;
+}
+.work-turn + .work-turn {
+  border-top: 1px solid var(--border);
+}
+.work-node {
+  position: absolute;
+  left: 13px;
+  top: 19px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted-dim);
+}
+[data-state="working"] .work-node {
+  background: var(--warn);
+}
+[data-state="done"] .work-node {
+  background: var(--ok);
+}
+[data-state="asking"] .work-node {
+  background: var(--accent);
+}
+[data-state="failed"] .work-node {
+  background: var(--danger);
+}
+/* The one that wants you is marked on its whole edge, not by a dot somebody has to find. */
+.work-turn[data-state="asking"] {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.work-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.work-face {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #10131a;
+  background: hsl(var(--face) 62% 62%);
+}
+.work-who {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text-strong);
+}
+.work-pill {
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: rgb(255 255 255 / 7%);
+}
+[data-state="working"] .work-pill {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+}
+[data-state="done"] .work-pill {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+}
+[data-state="asking"] .work-pill {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+[data-state="failed"] .work-pill {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+.work-when {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--muted-dim);
+  white-space: nowrap;
+}
+
+/* What was marked, named rather than pictured. A thumbnail says which screenshot; the
+   word says which tool, which is what somebody actually remembers about a mark. */
+.work-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.work-mark {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 20px;
+  padding: 0 8px;
+  border-radius: 9999px;
+  color: var(--muted);
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+
+.work-ask {
+  all: unset;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.work-ask:hover {
+  color: var(--text);
+}
+.work-ask:focus-visible {
+  outline: 2px solid var(--accent);
+  border-radius: 4px;
+}
+.work-ask-mark {
+  flex: none;
+  color: var(--muted-dim);
+  transition: transform 120ms ease;
+}
+.work-ask[data-open="true"] .work-ask-mark {
+  transform: rotate(90deg);
+}
+.work-ask-said {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+.work-ask[data-open="true"] .work-ask-said {
+  -webkit-line-clamp: 20;
+}
+
+/*
+ * What an agent said back.
+ *
+ * `pre-wrap`, because a reply arrives with paragraphs, bullet lists and fenced code in it
+ * and `textContent` into a default `white-space` turned all of that into one run-on line.
+ * `anywhere`, because the panel is a fixed 394px and the commonest token in a reply is a
+ * path or a URL — which used to reach the edge and be clipped, unreadable.
+ */
+.work-said {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--card-foreground, #f0f0f2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* Long ones fold. A reply has no length anybody agreed to, and up to forty arrive at
+   once — one of them used to push every other row out of the panel. Only replies: a
+   prompt is short by construction and it is what somebody scans the list for. */
+.work-said[data-open] {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+}
+.work-said[data-open="true"] {
+  -webkit-line-clamp: none;
+  display: block;
+}
+.work-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.work-more {
+  all: unset;
+  align-self: flex-start;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 1px 0;
+}
+.work-more:hover {
+  color: var(--text-strong);
+  text-decoration: underline;
+}
+.work-more:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.work-said + .work-said {
+  margin-top: 6px;
+}
+.work-said[data-mine="true"] {
+  padding-left: 8px;
+  border-left: 2px solid var(--border-strong);
+  color: var(--muted);
+}
+
+/* What happened, in its own bordered row: a receipt is a thing you are handed, not a
+   sentence in the middle of a paragraph. */
+.work-receipt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 0;
+  padding: 6px 9px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.work-receipt-mark {
+  color: var(--ok);
+}
+[data-state="failed"] .work-receipt {
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+}
+[data-state="failed"] .work-receipt-mark {
+  color: var(--danger);
+}
+.work-receipt-count {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+.work-receipt-more {
+  color: var(--ok);
+}
+.work-receipt-less {
+  color: var(--danger);
+}
+
+.work-answer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.work-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 3px;
+}
+.work-act {
+  all: unset;
+  padding: 5px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+}
+.work-act:hover:not(:disabled) {
+  border-color: var(--border-hover, #3e4050);
+  color: var(--text-strong);
+}
+.work-act:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.work-act:focus-visible {
+  outline: 2px solid var(--accent);
+}
+/* A fill inside a brighter border, which is what the design draws — a flat accent was
+   the one thing that read as wrong beside it. */
+.work-act[data-lead="true"] {
+  background: var(--accent-fill);
+  border-color: var(--accent);
+  color: var(--accent-foreground);
+}
+.work-act[data-lead="true"]:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.work-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px 15px 22px;
+}
+.work-empty-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.work-empty-said {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.work-steps {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text);
+}
+.work-steps li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+/* Numbered in circles, because they are three steps in an order and not three bullets. */
+.work-steps li::before {
+  content: counter(step);
+  counter-increment: step;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+.work-steps {
+  counter-reset: step;
+}
+
+/*
+ * One card, the way the design draws it: marks, the field and the foot inside a single
+ * border. It was three separately-bordered controls stacked up, which read as three
+ * things to deal with rather than one thing to write in.
+ */
+/* Everything below the log: the card you write in, and the panel setting under it. */
+.work-tail {
+  border-top: 1px solid var(--border);
+  background: rgb(255 255 255 / 2%);
+}
+.work-write {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 11px 13px 10px;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+}
+/* The field is the card's inside, so it draws no edge of its own. */
+.work-write > .ask-box > .popup-note {
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 0;
+}
+.work-write > .ask-box > .popup-note:focus-visible {
+  outline: none;
+}
+.work-write > .row,
+.work-write > .mode-row,
+.work-write > .file-add,
+.work-write > .popup-note,
+.work-write > .popup-foot,
+.work-write > .popup-warn,
+.work-write > .agent-empty {
+  margin-left: 0;
+  margin-right: 0;
+  width: 100%;
+}
+
+/* A setting about the panel, outside the card the message is written in — and quieter
+   than the message, because it is not what anybody opened this to do. */
+.work-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 13px 11px;
+  font-size: 11.5px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.work-foot:hover {
+  color: var(--text);
+}
+
+/*
+ * ── the library ──────────────────────────────────────────────────────────────
+ *
+ * The one window in this toolbar. Every other menu is a list of words because the thing
+ * being chosen is its name; a component is recognised by its picture, so this needs room
+ * for pictures — and room is what makes it a window rather than a flyout.
+ *
+ * Centred on the screen the mark is on — placed by `placeLibrary`, not by the stylesheet.
+ * The overlay spans every display, so centring on the viewport means centring on the
+ * union of all of them: with two monitors side by side that is the bezel, and the window
+ * arrives split down the middle with its close button on the screen you are not looking
+ * at. The same trap the answer panels already avoid.
+ */
+.library {
+  position: fixed;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(560px, 82vw);
+  max-height: 70vh;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--chrome-strong);
+  border: 1px solid rgb(255 255 255 / 12%);
+  box-shadow: 0 30px 80px rgb(0 0 0 / 68%);
+}
+.library-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+.library-head .agents-title {
+  flex: 1;
+  padding: 2px 0 0;
+}
+.library-find {
+  margin: 0;
+}
+/* Three across, so a preview is wide enough to tell two cards apart at a glance. */
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  min-height: 0;
+  padding: 2px;
+}
+.library-card {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px;
+  border-radius: 10px;
+  cursor: pointer;
+  border: 1px solid rgb(255 255 255 / 8%);
+}
+.library-card:hover {
+  background: rgb(255 255 255 / 7%);
+  border-color: rgb(255 255 255 / 16%);
+}
+.library-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* The frame keeps its height whether or not a picture arrived, so a catalogue with one
+   dead image does not leave a hole in the grid. */
+.library-shot {
+  aspect-ratio: 4 / 3;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgb(255 255 255 / 5%);
+}
+.library-shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.library-name {
+  font-size: 11.5px;
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* What was chosen out of it, said on the mark that asked. */
+.chosen-row {
+  margin-top: 6px;
+}
+.chosen-none {
+  color: var(--muted);
+}
+
+/* Where a design mark's content comes from, under the row saying what kind it is. */
+.source-row {
+  margin-top: 4px;
+}
+
+.popup {
+  position: absolute;
+  z-index: 70;
+  width: 290px;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--chrome-strong);
+  border: 1px solid rgb(255 255 255 / 12%);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 60%);
+}
+.popup-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 2px 8px;
+}
+.popup-shot {
+  width: 62px;
+  height: 44px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid rgb(255 255 255 / 12%);
+}
+/* The way out. Quiet until it is looked for, which is what a dismissal should be. */
+.popup-shut {
+  all: unset;
+  flex-shrink: 0;
+  align-self: flex-start;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+}
+.popup-shut:hover {
+  background: rgb(255 255 255 / 10%);
+  color: var(--text-strong);
+}
+.popup-shut:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.popup-named {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+  font-size: 12.5px;
+}
+.popup-size {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The colour itself, beside its digits. Six characters are not a colour to anybody. */
+/* The address, under the size. One line, clipped rather than wrapped — a popup that
+   grows a paragraph because somebody marked a deep path is a popup in the way. */
+.popup-place {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 240px;
+  direction: rtl;
+  text-align: left;
+}
+
+.popup-swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 5px;
+  border-radius: 2px;
+  border: 1px solid rgb(255 255 255 / 35%);
+}
+
+.popup-note {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 7px 9px;
+  border-radius: 8px;
+  resize: none;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--text-strong);
+  background: rgb(255 255 255 / 7%);
+  border: 1px solid rgb(255 255 255 / 10%);
+}
+.popup-note:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.popup-note::placeholder {
+  color: var(--muted);
+}
+/* Where the document goes, and the way to point at it instead of typing it. */
+.popup-dest-line {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  margin-top: 6px;
+}
+.popup-dest {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.popup-browse {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  border-radius: 8px;
+  color: var(--text);
+  background: rgb(255 255 255 / 6%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  cursor: pointer;
+}
+.popup-browse:hover {
+  color: var(--text-strong);
+  background: rgb(255 255 255 / 11%);
+}
+
+.popup-warn {
+  margin: 8px 0 0;
+  padding: 7px 9px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-strong);
+  background: rgb(255 123 123 / 12%);
+  border: 1px solid rgb(255 123 123 / 40%);
+}
+
+.popup-foot {
+  display: flex;
+  align-items: center;
+  /* Five, not six. With four controls and the send key the row is within a few pixels of
+     full, and those few pixels are the difference between "Claude Code" and "Claude Co…". */
+  gap: 5px;
+  padding-top: 7px;
+}
+/*
+ * Who this is going to. A dot, the name, a chevron — it used to be the name on its own,
+ * which read as a caption and not as the control that changes it.
+ */
+.popup-to {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* Shrinks before it pushes Send past the card's edge, but does not grow — growing
+     dragged the mode picker away from the name it belongs beside. Shrinks last, though:
+     who is answering matters more than which model is doing it. */
+  flex: 0 1 auto;
+  flex-shrink: 0.4;
+  min-width: 0;
+  padding: 3px 5px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  color: var(--text);
+  cursor: pointer;
+}
+.popup-to:hover {
+  color: var(--text-strong);
+  background: var(--bg-hover);
+}
+.popup-to:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.popup-to-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.popup-to-lit {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted-dim);
+}
+/* Somebody is chosen and the message has somewhere to go. Nobody chosen is not an
+   error, so it stays grey rather than going red. */
+.popup-to-lit[data-up="true"] {
+  background: var(--ok);
+}
+
+/*
+ * How this will be answered: which model, and how hard it thinks.
+ *
+ * Its own row, because these two are one question and the row below them — Files,
+ * Schedule — is a different one. The model takes what it needs and the slider takes the
+ * rest, so a long model name shortens the slider rather than pushing it off the card.
+ */
+/*
+ * Beside the mode in the send row. Both names shrink rather than push Send off the card,
+ * and the receiver yields first: the model is the thing just chosen, and the more likely
+ * to be the one being read.
+ */
+.model-key {
+  flex: 0 1 auto;
+  min-width: 42px;
+}
+.model-key-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Wider than the mode's menu: a model is named by a phrase and a provider, where a mode
+   is named by a word. */
+.model-menu {
+  width: 268px;
+}
+/* A menu with nothing in it still has to say why. */
+.menu-empty {
+  margin: 0;
+  padding: 7px 8px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.effort {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  /* Takes the width Files and Schedule leave on their row. */
+  flex: 1 1 auto;
+  min-width: 96px;
+  margin-left: 6px;
+}
+/*
+ * The stops are the model's, so the track is drawn rather than ticked: a model with three
+ * efforts and one with five would otherwise need two different sets of marks, and the
+ * word beside it already says which stop the handle is on.
+ */
+.effort-bar {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 16px;
+  margin: 0;
+  appearance: none;
+  background: none;
+  cursor: pointer;
+}
+.effort-bar::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+.effort-bar::-webkit-slider-thumb {
+  appearance: none;
+  width: 11px;
+  height: 11px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.effort-bar:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.effort-said {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  /* Wide enough for the longest level, so the slider does not shorten as it is dragged. */
+  min-width: 44px;
+}
+
+/* Files and Schedule: what else could happen to this message, kept away from the row
+   that sends it. Left-aligned and quiet — they are not the reason anybody is here. */
+.compose-more {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: -8px;
+}
+
+/* Who and how on the left, what happens to it on the right. */
+.compose-gap {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The keystroke, next to the key it works. */
+.compose-key {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted-dim);
+  white-space: nowrap;
+}
+
+/*
+ * Send, as the design draws it: a round accent key with an arrow. What is going is
+ * listed directly above it, so the button does not have to say it again.
+ */
+.compose-send {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 14px;
+  line-height: 1;
+}
+/* Why this receiver, when nobody chose it. */
+.popup-why {
+  opacity: 0.7;
+}
+
+/* Same button the Work window draws, so the composer and the history below it are
+   plainly the same panel: a bordered slab, not a translucent wash. */
+.popup-do {
+  all: unset;
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-strong);
+  cursor: pointer;
+}
+.popup-do:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+.popup-go {
+  background: var(--accent-fill);
+  border-color: var(--accent);
+  color: var(--accent-foreground);
+}
+.popup-go:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.popup-do[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+.popup-do:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+/*
+ * Files… and Schedule…, which had no rule at all and were drawing as the browser's own
+ * grey chrome — the loudest thing in a panel where they are the two rarest actions.
+ * Text, not a slab: they sit beside Send and must not compete with it.
+ */
+.compose-later {
+  all: unset;
+  flex-shrink: 0;
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  color: var(--muted-dim);
+  cursor: pointer;
+}
+.compose-later:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+.compose-later:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+/* ── what came back, inside the Work window ───────────────────────────────── */
+
+/*
+ * The pin and the panel it opened are gone with the marks. A turn and the box you answer
+ * it in kept their names, because they are the same two things — read in the window now
+ * rather than on the desktop.
+ */
+.answer-turn {
+  margin: 0 0 8px;
+}
+.answer-turn:last-child {
+  margin-bottom: 0;
+}
+.answer-turn[data-mine="true"] {
+  padding-left: 10px;
+  border-left: 2px solid rgb(255 255 255 / 14%);
+  color: var(--muted);
+}
+.answer-say {
+  margin: 8px 0 0;
+  width: 100%;
+}
+/* The two shortcuts, beside the reply rather than instead of it. */
+.answer-quick {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+/* A measurement's number, sitting on the line it belongs to. */
+.span-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--accent);
+  color: var(--card);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 45%);
+}
+
+/* ── when something has gone wrong ────────────────────────────────────────── */
+
+/*
+ * The rail's only unprompted line, and it is only ever a problem.
+ *
+ * What used to sit here named the tool, the window in front and who was receiving —
+ * all three of which are on the rail already, so it was the toolbar reading its own
+ * state back to somebody over the top of their work. A failure is different: it is
+ * something they do not otherwise know, and a send that fails silently is the worst
+ * thing this surface could do.
+ */
+.trouble {
+  position: absolute;
+  margin: 0;
+  padding: 7px 11px;
+  border-radius: 8px;
+  max-width: 420px;
+  background: var(--chrome-strong);
+  /* The quiet face, and the default. A receipt is the toolbar agreeing with something
+     somebody just did; it does not need a border the colour of an error. */
+  border: 1px solid rgb(255 255 255 / 14%);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* And the face for news. Red is spent here rather than on everything, which is the only
+   way it means anything when it appears. */
+.trouble[data-tone="failure"] {
+  border-color: rgb(255 123 123 / 55%);
+  color: var(--text-strong);
+}
+
+.trouble-said {
+  min-width: 0;
+}
+
+/* A message that waits until it is dismissed has to offer the dismissing. */
+.trouble-shut {
+  all: unset;
+  flex: none;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.trouble-shut:hover {
+  color: var(--text-strong);
+}
+
+.trouble-shut:focus-visible {
+  outline: 2px solid var(--accent-fill);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.rail-wrap[data-vertical="false"] .trouble {
+  top: calc(100% + 8px);
+  left: 0;
+}
+.rail-wrap[data-dock="bottom"] .trouble {
+  top: auto;
+  bottom: calc(100% + 8px);
+}
+.rail-wrap[data-vertical="true"] .trouble {
+  top: 0;
+  left: calc(100% + 10px);
+  max-width: 220px;
+}
+.rail-wrap[data-dock="right"] .trouble {
+  left: auto;
+  right: calc(100% + 10px);
+}
+
+/* ── what the tools draw ──────────────────────────────────────────────────── */
+
+.marks,
+.pins {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/*
+ * What a recording is recording, while it records it.
+ *
+ * Visible on purpose while the rest of the page is not. `shoot` hides the whole body so
+ * the toolbar does not photograph itself, and `visibility` is the one property that can
+ * be turned back on underneath a hidden ancestor — which is why the layer is hidden
+ * that way rather than by opacity or display.
+ *
+ * None of it takes the pointer. The frame is drawn around the region so somebody can
+ * see what is being filmed, not so they can click it; the input shape keeps only the
+ * countdown, and everything else on the desktop stays reachable for the whole recording.
+ */
+.recording {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  visibility: visible;
+}
+.recording-area {
+  position: absolute;
+  outline: 2px solid var(--accent);
+  /* Outside the box, which is the whole point: the box is already clear of the crop,
+     and a border drawn inward would spend that clearance getting into the picture. */
+  outline-offset: 0;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 45%);
+}
+.recording-left {
+  position: absolute;
+  left: -2px;
+  bottom: calc(100% + 8px);
+  margin: 0;
+  padding: 4px 9px 4px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--card);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 45%);
+}
+/* A region against the top of the screen has nowhere above it to put this. */
+.recording-area[data-under="true"] .recording-left {
+  bottom: auto;
+  top: calc(100% + 8px);
+}
+.recording-left::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--card);
+  /* The one thing on screen that has to read as "still going" from across a desk. */
+  animation: recording-pulse 1s ease-in-out infinite;
+}
+@keyframes recording-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/*
+ * The gesture catcher, mounted only while a tool other than the pointer is out.
+ *
+ * Removed rather than made inert: an invisible full-screen element that swallows clicks
+ * is the worst thing an overlay can do, and absence is a stronger guarantee than
+ * `pointer-events: none`.
+ */
+.capture {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+  background: transparent;
+  touch-action: none;
+}
+
+/*
+ * A mark's number, and the number the message gives it.
+ *
+ * A pin has nothing else to show for itself, so its badge sits on the spot and is the
+ * mark. Anything with a shape already draws that shape, so its badge sits at the corner
+ * and gets out of the way — smaller, and outside the region rather than over the thing
+ * somebody was pointing at.
+ */
+.pin[data-pointing="false"] {
+  width: 17px;
+  height: 17px;
+  font-size: 10px;
+  transform: translate(-55%, -55%);
+}
+.pin {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--card);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 45%);
+}
+
+/*
+ * Something is being dragged over the toolbar.
+ *
+ * The whole rail lights rather than a drop zone inside it, because the thing that
+ * catches a file is the window, and the window is the shape you can see. A dashed
+ * rectangle drawn inside it would be a second, smaller promise about a boundary the
+ * desktop has already decided.
+ */
+.rail-wrap[data-catching="true"] .rail,
+.rail-wrap[data-catching="true"] .flyout-send {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── keyboard focus, for the controls that threw it away ──────────────────────
+ *
+ * `all: unset` is used nineteen times in this file to take a button back to nothing, and
+ * it is thorough: the focus ring goes with everything else. Six controls were left with
+ * no visible focus at all, so a keyboard user could tab through the flyouts, the toasts
+ * and the composer's own menu with nothing on screen saying where they were.
+ *
+ * The ring matches `.key:focus-visible`, which kept its own — one shape for the whole
+ * surface rather than six that nearly agree.
+ */
+.row:focus-visible,
+.chip:focus-visible,
+.toast:focus-visible,
+.row-more:focus-visible,
+.file-drop:focus-visible,
+.ask-menu-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* The two keystrokes that live inside the ask field.
+ *
+ * They were only ever named in the placeholder, which is gone by the time anybody could
+ * use them. Pressable, because somebody who has just found out `/` exists should be able
+ * to press the thing that told them. */
+.compose-keys {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.compose-key-do {
+  all: unset;
+  cursor: pointer;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid rgb(255 255 255 / 14%);
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.compose-key-do:hover {
+  color: var(--text-strong);
+  border-color: rgb(255 255 255 / 30%);
+}
+
+.compose-key-do:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── the first run ───────────────────────────────────────────────────────────
+ *
+ * Beside the rail, where the things it names are. Not centred on the screen: it is about
+ * this toolbar, and a card in the middle of somebody's desktop reads as the operating
+ * system talking rather than the strip they just installed. */
+.tips {
+  position: absolute;
+  z-index: 6;
+  max-width: 320px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--chrome-strong);
+  border: 1px solid rgb(255 255 255 / 16%);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--text);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.rail-wrap[data-vertical="false"] .tips {
+  top: calc(100% + 8px);
+  left: 0;
+}
+
+.rail-wrap[data-vertical="true"] .tips {
+  top: 0;
+  left: calc(100% + 10px);
+}
+
+.rail-wrap[data-dock="right"] .tips {
+  left: auto;
+  right: calc(100% + 10px);
+}
+
+.rail-wrap[data-dock="bottom"] .tips {
+  top: auto;
+  bottom: calc(100% + 8px);
+}
+
+.tips-head {
+  color: var(--text-strong);
+  font-size: 12.5px;
+}
+
+.tips-row {
+  margin: 0;
+  display: flex;
+  gap: 8px;
+}
+
+/* A fixed column, so the four descriptions line up and the card reads as a list of
+   things rather than four sentences. */
+.tips-what {
+  flex: none;
+  width: 82px;
+  color: var(--text-strong);
+}
+
+.tips-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+
+/* ── how the receiver answers ────────────────────────────────────────────────
+ *
+ * Model and effort sat on the composer's send row and on the row above it, which said
+ * they were part of the message being written. They are not: they belong to the
+ * conversation, and the toolbar has always stored them that way. They live with the
+ * choice of who is answering now, and the receiver control says what they are. */
+.agent-answer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 2px;
+  border-top: 1px solid rgb(255 255 255 / 10%);
+  margin-top: 6px;
+}
+
+.agent-answer-said {
+  flex: none;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted-dim);
+}
+
+/* The name and, under it, what will read the message. Two lines in the space the name
+   used to take alone, because the second is a caption and is set as one. */
+.popup-to-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.popup-to-how {
+  font-size: 10px;
+  color: var(--muted-dim);
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── what the agent is doing ──────────────────────────────────────────────────
+ *
+ * A line beside the crab, up only while something is running. The mascot already says
+ * that an agent is working; this is the other half of the sentence, in the register
+ * OpenClaw's own chat uses while a run is underway — "Reading toolbar.css" rather than
+ * the answer, which arrives later and goes in the pin where there is room to read it.
+ *
+ * Hung off the end of the rail rather than placed in it. The crab is the last key, so
+ * the end is where the crab is; and a line inside the rail would make the rail wider
+ * every time an agent opened a file with a longer name, moving every key out from under
+ * somebody's pointer.
+ *
+ * It takes no pointer events, and so is not part of the clickable region — see
+ * `boxAround`. It is a sentence, not a control, and an agent can run for minutes.
+ */
+.doing {
+  position: absolute;
+  z-index: 5;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 260px;
+  padding: 5px 11px 5px 9px;
+  border-radius: 999px;
+  background: var(--chrome-strong);
+  border: 1px solid rgb(255 255 255 / 12%);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 6%) inset,
+    0 10px 24px rgb(0 0 0 / 45%);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.45;
+  /* One line. A status that wraps to three is an answer, and the shortening that keeps
+     it to one is decided in the page — this is the guard for the cases it cannot know
+     about, like a font that fell back wider than the one shipped beside it. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+/* The same green the crab wears while it works, breathing on the same clock. Two marks
+   for one fact, which is what ties the line to the mascot it comes out of rather than
+   leaving it a floating caption. */
+.doing::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgb(52 199 89);
+  box-shadow: 0 0 8px rgb(52 199 89 / 55%);
+  animation: minding-dot 2.6s ease-in-out infinite;
+}
+
+@keyframes minding-dot {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/*
+ * Out of the crab, not out of the middle of the rail: the pill is aligned to the rail's
+ * far end, which is where the mascot is, and the transform grows it from the corner
+ * nearest to it.
+ *
+ * Which side of the rail it goes on is decided by the dock, and the two cases are the
+ * way round they are because the dock names the screen edge the rail is *against*.
+ * Against the bottom edge there is no room underneath, so the pill goes above; anywhere
+ * else it hangs below, out of the way of the menus, which all open upward.
+ *
+ * Written the other way round first, which put the pill eight pixels below a rail docked
+ * at the bottom of the screen — that is off the bottom of the screen, so it rendered
+ * every time and was visible none of them.
+ */
+.rail-wrap[data-vertical="false"] .doing {
+  top: calc(100% + 8px);
+  right: 0;
+  transform-origin: 100% 0;
+  animation: doing-out 220ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.rail-wrap[data-dock="bottom"] .doing {
+  top: auto;
+  bottom: calc(100% + 8px);
+  transform-origin: 100% 100%;
+}
+
+/* Upright, the crab is the bottom key and the line goes out sideways from it. */
+.rail-wrap[data-vertical="true"] .doing {
+  bottom: 0;
+  left: calc(100% + 10px);
+  transform-origin: 0 100%;
+  animation: doing-out 220ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.rail-wrap[data-dock="right"] .doing {
+  left: auto;
+  right: calc(100% + 10px);
+  transform-origin: 100% 100%;
+}
+
+@keyframes doing-out {
+  from {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .doing,
+  .doing::before {
+    animation: none;
+  }
+}
+
+/*
+ * ── an agent that has asked something ────────────────────────────────────────
+ *
+ * The one panel on this rail that is not opened by pressing anything. It is here because
+ * something has stopped and is waiting, which is the only state the toolbar has where
+ * doing nothing costs something — so it arrives on its own, out of the key that says who
+ * is talking.
+ *
+ * Shaped like the other flyouts and coloured like them, with one difference: the accent
+ * border. On this rail the accent means "this is the thing in your hand", and a question
+ * waiting on an answer is exactly that, whether or not anybody has picked it up yet.
+ */
+.ask {
+  position: absolute;
+  z-index: 6;
+  box-sizing: border-box;
+  width: 288px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--chrome-strong);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 30%),
+    0 24px 60px rgb(0 0 0 / 60%);
+}
+
+.ask-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ask-who {
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  color: var(--accent);
+}
+.ask-shut {
+  all: unset;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+}
+.ask-shut:hover {
+  background: rgb(255 255 255 / 8%);
+  color: var(--text-strong);
+}
+.ask-shut:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+/* The question, at most four lines of it. Anything longer is an agent explaining itself,
+   and the explanation is in the Work window where there is room to read it. */
+.ask-said {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-strong);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+}
+
+/* One per line rather than a row that wraps: these are sentences, not verbs, and a
+   sentence cut in half by a column of buttons is unreadable at this width. */
+.ask-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.ask-choice {
+  all: unset;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  font-size: 12px;
+  color: var(--text-strong);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ask-choice:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-elevated));
+}
+.ask-choice:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.ask-choice:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+.ask-own {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+.ask-write {
+  flex: 1;
+  min-width: 0;
+}
+.ask-send {
+  all: unset;
+  flex-shrink: 0;
+  padding: 7px 11px;
+  border-radius: 9px;
+  border: 1px solid var(--accent);
+  background: var(--accent-fill);
+  color: var(--accent-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.ask-send:hover:not(:disabled) {
+  background: var(--accent);
+}
+.ask-send:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.ask-send:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+/*
+ * The badge, and the way back to a question that has been pushed aside.
+ *
+ * Not shown at all when nothing is asking — a permanent question mark on the key would
+ * read as help, which is the one thing it is not. `display` rather than opacity, so it
+ * takes no width on a rail where every pixel is somebody's pointer target.
+ */
+.ask-badge {
+  display: none;
+}
+.agents-key[data-asking="true"] .ask-badge {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+/* Same shape of claim as the working ring, in the colour that means "you". A question is
+   the one thing on this rail that nothing else will resolve. */
+.agents-key[data-asking="true"] {
+  box-shadow:
+    0 0 0 1.5px color-mix(in srgb, var(--accent) 65%, transparent),
+    0 0 14px color-mix(in srgb, var(--accent) 35%, transparent);
+  animation: asking 2.2s ease-in-out infinite;
+}
+@keyframes asking {
+  50% {
+    box-shadow:
+      0 0 0 1.5px var(--accent),
+      0 0 22px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agents-key[data-asking="true"] {
+    animation: none;
+  }
+}

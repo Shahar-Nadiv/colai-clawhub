@@ -1,0 +1,62 @@
+[package]
+name = "colai-toolbar"
+version = "0.1.0"
+description = "colai — point at anything on screen and hand it to an agent"
+edition = "2021"
+rust-version = "1.97.1"
+
+[[bin]]
+name = "colai-toolbar"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+# The overlay shapes itself through GTK rather than raw X. A shape set behind GTK's
+# back is undone the next time GTK re-applies its own input region, so the call has to
+# be GTK's own. Versions match what Tauri already resolves.
+cairo-rs = "0.18.5"
+gdk = "0.18.2"
+gtk = "0.18.2"
+base64 = "0.23.1"
+# The Gateway handshake signs a device identity, and the identity is stored on disk.
+ed25519-dalek = "3.0.0"
+getrandom = "0.4.3"
+sha2 = "0.11.0"
+subtle = "2.6.1"
+zeroize = "1.9.0"
+futures-util = "0.3.34"
+rustls = { version = "0.23.43", default-features = false, features = ["ring", "std", "tls12"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+tauri = { version = "2.11.5", features = ["image-png", "tray-icon", "unstable"] }
+# The one binding that exists outside this window. Everything else the toolbar offers is
+# reachable only once it already has the keyboard, which it only takes when a panel opens
+# — so eleven advertised single-letter shortcuts were unreachable from the desktop.
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-opener = "2.5.5"
+tauri-plugin-single-instance = "2.4.4"
+tokio = { version = "1.53.1", features = ["macros", "sync", "time"] }
+tokio-tungstenite = { version = "0.30.0", features = ["rustls-tls-native-roots"] }
+uuid = { version = "1.26.0", features = ["v4"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2.189"
+zbus = { version = "5.19.0", default-features = false, features = ["tokio"] }
+
+# What gets published.
+#
+# The binary ships inside an npm package that anybody can download and unpack, so it is
+# stripped: the symbol table is nobody's business and it is most of the size. Paths are
+# remapped in the build script, because panic locations from dependencies otherwise carry
+# whoever built it home directory into a public artifact.
+[profile.release]
+strip = "symbols"
+# One codegen unit and fat LTO: this is built once at publish time, not in a loop, so the
+# minutes are cheap and the megabytes are not — every install pays for the size.
+codegen-units = 1
+lto = true
+# Unwinding stays. Aborting would save a little more, at the price of one panic anywhere
+# taking the whole toolbar off the screen instead of failing the thing that panicked —
+# the wrong trade for a window somebody leaves open all day.

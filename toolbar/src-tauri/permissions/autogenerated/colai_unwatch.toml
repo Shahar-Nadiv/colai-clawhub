@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-unwatch"
+description = "Enables the colai_unwatch command without any pre-configured scope."
+commands.allow = ["colai_unwatch"]
+
+[[permission]]
+identifier = "deny-colai-unwatch"
+description = "Denies the colai_unwatch command without any pre-configured scope."
+commands.deny = ["colai_unwatch"]
