@@ -10,3 +10,6 @@ toolbar/src-tauri/target/
 # again, 5 MB of it, and committing one would put a stale copy of the plugin in the
 # repository people read to check what the plugin is.
 .pack/
+
+# Build output: `scripts/build-sidecar.mjs` produces this from `agent/sidecar.mjs`.
+agent/sidecar.bundle.mjs

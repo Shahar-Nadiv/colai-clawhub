@@ -24,6 +24,7 @@
     "index.ts",
     "src/",
     "dist/",
+    "agent/sidecar.bundle.mjs",
     "openclaw.plugin.json",
     "toolbar/ui/",
     "toolbar/src-tauri/src/",
@@ -44,9 +45,11 @@
     "test": "vitest run",
     "build:runtime": "node scripts/build-runtime.mjs",
     "build:toolbar": "node scripts/build-toolbar.mjs",
-    "build:release": "node scripts/build-release.mjs"
+    "build:release": "node scripts/build-release.mjs",
+    "build:sidecar": "node scripts/build-sidecar.mjs"
   },
   "devDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.272",
     "esbuild": "0.28.2",
     "openclaw": "2026.9.1",
     "vitest": "4.1.11"
