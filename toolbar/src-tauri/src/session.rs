@@ -61,6 +61,9 @@ pub(crate) struct Session {
     /// The `claude` this machine has. Resolved once — a toolbar whose binary moves
     /// underneath it has bigger problems than a stale path.
     claude: PathBuf,
+    /// How much may happen without being asked. See `start` for what each mode allows and
+    /// for why a conversation with no known directory does not get this one.
+    permission: String,
     talking: Mutex<Option<Talking>>,
     spent: Mutex<f64>,
 }
@@ -89,8 +92,13 @@ impl Session {
     }
 
     pub fn new(claude: PathBuf) -> Self {
+        Self::with_permission(claude, permission_asked())
+    }
+
+    pub fn with_permission(claude: PathBuf, permission: String) -> Self {
         Self {
             claude,
+            permission,
             talking: Mutex::new(None),
             spent: Mutex::new(0.0),
         }
@@ -181,6 +189,40 @@ impl Session {
             // Without this the stream carries only the result, and the toolbar would have
             // nothing to say between somebody pressing send and the answer arriving.
             "--verbose",
+            /*
+             * Nobody is sitting in front of this to approve anything.
+             *
+             * `--permission-prompts` defaults to `host`, and the host is meant to be an SDK
+             * with a callback. The toolbar drives the CLI directly and has no callback, so
+             * every prompt was being denied anyway — this says so deliberately instead of
+             * arriving at the same place by accident. Anything that would ask is refused,
+             * the refusal comes back as a tool result, and Claude explains it in the reply,
+             * which is at least a sentence somebody can act on.
+             */
+            "--permission-prompts",
+            "none",
+        ]);
+        /*
+         * What may happen without being asked.
+         *
+         * Measured rather than assumed, because this is the toolbar's whole security
+         * posture. With `acceptEdits`: a write inside the working directory succeeds, a
+         * write outside it is denied, and Bash is blocked. So the thing the toolbar exists
+         * for — "change this thing I am pointing at" — works, and it is confined to the
+         * project the conversation belongs to, with no shell.
+         *
+         * That confinement *is* the working directory, which is why a conversation whose
+         * directory is unknown gets `default` instead: for a new conversation `claude`
+         * would inherit wherever the toolbar happens to have been launched from, and
+         * auto-approving edits across somebody's home directory is not a default anybody
+         * asked for. Strict until we know where we are.
+         */
+        run.args([
+            "--permission-mode",
+            match cwd.as_deref() {
+                Some(_) => self.permission.as_str(),
+                None => "default",
+            },
         ]);
         if let Some(key) = &key {
             run.args(["--resume", key]);
@@ -399,6 +441,25 @@ fn read_conversation(path: &Path) -> Option<Conversation> {
     })
 }
 
+/// What the toolbar is allowed to do without asking.
+///
+/// `acceptEdits` by default, for the reason given in `Session::start`: it is the mode in
+/// which the product works at all, and it is confined to the conversation's own directory.
+/// `COLAI_PERMISSION` narrows it — `default` refuses every edit too — and anything the CLI
+/// does not recognise is refused rather than passed along, because a typo here would
+/// otherwise become a silently more permissive session.
+fn permission_asked() -> String {
+    const KNOWN: [&str; 3] = ["acceptEdits", "default", "plan"];
+    match std::env::var("COLAI_PERMISSION") {
+        Ok(asked) if KNOWN.contains(&asked.as_str()) => asked,
+        Ok(asked) if !asked.is_empty() => {
+            eprintln!("[colai] COLAI_PERMISSION={asked} is not one of {KNOWN:?}; using acceptEdits.");
+            "acceptEdits".to_string()
+        }
+        _ => "acceptEdits".to_string(),
+    }
+}
+
 /// Where a conversation is being had.
 ///
 /// The cwd Claude Code recorded for it, which is the project it is about. `None` for a
@@ -525,8 +586,28 @@ fn briefly(said: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{briefly, cost_in};
+    use super::{briefly, cost_in, permission_asked};
     use serde_json::json;
+
+    #[test]
+    fn an_unknown_permission_is_refused_rather_than_passed_along() {
+        /*
+         * Measured behaviour this protects, from probing the real CLI:
+         *
+         *   acceptEdits  write inside the working directory   succeeds
+         *   acceptEdits  write outside it                     denied
+         *   acceptEdits  Bash                                 blocked
+         *
+         * So the mode decides how much of somebody's machine is reachable without being
+         * asked, and a typo that fell through to a broader one would widen that silently.
+         */
+        std::env::set_var("COLAI_PERMISSION", "bypassPermissions");
+        assert_eq!(permission_asked(), "acceptEdits", "an unknown mode must not be honoured");
+        std::env::set_var("COLAI_PERMISSION", "default");
+        assert_eq!(permission_asked(), "default", "a stricter mode must be honoured");
+        std::env::remove_var("COLAI_PERMISSION");
+        assert_eq!(permission_asked(), "acceptEdits");
+    }
 
     #[test]
     fn a_cost_is_read_whether_it_is_a_number_or_a_string() {
