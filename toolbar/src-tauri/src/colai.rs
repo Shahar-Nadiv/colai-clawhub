@@ -175,9 +175,8 @@ pub(crate) fn ensure_overlay(app: &AppHandle) -> Result<WebviewWindow, String> {
     // `try_state`, because the toolbar can be opened before the client is registered —
     // from the tray during startup, or from the setup hook itself. A missing client means
     // the connection is not ready to wake, not that anything is wrong.
-    if let Some(gateway) = app.try_state::<crate::gateway_ws::GatewayClient>() {
-        gateway.activate(app.clone());
-    }
+    // Nothing to wake. The Gateway held a connection that had to be told the toolbar was
+    // up; `claude` is started per conversation and needs no rousing.
     Ok(window)
 }
 
@@ -822,9 +821,7 @@ pub(crate) fn colai_summon(app: AppHandle) -> Result<(), String> {
      * Somebody summoning the toolbar is the closest thing to "try again" this program
      * has, and it costs nothing when the driver is not parked.
      */
-    if let Some(gateway) = app.try_state::<crate::gateway_ws::GatewayClient>() {
-        gateway.resume_paused_reconnect();
-    }
+    // Same: there is no parked reconnect to resume.
     Ok(())
 }
 
@@ -879,28 +876,7 @@ pub(crate) fn colai_release(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// The CLI that knows where OpenClaw is.
-///
-/// The address is not kept, only the way to ask for it. The Control UI's address carries
-/// a one-time grant that the browser spends on arrival, so a remembered one works once
-/// and then drops somebody on a connect page — which is exactly what nobody installing a
-/// toolbar should ever be asked to do.
-#[derive(Default)]
-pub(crate) struct ControlUi(std::sync::Mutex<Option<crate::cli::OpenClawCli>>);
-
-impl ControlUi {
-    pub(crate) fn found(&self, cli: crate::cli::OpenClawCli) {
-        if let Ok(mut held) = self.0.lock() {
-            *held = Some(cli);
-        }
-    }
-
-    fn cli(&self) -> Option<crate::cli::OpenClawCli> {
-        self.0.lock().ok().and_then(|held| held.clone())
-    }
-}
-
-/// OpenClaw itself, opened in a browser and already signed in.
+/// There is no second application to open. See the body.
 ///
 /// This used to show the desktop app's own window, because the toolbar lived inside that
 /// app and colai's settings page *was* that window. Standing alone there is no such
@@ -911,21 +887,21 @@ impl ControlUi {
 /// rail being put away, so a press on it that does nothing at all is the toolbar looking
 /// broken at the moment it has least to show for itself.
 #[tauri::command]
-pub(crate) async fn colai_open_settings(app: AppHandle) -> Result<(), String> {
-    let Some(cli) = app.state::<ControlUi>().cli() else {
-        return Err(
-            "No Gateway yet, so there is nowhere to open. Start OpenClaw and try again."
-                .to_string(),
-        );
-    };
-    // Off the UI thread: this runs the `openclaw` CLI, which takes most of a second, and
-    // the rail must not freeze while somebody waits for a browser.
-    let url = tauri::async_runtime::spawn_blocking(move || crate::gateway::browser_url(&cli))
-        .await
-        .map_err(|error| format!("Could not ask OpenClaw where it is: {error}"))??;
-    tauri_plugin_opener::OpenerExt::opener(&app)
-        .open_url(url, None::<&str>)
-        .map_err(|error| format!("Could not open OpenClaw: {error}"))
+pub(crate) async fn colai_open_settings(
+    #[allow(unused_variables)] app: AppHandle,
+) -> Result<(), String> {
+    /*
+     * Nothing to open.
+     *
+     * This opened OpenClaw's dashboard — a web application the Gateway served, where the
+     * agents and their settings lived. Claude Code is the terminal the person already has
+     * in front of them; there is no second window to send them to, and opening a browser
+     * at nothing would be worse than the key not being there.
+     *
+     * The key itself comes off the rail; this stays so that a stale page cannot invoke a
+     * command that no longer exists.
+     */
+    Err("There is no separate application to open — Claude Code is where this goes.".to_string())
 }
 
 /// One screen, in the overlay's own coordinates, with what the desktop keeps of it.

@@ -13,7 +13,7 @@
 use base64::Engine as _;
 use serde::Serialize;
 
-use crate::gateway_ws::ChatAttachment;
+use crate::wire::ChatAttachment;
 
 /// A path somebody brought in, as the composer needs to show it.
 ///

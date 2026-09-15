@@ -18,7 +18,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::gateway_ws::GatewayClient;
 
 /// A catalogue the toolbar knows how to read.
 ///
@@ -128,43 +127,22 @@ pub(crate) struct Found {
 /// bookmarked, not a search they have to think of words for.
 #[tauri::command]
 pub(crate) async fn colai_library_search(
-    gateway: tauri::State<'_, GatewayClient>,
-    kind: String,
-    query: String,
-    mine: bool,
-    agent_id: Option<String>,
-    session_key: Option<String>,
-) -> Result<Found, String> {
-    for library in LIBRARIES {
-        let wanted = if kind == "system" {
-            library.theme
-        } else {
-            library.component
-        };
-        for search in library.searches {
-            let answer = gateway
-                .invoke_tool(
-                    search,
-                    asked_for(wanted, &query, mine),
-                    agent_id.clone(),
-                    session_key.clone(),
-                )
-                .await?;
-            if answer.missing {
-                continue;
-            }
-            return Ok(Found {
-                library: Some(library.label.to_string()),
-                cards: cards_in(&answer.output, library.previews),
-                connect: false,
-                trouble: answer.trouble,
-            });
-        }
-    }
-    Ok(Found {
-        connect: true,
-        ..Found::default()
-    })
+    #[allow(unused_variables)] library: String,
+    #[allow(unused_variables)] query: String,
+) -> Result<Vec<Card>, String> {
+    /*
+     * The component library is not reachable from this host.
+     *
+     * It searched 21st.dev by asking OpenClaw to invoke an MCP tool on the user's behalf —
+     * the Gateway had a method for that and knew which servers were configured. Claude Code
+     * has MCP servers too, but they belong to the session, and a toolbar cannot reach into
+     * one and call it.
+     *
+     * Said rather than returning nothing: an empty result reads as "no components matched",
+     * which would send somebody looking for a better search term for a feature that is not
+     * here. Claude itself can fetch a component when asked in the conversation.
+     */
+    Err("The component library needs OpenClaw. Ask Claude for a component instead.".to_string())
 }
 
 /// What each catalogue is called, and what to name its server.

@@ -4417,12 +4417,16 @@ describe("one light for every agent at once", () => {
   });
 
   test("a desktop that asked for less movement gets none of it", () => {
+    /*
+     * The rule belongs to the animation, not to whatever is being animated. It was written
+     * for a walking crab and now guards a turning C — and the replacement shipped without
+     * one, spinning on for anybody who had asked it not to, until this caught it.
+     */
     const quiet = css.slice(
-      css.indexOf("@media (prefers-reduced-motion: reduce)", css.indexOf("crab-walk")),
+      css.indexOf("@media (prefers-reduced-motion: reduce)", css.indexOf("colai-turn")),
     );
-    for (const part of ["crab-leg", "crab-claw", "crab-body"]) {
-      expect(quiet.slice(0, 400), part).toContain(part);
-    }
+    expect(quiet.slice(0, 300)).toContain("colai-c");
+    expect(quiet.slice(0, 300)).toContain("animation: none");
   });
 });
 
@@ -5221,15 +5225,15 @@ describe("the way back when the toolbar is put away", () => {
 
   test("the toolbar carries a tray icon of its own", () => {
     /*
-     * Not in OpenClaw's tray, which is where it belongs and where it cannot go: that menu
-     * is compiled into OpenClaw's desktop app with no seam for a plugin, and this plugin
-     * does not change OpenClaw. A second icon beside OpenClaw's is what staying out of
-     * somebody else's source costs.
+     * The toolbar is the only window this program has, and it can be put away — Escape,
+     * dragged off, or never summoned. Without a tray there would be nothing left on screen
+     * to press and no way back except killing the process.
      *
-     * Without one, Escape puts the toolbar away and there is nothing left on screen to
-     * press — the toolbar is the only window this program has.
+     * "Open OpenClaw" used to sit on this menu and is gone with the application it opened.
+     * Claude Code is the terminal the person already has in front of them; there is no
+     * second window to send them to.
      */
-    for (const label of ['"Toolbar"', '"Open OpenClaw"', '"Quit colai"']) {
+    for (const label of ['"Toolbar"', '"Quit colai"']) {
       expect(tray, `the tray menu must offer ${label}`).toContain(label);
     }
   });
@@ -5273,11 +5277,14 @@ describe("the way back when the toolbar is put away", () => {
     expect(hiding.slice(0, hiding.indexOf("\n}"))).toContain("tray_says_toolbar(&app, false)");
   });
 
-  test("opening OpenClaw does not hold the menu open", () => {
-    // It runs the CLI for a fresh sign-in address, which takes most of a second. On the
-    // menu's own thread that is a tray that stays open staring at somebody.
-    const pressed = tray.slice(tray.indexOf("fn pressed"));
-    expect(pressed).toContain("tauri::async_runtime::spawn");
+  test("the menu offers nothing that opens another application", () => {
+    /*
+     * It had one item that did — "Open OpenClaw" — and it took most of a second on the
+     * menu's own thread, which is a tray sitting open staring at somebody. Both the item
+     * and the wait are gone: there is no second application on this host.
+     */
+    expect(tray).not.toContain("colai_open_settings");
+    expect(tray).not.toContain("OPEN_ID");
   });
 
   test("no tray is not no toolbar", () => {

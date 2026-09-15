@@ -2,13 +2,13 @@
 //
 // The toolbar can be put away from its own keyboard, and standing alone it has no other
 // window — so without this, somebody who pressed Escape had nothing left on screen to
-// press and no way back except killing the process and letting OpenClaw start it again.
+// press and no way back except killing the process.
 //
-// It ticked a menu item in the OpenClaw desktop app before this program was cut out of
-// it. That app is not what installs the toolbar any more, and a plugin cannot reach that
-// menu: it is compiled into OpenClaw's desktop app with no seam for one, and this plugin
-// does not change OpenClaw. So the toolbar carries its own icon — a second one beside
-// OpenClaw's, which is the honest cost of staying out of OpenClaw's source.
+// That is the whole reason it exists. The rail can be put away — dragged off, double
+// clicked shut, or never summoned — and a window with no taskbar entry and no menu bar has
+// nowhere else to be found. The tray is the one surface that is still there when the
+// toolbar is not, which is why it also carries the keyboard shortcut as a label: a global
+// shortcut nobody has been told about is a shortcut nobody uses.
 
 use crate::colai;
 use std::sync::Mutex;
@@ -22,7 +22,6 @@ const TIPS_ID: &str = "colai-tips";
 
 /// What the page hears when somebody asks for the basics again.
 pub(crate) const TIPS_EVENT: &str = "colai:tips";
-const OPEN_ID: &str = "open-openclaw";
 const QUIT_ID: &str = "quit";
 
 /// The tray, kept alive and reachable so the tick can be corrected.
@@ -56,7 +55,6 @@ impl Tray {
 pub(crate) fn build(app: &App) -> tauri::Result<Tray> {
     // Ticked on, because the toolbar opens with the program.
     let toolbar = CheckMenuItem::with_id(app, TOOLBAR_ID, "Toolbar", true, true, None::<&str>)?;
-    let open = MenuItem::with_id(app, OPEN_ID, "Open OpenClaw", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     // The binding, written where somebody looking for the toolbar will find it. A global
     // shortcut nobody has been told about is a shortcut nobody uses, and this menu is the
@@ -75,7 +73,7 @@ pub(crate) fn build(app: &App) -> tauri::Result<Tray> {
     let tips = MenuItem::with_id(app, TIPS_ID, "Show the basics", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, QUIT_ID, "Quit colai", true, None::<&str>)?;
     let menu = MenuBuilder::new(app)
-        .items(&[&toolbar, &binding, &tips, &open, &separator, &quit])
+        .items(&[&toolbar, &binding, &tips, &separator, &quit])
         .build()?;
 
     let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))?;
@@ -102,21 +100,11 @@ fn pressed(app: &AppHandle, event: tauri::menu::MenuEvent) {
         TOOLBAR_ID => {
             // The same word the command line sends, through the same decision: `toggle`
             // reads the window rather than this tick, which is what the press is about to
-            // correct. Three ways in — the menu, `openclaw colai toggle`, the toolbar's
-            // own keyboard — and one place that decides what they mean.
+            // correct. Three ways in — the menu, the command line, and the toolbar's own
+            // keyboard — and one place that decides what they mean.
             if let Err(trouble) = colai::asked_for(app, &["toggle".to_string()]) {
                 eprintln!("[colai] could not turn the toolbar over: {trouble}");
             }
-        }
-        OPEN_ID => {
-            // Opening OpenClaw runs the CLI for a fresh sign-in address, which takes most
-            // of a second. Off the menu's thread, so the tray closes when it is pressed.
-            let app = app.clone();
-            tauri::async_runtime::spawn(async move {
-                if let Err(trouble) = colai::colai_open_settings(app).await {
-                    eprintln!("[colai] {trouble}");
-                }
-            });
         }
         TIPS_ID => {
             // Shown, which means the toolbar has to be on screen to show it. Somebody

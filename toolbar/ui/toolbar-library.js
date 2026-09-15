@@ -219,10 +219,10 @@ function drawLibrary() {
       ? known
           .map(
             (one) =>
-              `${one.label} — add it in OpenClaw under Settings → MCP, and name the server “${one.called}”.`,
+              `${one.label} — not reachable from here. Ask Claude for a component instead.`,
           )
           .join(" ")
-      : "Add one in OpenClaw under Settings → MCP.";
+      : "Not reachable from here — ask Claude for a component instead.";
     rows.push(saying(`No component library is connected to this agent yet. ${told}`));
   } else if (open.trouble) {
     rows.push(saying(`Could not look — ${open.trouble}`));

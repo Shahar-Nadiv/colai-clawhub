@@ -63,44 +63,21 @@ function icon(name, size) {
 }
 
 /**
- * OpenClaw's own mark, for the key that opens OpenClaw.
+ * colai's own mark, for the key that says how things are going.
  *
- * Not one of the glyphs above and deliberately not drawn like one: those are line
- * drawings of what a tool does, and this is a logo. It is the tray icon's geometry
- * exactly — `src-tauri/icons/tray-template.svg` — so the critter in the rail and the
- * critter in the system tray are the same face rather than two drawings of one.
+ * This was OpenClaw's crab, because the toolbar was built inside OpenClaw's desktop app and
+ * the key beside it opened that app. There is no such application here, so the face is
+ * colai's: the C from the logo, open to the right, with the cursor for a tail.
  *
- * A silhouette with the eyes punched out, filled with `currentColor`, so it dims and
- * lights with every other key on the rail.
+ * Two parts rather than one path, because the arc turns on its own when something is
+ * running — see `data-walking` in the stylesheet. The crab walked; a C spins, which is the
+ * same idea drawn in the shape this mark actually has.
  */
-function openclawMark(size) {
+function colaiMark(size) {
   const edge = size || 17;
-  // Grouped rather than flat, because the parts move independently when it is working:
-  // the legs take turns, and everything above them rides on one body so the eyes never
-  // come off the face.
-  return `<svg width="${edge}" height="${edge}" viewBox="0 0 18 18" aria-hidden="true">
-    <mask id="colai-critter" maskUnits="userSpaceOnUse" x="0" y="0" width="18" height="18">
-      <rect class="crab-leg crab-leg-a" fill="#fff" x="5.4" y="12.96" width="2.52" height="3.24" rx="1.26" />
-      <rect class="crab-leg crab-leg-b" fill="#fff" x="10.08" y="12.96" width="2.52" height="3.24" rx="1.26" />
-      <g class="crab-body">
-        <g fill="none" stroke="#fff" stroke-width="2.07" stroke-linecap="round">
-          <path d="M6.926 4.563 Q6.149 1.35 3.816 1.62" />
-          <path d="M11.074 4.563 Q11.851 1.35 14.184 1.62" />
-        </g>
-        <circle class="crab-claw crab-claw-a" fill="#fff" cx="2.7" cy="9.59" r="1.8" />
-        <circle class="crab-claw crab-claw-b" fill="#fff" cx="15.3" cy="9.59" r="1.8" />
-        <ellipse fill="#fff" cx="9" cy="8.64" rx="6.48" ry="5.94" />
-        <g fill="#000">
-          <ellipse cx="6.149" cy="7.69" rx="1.426" ry="1.544" />
-          <ellipse cx="11.851" cy="7.69" rx="1.426" ry="1.544" />
-        </g>
-        <g fill="#fff">
-          <circle cx="5.522" cy="7.134" r="0.741" />
-          <circle cx="11.224" cy="7.134" r="0.741" />
-        </g>
-      </g>
-    </mask>
-    <rect width="18" height="18" fill="currentColor" mask="url(#colai-critter)" />
+  return `<svg width="${edge}" height="${edge}" viewBox="0 0 24 24" aria-hidden="true">
+    <path class="colai-c" d="M17.2 6.4A8.6 8.6 0 1 0 12.6 20.4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+    <path class="colai-tip" d="M15.4 11.8 L23 19.6 L22 9.8 Z" fill="currentColor" />
   </svg>`;
 }
 
@@ -213,15 +190,20 @@ function buildRail() {
   // one item on it, which is a menu that exists to be dismissed.
   buttons.send = send;
 
-  // The way back to OpenClaw itself, wearing OpenClaw's own face. A gear said
-  // "preferences"; what this opens is the application.
+  /*
+   * How things are going, wearing colai's own face.
+   *
+   * It used to be the way back to OpenClaw, and opening that application is what it did.
+   * There is no second application here — Claude Code is the terminal already in front of
+   * the person — so the key keeps the only job it had that still means something: it is the
+   * light. Green while something runs, and the mark turns while it does.
+   */
   const home = document.createElement("button");
   home.type = "button";
   home.className = "key home-key";
-  home.title = "OpenClaw";
-  home.setAttribute("aria-label", "Open OpenClaw");
-  home.innerHTML = openclawMark();
-  home.addEventListener("click", () => invoke("colai_open_settings"));
+  home.title = "colai";
+  home.setAttribute("aria-label", "colai");
+  home.innerHTML = colaiMark();
   buttons.settings = home;
 
   // Only ever on the rail while something is running, and beside the key that says so.
@@ -600,7 +582,7 @@ async function watchEverything() {
       same(before.working, work.working) &&
       same(before.troubled, work.troubled)
     ) {
-      // Nothing about who is working has moved — but the line beside the crab can go
+      // Nothing about who is working has moved — but the line beside the mark can go
       // stale on its own clock. An agent silent inside one long tool call is the same
       // news five seconds later, and the sentence about it stops being true without
       // anything here changing. Redrawn only when what it would say has actually

@@ -414,62 +414,44 @@ body {
  * more than one place now — the tray icon at seventeen pixels and the pin waiting on a
  * reply at fourteen. One trigger, so the second place did not have to restate the gait.
  */
-.crab-leg,
-.crab-claw,
-.crab-body {
+.colai-c {
   transform-box: fill-box;
   transform-origin: center;
 }
-/* One stride pair. Everything below is a division of it, so the parts cannot drift. */
-[data-walking="true"] .crab-body {
-  animation: crab-walk 0.68s ease-in-out infinite;
+/*
+ * The mark turns while something is running.
+ *
+ * The crab that was here walked — legs, claws and a body leaning onto each stride. A C is
+ * an arc, and an arc that is doing something turns; the same idea drawn in the shape this
+ * mark actually has, and one property instead of five animations that had to stay in step.
+ *
+ * Only the arc. The cursor holds still, so the mark stays legible as a mark rather than
+ * becoming a spinner that happens to be green.
+ *
+ * Only while it is green, as before: a mark merrily spinning under a red light would be
+ * the toolbar contradicting itself.
+ */
+[data-walking="true"] .colai-c {
+  animation: colai-turn 1.4s linear infinite;
 }
-[data-walking="true"] .crab-leg-a {
-  animation: crab-step 0.68s ease-in-out infinite;
-}
-[data-walking="true"] .crab-leg-b {
-  animation: crab-step 0.68s ease-in-out -0.34s infinite;
-}
-/* Counter to the leg on their own side, so it looks pleased with itself rather than
-   merely mobile. */
-[data-walking="true"] .crab-claw-a {
-  animation: crab-wave 0.68s ease-in-out -0.34s infinite;
-}
-[data-walking="true"] .crab-claw-b {
-  animation: crab-wave 0.68s ease-in-out infinite;
-}
-@keyframes crab-walk {
-  0%,
-  50%,
-  100% {
-    transform: translateY(0) rotate(0deg);
-  }
-  /* Leaning onto the right leg while the left one is up, and the other way after. */
-  25% {
-    transform: translateY(0.3px) rotate(3deg);
-  }
-  75% {
-    transform: translateY(0.3px) rotate(-3deg);
+@keyframes colai-turn {
+  to {
+    transform: rotate(360deg);
   }
 }
-@keyframes crab-step {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-0.9px);
-  }
-}
-@keyframes crab-wave {
-  0%,
-  100% {
-    transform: translateY(0) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-0.55px) rotate(-8deg);
+/*
+ * And a desktop that asked for less movement gets none of it.
+ *
+ * The crab this replaced had one of these and the replacement did not — the mark simply
+ * spun on, for anyone who had said they did not want that. The rule is the animation's,
+ * not the crab's, so it moves with it.
+ */
+@media (prefers-reduced-motion: reduce) {
+  [data-walking="true"] .colai-c {
+    animation: none;
   }
 }
+
 @media (prefers-reduced-motion: reduce) {
   .home-key[data-mood],
   [data-walking] .crab-leg,

@@ -9,7 +9,12 @@ const tauri = window["__TAURI__"];
 const invoke = tauri ? tauri.core.invoke : async () => undefined;
 const listen = tauri ? tauri.event.listen : async () => () => {};
 
-const WHERE = "openclaw.toolbar.where";
+// Where the rail was left, remembered between runs.
+//
+// Renamed off `openclaw.toolbar.where`, which costs anybody who used the OpenClaw build
+// one rail that starts in its default corner. Worth it: a key naming a product this is no
+// longer part of is the kind of thing that stays wrong for years because it works.
+const WHERE = "colai.toolbar.where";
 
 const el = {
   wrap: document.getElementById("rail-wrap"),
@@ -146,7 +151,7 @@ const state = {
   // honest state before anything is known, and a green one would be a claim.
   atWork: null,
   // The last thing heard about work in progress — a line, which conversation it came
-  // from and when. What the pill beside the crab shows. Null until an agent says
+  // from and when. What the pill beside the mark shows. Null until an agent says
   // something, which is not the same as nothing running: `doingSaid` decides between
   // those two, because only it can see what the Gateway reports.
   doing: null,
@@ -414,14 +419,14 @@ function render() {
   const mood = moodMark(state.atWork);
   if (mood) buttons.settings.dataset.mood = mood;
   else delete buttons.settings.dataset.mood;
-  // The one trigger for the gait, wherever the crab is drawn. Working is the only mood
-  // it walks in: a crab scuttling under a red light would be the toolbar contradicting
+  // The one trigger for the motion, wherever the mark is drawn. Working is the only mood
+  // it turns in: a mark spinning under a red light would be the toolbar contradicting
   // itself.
   buttons.settings.dataset.walking = String(mood === "working");
   buttons.settings.title = moodSaid(state.atWork);
   buttons.settings.setAttribute("aria-label", buttons.settings.title);
 
-  // And what it is doing, beside the crab that says it is doing something.
+  // And what it is doing, beside the mark that says it is doing something.
   //
   // The text is only written when it changes. This runs on every render — a keypress, a
   // pointer move over a menu — and rewriting the node each time restarts the CSS
@@ -611,10 +616,13 @@ function redrawMarksSoon() {
  * the state, because a state is not an instruction.
  */
 const GATEWAY_TROUBLE = {
-  down: "OpenClaw is not answering. Retrying…",
-  "pairing-required": "This machine is not paired with OpenClaw yet.",
-  "credential-required": "OpenClaw needs a credential before it will answer.",
-  "tls-failure": "OpenClaw's certificate did not match the one this toolbar pinned.",
+  down: "Claude Code is not answering. Retrying…",
+  // Kept because the page reads this table by key and an absent key draws nothing.
+  // Neither can happen here: there is nothing to pair with and no credential to hold —
+  // the toolbar runs `claude` as whoever started it.
+  "pairing-required": "This machine is not paired yet.",
+  "credential-required": "Claude Code needs signing in to before it will answer.",
+  "tls-failure": "The connection could not be trusted.",
 };
 
 let saidLast = "";
@@ -760,7 +768,7 @@ function boxAround(node) {
     }
     if (!box.width || !box.height) continue;
     // Something that does not take the pointer claims none of the desktop. The line
-    // beside the crab is the case this exists for: a sentence about work in progress,
+    // beside the mark is the case this exists for: a sentence about work in progress,
     // hung over whatever somebody is working on, for as long as the agent runs — and
     // counting it would lay a dead strip of glass across exactly that. Its children are
     // still walked above, because `pointer-events` is inherited and a child may take it

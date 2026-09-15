@@ -15,8 +15,8 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 
 use crate::colai_capture::MarkShots;
-use crate::gateway_ws::{
-    ChatAttachment, ChatRoutingTarget, CronAdd, CronAdded, GatewayClient, Point, Rewound,
+use crate::wire::{
+    ChatAttachment, CronAdd, CronAdded, Point, Rewound,
     StartHere, ThreadLocator,
 };
 
@@ -206,38 +206,6 @@ pub(crate) async fn colai_send(
      * miss, so `watching` is true whenever anything was sent at all.
      */
     Ok(sent)
-}
-
-/// Which session a receiver turns out to be.
-///
-/// A thread is the only one that costs anything: continuing it is what makes a
-/// conversation held elsewhere into one the Gateway can speak to, and it is a real
-/// handover. The page asks before it ever gets here.
-async fn resolve(
-    gateway: &GatewayClient,
-    receiver: &Receiver,
-) -> Result<ChatRoutingTarget, String> {
-    match receiver.kind.as_str() {
-        "agent" => gateway.target_for_agent(&receiver.id).await,
-        "session" => Ok(ChatRoutingTarget {
-            session_key: receiver.id.clone(),
-            // A canonical session key already says whose it is; naming the agent again
-            // is rejected.
-            agent_id: None,
-        }),
-        "thread" => {
-            let locator = receiver
-                .locator
-                .clone()
-                .ok_or_else(|| "That conversation cannot be reached from here.".to_string())?;
-            let session_key = gateway.catalog_continue(locator).await?;
-            Ok(ChatRoutingTarget {
-                session_key,
-                agent_id: None,
-            })
-        }
-        other => Err(format!("There is no way to send to a {other}.")),
-    }
 }
 
 /// Lay a recording out as one picture, on the thread allowed to draw.

@@ -1644,13 +1644,13 @@ function moodMark(work) {
 /** What the icon's tooltip says, given everything happening at once. */
 function moodSaid(work) {
   const now = moodOf(work);
-  if (!now) return "OpenClaw · ⌘,";
+  if (!now) return "colai";
   const said = [MOODS[now.mood].says(now.many)];
   // The rest, so a red light does not hide two agents still working behind it. Named in
   // the same order they would have been ranked.
   if (now.mood !== "waiting" && work.waiting > 0) said.push(MOODS.waiting.says(work.waiting));
   if (now.mood !== "working" && work.running > 0) said.push(MOODS.working.says(work.running));
-  return `OpenClaw — ${said.join(", ")}`;
+  return `colai — ${said.join(", ")}`;
 }
 
 /** What the rail says about work underway, in the fewest words that are still true. */

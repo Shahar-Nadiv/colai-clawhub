@@ -260,7 +260,7 @@ function drawPopup() {
   if (needsAgreeing()) {
     const warned = document.createElement("p");
     warned.className = "popup-warn";
-    warned.textContent = `Sending adopts “${state.receiving.name}” into OpenClaw, which takes it over from wherever it is running now.`;
+    warned.textContent = `Sending continues “${state.receiving.name}” from wherever it left off.`;
     rows.splice(rows.length - 1, 0, warned);
   }
 
@@ -446,7 +446,7 @@ function modelPick() {
     if (state.models.length === 0) {
       const said = document.createElement("p");
       said.className = "menu-empty";
-      said.textContent = "No models. Sign in to a provider in OpenClaw.";
+      said.textContent = "Claude Code chooses its own model — use /model to change it.";
       menu.append(said);
       return;
     }
@@ -1281,7 +1281,7 @@ function drawComposer(into) {
   if (needsAgreeing()) {
     const warned = document.createElement("p");
     warned.className = "popup-warn";
-    warned.textContent = `Sending adopts “${state.receiving.name}” into OpenClaw, which takes it over from wherever it is running now.`;
+    warned.textContent = `Sending continues “${state.receiving.name}” from wherever it left off.`;
     rows.push(warned);
   }
 
@@ -1468,7 +1468,7 @@ function drawWho() {
     const empty = document.createElement("p");
     empty.className = "agent-empty";
     empty.textContent =
-      "Nobody yet. Start a conversation in the OpenClaw window and it appears here.";
+      "Nothing yet. Start a conversation with Claude Code and it appears here.";
     el.agentRows.replaceChildren(empty);
     return;
   }

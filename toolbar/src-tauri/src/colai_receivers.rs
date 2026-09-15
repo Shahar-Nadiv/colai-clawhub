@@ -42,10 +42,19 @@ pub(crate) struct ToolbarAgent {
 /// simply not carry, and a menu item that always fails is worse than one that is absent —
 /// it teaches somebody the toolbar is broken.
 #[tauri::command]
-pub(crate) fn colai_allowed(
-    gateway: tauri::State<'_, crate::gateway_ws::GatewayClient>,
-) -> Vec<String> {
-    gateway.scopes()
+pub(crate) fn colai_allowed() -> Vec<String> {
+    /*
+     * Nothing is gated here.
+     *
+     * The Gateway issued scopes and the page hid controls it would be refused for. Claude
+     * Code has no scopes: the toolbar runs it as the person who started the toolbar, and
+     * what it may do is decided by the permission mode — see `session.rs` — not by a grant
+     * the page can read.
+     *
+     * Empty rather than a list of everything: the page treats an unknown scope as absent,
+     * so claiming scopes that do not exist would be inventing an authority to display.
+     */
+    Vec::new()
 }
 
 #[tauri::command]
@@ -141,7 +150,7 @@ pub(crate) async fn colai_sessions(
 #[tauri::command]
 pub(crate) async fn colai_models(
     #[allow(unused_variables)] agent_id: Option<String>,
-) -> Result<Vec<crate::gateway_ws::ModelChoice>, String> {
+) -> Result<Vec<crate::wire::ModelChoice>, String> {
     /*
      * Claude Code chooses its own model, and changing it mid-conversation is its own
      * `/model`. The Gateway kept the choice on the conversation and had a method to patch
@@ -168,14 +177,14 @@ pub(crate) async fn colai_models(
 #[tauri::command]
 pub(crate) async fn colai_at_work(
     session: tauri::State<'_, crate::session::Session>,
-) -> Result<crate::gateway_ws::AtWork, String> {
+) -> Result<crate::wire::AtWork, String> {
     /*
      * The rail's one light. On OpenClaw it counted other people's agents running in the
      * background; here the only thing working is the conversation this toolbar is having,
      * which it already knows about — so this reports on itself and nothing else.
      */
     let _ = session.spent();
-    Ok(crate::gateway_ws::AtWork::default())
+    Ok(crate::wire::AtWork::default())
 }
 
 /// What to call a conversation, in the order a person would.
@@ -183,7 +192,7 @@ pub(crate) async fn colai_at_work(
 /// The name somebody gave it, then the name the Gateway shows in its own list, then the
 /// title projected from the first message, and only then the routing key — which is an
 /// address rather than a name, and appears when a session genuinely has nothing else.
-fn session_title(row: &crate::gateway_ws::GatewaySessionSummary) -> String {
+fn session_title(row: &crate::wire::Conversation) -> String {
     [
         row.label.as_deref(),
         row.display_name.as_deref(),
@@ -211,7 +220,7 @@ pub(crate) struct ToolbarThread {
     pub receiving: bool,
     /// Carried so the thread can be continued later. An id alone names nothing: a
     /// conversation is addressed by its catalog, its host and its thread together.
-    pub locator: crate::gateway_ws::ThreadLocator,
+    pub locator: crate::wire::ThreadLocator,
 }
 
 /// The folder a set of those conversations belongs to.
@@ -226,46 +235,6 @@ pub(crate) struct ToolbarProject {
     pub label: Option<String>,
     pub path: Option<String>,
     pub threads: Vec<ToolbarThread>,
-}
-
-/// The conversations somebody has open somewhere other than the Gateway.
-///
-/// A machine can have an empty Gateway session store and two dozen of these — which is
-/// The directories somebody actually works in, as the Gateway reports them.
-///
-/// This is the list that decides what `@` may reach and what may be read into a send,
-/// so it deliberately comes from the Gateway rather than from the page. A page that
-/// could name its own roots could name `/`, and then the gate in front of the file
-/// system would be a gate the thing being gated holds the key to.
-///
-/// Archived threads count: the folder is still somewhere they work, even if that
-/// conversation is finished.
-pub(crate) async fn work_roots(
-    gateway: &crate::gateway_ws::GatewayClient,
-) -> Vec<std::path::PathBuf> {
-    let Ok(listed) = gateway.sessions_catalog_list().await else {
-        // No answer is not permission. An empty list refuses everything, which is the
-        // safe direction for a question about what may be read.
-        return Vec::new();
-    };
-    let mut roots: Vec<std::path::PathBuf> = Vec::new();
-    for catalog in &listed.catalogs {
-        for host in &catalog.hosts {
-            for thread in &host.sessions {
-                let Some(root) = thread.cwd.as_deref().and_then(project_root) else {
-                    continue;
-                };
-                let root = std::path::PathBuf::from(root);
-                if !worth_reading(&root) {
-                    continue;
-                }
-                if !roots.contains(&root) {
-                    roots.push(root);
-                }
-            }
-        }
-    }
-    roots
 }
 
 /// Whether a directory is narrow enough to be a root at all.
@@ -376,7 +345,7 @@ fn segments(path: &str) -> usize {
 }
 
 /// What to call a thread: its own name, then the folder it runs in, then its id.
-fn thread_title(thread: &crate::gateway_ws::CatalogThread) -> String {
+fn thread_title(thread: &crate::wire::CatalogThread) -> String {
     named(thread.name.as_deref())
         .or_else(|| thread.cwd.as_deref().map(checkout_name))
         .unwrap_or_else(|| thread.thread_id.clone())
@@ -455,10 +424,10 @@ mod tests {
     }
 
     use super::*;
-    use crate::gateway_ws::GatewaySessionSummary;
+    use crate::wire::Conversation;
 
-    fn row(key: &str) -> GatewaySessionSummary {
-        GatewaySessionSummary {
+    fn row(key: &str) -> Conversation {
+        Conversation {
             key: key.to_string(),
             agent_id: None,
             label: None,
@@ -472,8 +441,8 @@ mod tests {
         }
     }
 
-    fn thread(id: &str) -> crate::gateway_ws::CatalogThread {
-        crate::gateway_ws::CatalogThread {
+    fn thread(id: &str) -> crate::wire::CatalogThread {
+        crate::wire::CatalogThread {
             thread_id: id.to_string(),
             agent_id: None,
             name: None,

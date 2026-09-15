@@ -20,7 +20,6 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod cli;
 mod colai;
 mod colai_attach;
 mod colai_capture;
@@ -31,10 +30,8 @@ mod colai_library;
 mod colai_marks;
 mod colai_receivers;
 mod colai_send;
-mod gateway;
-mod gateway_device_identity;
 mod session;
-mod gateway_ws;
+mod wire;
 mod hotkey;
 mod screen;
 mod tray;
@@ -113,9 +110,7 @@ fn main() {
                     eprintln!("[colai] Install Claude Code, or set COLAI_CLAUDE to its path.");
                 }
             }
-            app.manage(gateway_ws::GatewayClient::new());
             app.manage(colai::ShapeState::default());
-            app.manage(colai::ControlUi::default());
             app.manage(colai_capture::MarkShots::default());
 
             // The tray, before the overlay, so the first summon has something to tick.
@@ -151,46 +146,12 @@ fn main() {
             // it was made on and nowhere else.
             colai_attach::watch_the_front(app.handle());
 
-            // And the Gateway, found the way the desktop app finds it: by asking the
-            // OpenClaw CLI. That is why this needs no pairing, no credential store and no
-            // identity of its own — the CLI that installed this already has all three.
-            //
-            // On a background thread because it may install and start the service, which
-            // is slow, and a toolbar that will not draw until the Gateway answers is a
-            // toolbar that looks broken on a cold machine.
-            let handle = app.handle().clone();
-            std::thread::spawn(move || {
-                let found = match cli::OpenClawCli::discover() {
-                    Ok(found) => found,
-                    Err(trouble) => {
-                        eprintln!("[colai] no openclaw CLI: {trouble}");
-                        return;
-                    }
-                };
-                // How to ask where OpenClaw is, kept for the claw. The address itself is
-                // not: it carries a one-time grant, so the claw asks again on every press
-                // rather than replaying a spent one.
-                handle.state::<colai::ControlUi>().found(found.clone());
-                // Kept trying. One attempt was a toolbar that stayed disconnected for the
-                // rest of the session if the Gateway happened to be slow that morning,
-                // with every menu empty and no way back but killing it.
-                let mut wait = FIRST_RETRY;
-                loop {
-                    match gateway::ensure_ready(&found) {
-                        Ok(socket) => {
-                            handle
-                                .state::<gateway_ws::GatewayClient>()
-                                .configure(&handle, socket);
-                            return;
-                        }
-                        Err(trouble) => {
-                            eprintln!("[colai] no Gateway yet ({trouble}); trying again in {wait:?}");
-                            std::thread::sleep(wait);
-                            wait = (wait * 2).min(LONGEST_RETRY);
-                        }
-                    }
-                }
-            });
+            // Nothing to connect to, and nothing to discover at startup beyond the
+            // `claude` found above. The Gateway had to be located through the OpenClaw
+            // CLI, installed if absent, started if stopped, and then retried until it
+            // answered — all before the toolbar could say anything. `claude` is a program
+            // on this machine that is run per conversation, so there is no connection to
+            // hold open and no service to bring up.
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
