@@ -18,12 +18,22 @@ pub(crate) const CLIENT_MODE: &str = "ui";
 pub(crate) const CLIENT_PLATFORM: &str = "linux";
 pub(crate) const CLIENT_DEVICE_FAMILY: &str = "desktop";
 pub(crate) const CLIENT_ROLE: &str = "operator";
-pub(crate) const CLIENT_SCOPES: [&str; 5] = [
+/*
+ * Exactly the scopes this client's own calls need, checked against the Gateway's method
+ * table rather than assumed: `operator.read` for the lists and subscriptions,
+ * `operator.write` for sending and invoking, `operator.admin` for `cron.add`,
+ * `sessions.rewind` and `sessions.catalog.startTerminal`, `operator.approvals` for
+ * `exec.approval.list`.
+ *
+ * `operator.pairing` was in this list and is reached by nothing the toolbar calls. A
+ * scope asked for and never used is authority somebody granted for no reason, and it is
+ * held for as long as the device identity is.
+ */
+pub(crate) const CLIENT_SCOPES: [&str; 4] = [
     "operator.admin",
     "operator.read",
     "operator.write",
     "operator.approvals",
-    "operator.pairing",
 ];
 
 const IDENTITY_VERSION: u8 = 1;

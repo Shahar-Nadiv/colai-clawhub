@@ -39,9 +39,26 @@ const LOADED_FROM = [
   "LOCPATH",
 ];
 
-/** Whether a value sends the loader inside a snap. */
-function intoASnap(value: string | undefined): boolean {
-  return value !== undefined && /(^|:)\/snap\//.test(value);
+/**
+ * Where a snap keeps its libraries.
+ *
+ * Two spellings, because snapd's mount root is not the same everywhere: `/snap` where the
+ * distribution creates that directory, and `/var/lib/snapd/snap` where it does not —
+ * Fedora and openSUSE among them, which usually symlink the first to the second. Matching
+ * only the short one made this whole file a no-op on exactly the distributions that need
+ * it most. Leading slashes are allowed to repeat because `//snap/...` is the same path to
+ * the loader and was not to this regex.
+ */
+const A_SNAP = /^\/*(?:var\/lib\/snapd\/)?snap\//;
+
+/**
+ * The entries of a loader variable, however that variable separates them.
+ *
+ * `LD_PRELOAD` is space-separated or colon-separated per `ld.so(8)`; the rest are colons.
+ * Splitting on both is correct for all of them and matters for the one.
+ */
+function entriesOf(value: string): string[] {
+  return value.split(/[:\s]+/).filter(Boolean);
 }
 
 /**
@@ -56,8 +73,27 @@ export function withoutSomebodyElsesLibraries(
 ): NodeJS.ProcessEnv {
   const given: NodeJS.ProcessEnv = { ...inherited };
   for (const name of LOADED_FROM) {
-    if (intoASnap(given[name])) {
+    const value = given[name];
+    if (value === undefined) {
+      continue;
+    }
+    /*
+     * The snap entries go; everything else stays.
+     *
+     * This used to delete the whole variable the moment one entry pointed into a snap,
+     * which quietly took somebody's own `/opt/mylibs` with it. The variable is a list and
+     * only some of it is the problem, so only some of it is removed — and the variable is
+     * dropped only when nothing is left, because an empty `LD_LIBRARY_PATH` is not the
+     * same thing to the loader as an absent one.
+     */
+    const kept = entriesOf(value).filter((entry) => !A_SNAP.test(entry));
+    if (kept.length === entriesOf(value).length) {
+      continue;
+    }
+    if (kept.length === 0) {
       delete given[name];
+    } else {
+      given[name] = kept.join(name === "LD_PRELOAD" ? " " : ":");
     }
   }
   return given;

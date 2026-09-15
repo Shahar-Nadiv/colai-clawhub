@@ -1,6 +1,6 @@
 [package]
 name = "colai-toolbar"
-version = "0.1.0"
+version = "0.1.1"
 description = "colai — point at anything on screen and hand it to an agent"
 edition = "2021"
 rust-version = "1.97.1"
@@ -27,7 +27,7 @@ sha2 = "0.11.0"
 subtle = "2.6.1"
 zeroize = "1.9.0"
 futures-util = "0.3.34"
-rustls = { version = "0.23.43", default-features = false, features = ["ring", "std", "tls12"] }
+rustls = { version = "0.23.45", default-features = false, features = ["ring", "std", "tls12"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 tauri = { version = "2.11.5", features = ["image-png", "tray-icon", "unstable"] }

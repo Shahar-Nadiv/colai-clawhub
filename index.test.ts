@@ -4,9 +4,17 @@
 // runs `register`, because the failure it protects against — a plugin that installs,
 // loads, and quietly registers nothing — leaves no other trace.
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { describe, expect, it as test } from "vitest";
 import colai from "./index.js";
@@ -232,11 +240,43 @@ describe("the toolbar is not handed somebody else's libraries", () => {
     expect(withoutSomebodyElsesLibraries(deliberate)).toEqual(deliberate);
   });
 
-  test("a snap on the end of a real list still counts", () => {
-    // Snap wrappers prepend rather than replace, so the poison is usually one entry
-    // among several and a whole-value comparison would miss it.
+  test("the snap entry goes and the rest of the list stays", () => {
+    /*
+     * Snap wrappers prepend rather than replace, so the poison is usually one entry among
+     * several. This used to delete the whole variable on finding one — which fixed the
+     * crash and quietly took somebody's own `/opt/ros/jazzy/lib` with it, on a machine
+     * that has one. The variable is a list; only the bad entries are the problem.
+     */
     const mixed = { LD_LIBRARY_PATH: "/opt/ros/jazzy/lib:/snap/core20/current/lib" };
-    expect(withoutSomebodyElsesLibraries(mixed).LD_LIBRARY_PATH).toBeUndefined();
+    expect(withoutSomebodyElsesLibraries(mixed).LD_LIBRARY_PATH).toBe("/opt/ros/jazzy/lib");
+  });
+
+  test("the variable goes only when nothing is left of it", () => {
+    // An empty `LD_LIBRARY_PATH` is not the same thing to the loader as an absent one.
+    const only = { LD_LIBRARY_PATH: "/snap/code/263/usr/lib:/snap/core20/current/lib" };
+    expect(withoutSomebodyElsesLibraries(only)).not.toHaveProperty("LD_LIBRARY_PATH");
+  });
+
+  test("a snap under snapd's other mount root counts too", () => {
+    /*
+     * `/snap` exists where the distribution creates it. Where it does not — Fedora and
+     * openSUSE, which usually symlink it — snapd mounts at `/var/lib/snapd/snap`, and
+     * matching only the short spelling made this whole file a no-op on exactly the
+     * distributions most likely to need it.
+     */
+    const fedora = { GTK_PATH: "/var/lib/snapd/snap/code/263/usr/lib/gtk-3.0" };
+    expect(withoutSomebodyElsesLibraries(fedora)).not.toHaveProperty("GTK_PATH");
+    // And a doubled leading slash is the same path to the loader, if not to a regex.
+    expect(withoutSomebodyElsesLibraries({ LOCPATH: "//snap/x/locale" })).not.toHaveProperty(
+      "LOCPATH",
+    );
+  });
+
+  test("LD_PRELOAD is separated by spaces as well as colons", () => {
+    // `ld.so(8)` accepts either for this one variable, and a snap entry after a space was
+    // invisible to a colon-only split.
+    const preload = { LD_PRELOAD: "/usr/lib/libfoo.so /snap/core20/current/lib/libbar.so" };
+    expect(withoutSomebodyElsesLibraries(preload).LD_PRELOAD).toBe("/usr/lib/libfoo.so");
   });
 
   test("a path merely mentioning snap is not a snap path", () => {
@@ -302,6 +342,35 @@ describe("the toolbar is laid out before it is spawned", () => {
     const refusal = layOutTheToolbar(archive, join(binary, "beneath-a-file", "colai-toolbar"));
     expect(refusal).toContain("could not write the toolbar");
     expect(refusal).toContain("writable");
+  });
+
+  test("a symlink waiting at the temporary name is refused, not followed", () => {
+    /*
+     * A plain write opens `O_WRONLY|O_CREAT|O_TRUNC`, which follows a symlink. Anybody
+     * able to create one at `colai-toolbar.<pid>.partial` could point it at a file of
+     * their choosing and have thirteen megabytes written through it — and the digest
+     * check would not notice, because it reads back through the same link and agrees
+     * with itself.
+     */
+    const { archive, binary } = packed("a whole toolbar");
+    const victim = join(dirname(binary), "precious.txt");
+    writeFileSync(victim, "do not touch");
+    symlinkSync(victim, `${binary}.${process.pid}.partial`);
+
+    const refusal = layOutTheToolbar(archive, binary);
+    expect(refusal).toContain("could not write the toolbar");
+    expect(readFileSync(victim, "utf8")).toBe("do not touch");
+    expect(existsSync(binary)).toBe(false);
+  });
+
+  test("an archive that is not the toolbar is refused before it fills memory", () => {
+    // Gunzip has no opinion about output size on its own: a few hundred kilobytes of
+    // zeroes expands to hundreds of megabytes, inside the Gateway's own process.
+    const dir = mkdtempSync(join(tmpdir(), "colai-bomb-"));
+    const binary = join(dir, "colai-toolbar");
+    writeFileSync(`${binary}.gz`, gzipSync(Buffer.alloc(64 * 1024 * 1024)));
+    expect(layOutTheToolbar(`${binary}.gz`, binary)).toContain("could not unpack");
+    expect(existsSync(binary)).toBe(false);
   });
 
   test("what is unpacked is what the digest gate then checks", () => {

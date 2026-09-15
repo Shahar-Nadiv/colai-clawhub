@@ -26,7 +26,10 @@ export function layOutTheToolbar(archive: string, binary: string): string | null
   }
   let bytes: Buffer;
   try {
-    bytes = gunzipSync(readFileSync(archive));
+    // Bounded. The real binary expands to a little under 13 MB; an archive that does
+    // not is not the toolbar, and gunzip has no opinion about that on its own — a 611 KB
+    // file expands to 629 MB in half a second, inside the Gateway's own process.
+    bytes = gunzipSync(readFileSync(archive), { maxOutputLength: 32 * 1024 * 1024 });
   } catch (error) {
     return `could not unpack ${archive}: ${String(error)}`;
   }
@@ -41,7 +44,18 @@ export function layOutTheToolbar(archive: string, binary: string): string | null
    */
   const partial = `${binary}.${process.pid}.partial`;
   try {
-    writeFileSync(partial, bytes, { mode: 0o755 });
+    /*
+     * `wx`, so the open fails rather than follows.
+     *
+     * A plain write opens `O_WRONLY|O_CREAT|O_TRUNC`, which follows a symlink sitting at
+     * that path — and anybody who can create one in this directory could point it at a
+     * file of their choosing and have 13 MB written through it. The digest check does not
+     * catch it either: it reads through the same link and agrees with itself.
+     *
+     * `O_EXCL` refuses an existing name of any kind, which is the whole fix. The PID in
+     * the name keeps two live callers from colliding on it.
+     */
+    writeFileSync(partial, bytes, { mode: 0o755, flag: "wx" });
     renameSync(partial, binary);
   } catch (error) {
     try {

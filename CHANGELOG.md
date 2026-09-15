@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.1.1 — 2026-09-15
+
+An audit before the first public release, and what it found.
+
+- **A window title can no longer close the block it is quoted inside.** Facts read off
+  the desktop are wrapped in `<observed>…</observed>` so an agent can tell them from an
+  instruction. A browser's window title is the page's own `<title>`, chosen by whoever
+  wrote the page — and a title containing `</observed>` ended the block early, so
+  everything after it arrived in the same voice as the real instruction. Angle brackets
+  are now removed from everything inside the block.
+- **TLS updated.** rustls 0.23.43 → 0.23.45, for RUSTSEC-2026-0285, in which TLS 1.3
+  handshake messages could be accepted across encryption level boundaries. It affects a
+  Gateway reached over a network far more than one on loopback.
+- **The toolbar is unpacked more carefully.** The temporary file refuses to follow a
+  symlink left in its place, and a corrupt or hostile archive is refused rather than
+  decompressed without limit.
+- **The snap library guard was wrong twice.** It missed `/var/lib/snapd/snap`, which is
+  where snapd mounts on Fedora and openSUSE — so on those the fix did nothing. And when
+  it did fire it discarded the whole variable, taking any of your own entries with it.
+  Now only the snap entries are removed.
+- **One scope fewer.** The toolbar asked the Gateway for `operator.pairing` and never
+  used it.
+- The README and this file both said the toolbar's only network connection is your own
+  Gateway. The component library's preview pictures come from `cdn.21st.dev`. Corrected
+  in both.
+
 ## 0.1.0 — 2026-09-14
 
 First public release.
@@ -16,8 +42,10 @@ send it with a picture of exactly what you meant.
 - A mark that would capture the whole desktop — a screenshot or design mark clicked
   without dragging — says so in the composer before it is sent.
 - Screenshots are held in memory and never written to disk.
-- No telemetry, no analytics, no crash reporting, no update check. The only outbound
-  connection is to your own OpenClaw Gateway.
+- No telemetry, no analytics, no crash reporting, no update check. Everything the toolbar
+  sends goes to your own OpenClaw Gateway. The component library is the one exception: its
+  preview pictures come from `cdn.21st.dev`, which therefore sees your IP address while
+  that panel is open. No other host is accepted for a preview.
 
 ### Where it runs
 

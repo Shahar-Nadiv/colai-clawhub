@@ -109,7 +109,9 @@ If a mark would capture your **whole desktop** — which is what a screenshot or
 means if you click without dragging — the composer says so before you send it.
 
 Nothing else leaves. There is no telemetry, no analytics, no crash reporting and no update
-check. The toolbar's only network connection is to your own OpenClaw Gateway.
+check. Everything the toolbar sends goes to your own OpenClaw Gateway.
+
+The one exception is the component library: opening it loads preview pictures from `cdn.21st.dev`, so that host sees your IP address while the panel is open. Nothing about your screen or your prompt goes with them — the search itself runs through your own Gateway — and the toolbar refuses a preview from any other host.
 
 ## Where things live
 

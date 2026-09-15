@@ -1,6 +1,6 @@
 {
   "name": "@colai/toolbar",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Point at anything on screen and hand it to an agent",
   "license": "MIT",
   "type": "module",
