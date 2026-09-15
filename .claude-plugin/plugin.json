@@ -1,0 +1,10 @@
+{
+  "name": "colai",
+  "description": "Point at anything on your screen and hand it to Claude Code. A toolbar that floats over every application: box it, measure it, sample a colour, record a few seconds — then say what you want and send it with a picture of exactly what you meant.",
+  "version": "0.2.0",
+  "author": {
+    "name": "Shahar Nadiv"
+  },
+  "homepage": "https://github.com/Shahar-Nadiv/colai-clawhub",
+  "keywords": ["screenshot", "x11", "overlay", "desktop", "linux", "annotation", "screen-capture"]
+}

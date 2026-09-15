@@ -49,7 +49,158 @@ use tauri::Manager;
 const FIRST_RETRY: Duration = Duration::from_secs(2);
 const LONGEST_RETRY: Duration = Duration::from_secs(60);
 
+/// Variables that tell the loader where to find libraries, modules and locales.
+///
+/// The ones a confined application rewrites when it launches something.
+const LOADED_FROM: [&str; 8] = [
+    "LD_LIBRARY_PATH",
+    "LD_PRELOAD",
+    "GTK_PATH",
+    "GTK_EXE_PREFIX",
+    "GTK_IM_MODULE_FILE",
+    "GIO_MODULE_DIR",
+    "GSETTINGS_SCHEMA_DIR",
+    "LOCPATH",
+];
+
+/// Set on the way through, so the second run knows not to do this again.
+const ALREADY: &str = "COLAI_CLEANED_ENV";
+
+/// Where a snap keeps its libraries — both spellings, because snapd mounts at
+/// `/var/lib/snapd/snap` where the distribution does not create `/snap`.
+fn a_snap(entry: &str) -> bool {
+    let trimmed = entry.trim_start_matches('/');
+    trimmed.starts_with("snap/") || trimmed.starts_with("var/lib/snapd/snap/")
+}
+
+/// Start again without somebody else's libraries, if we were handed any.
+///
+/// The toolbar is a system GTK program, and a confined application — a snap-packaged
+/// editor or terminal — rewrites these variables to point inside itself before launching
+/// anything. Inheriting them, this loads that snap's libraries against the system libc and
+/// dies before drawing:
+///
+///     symbol lookup error: /snap/core20/current/lib/x86_64-linux-gnu/libpthread.so.0:
+///     undefined symbol: __libc_pthread_init, version GLIBC_PRIVATE
+///
+/// Nothing is missing and nothing is mispackaged; the same binary starts normally with
+/// those variables gone. It was fixed once in the Node layer that used to spawn this, and
+/// then Claude Code launched it directly and it happened again — which is the argument for
+/// doing it here instead. Whoever starts the toolbar, it starts clean.
+///
+/// Entries are removed, not whole variables: a list is only partly poisoned, and dropping
+/// all of it takes somebody's own paths with it. A variable is unset only when nothing
+/// survives, because an empty `LD_LIBRARY_PATH` is not the same thing to the loader as an
+/// absent one.
+fn without_somebody_elses_libraries() {
+    if std::env::var_os(ALREADY).is_some() {
+        return;
+    }
+    let mut touched = false;
+    let mut cleaned: Vec<(&str, Option<String>)> = Vec::new();
+    for name in LOADED_FROM {
+        let Ok(value) = std::env::var(name) else {
+            continue;
+        };
+        // `LD_PRELOAD` is space- or colon-separated per ld.so(8); the rest are colons.
+        let kept: Vec<&str> = value
+            .split(|c| c == ':' || c == ' ')
+            .filter(|entry| !entry.is_empty() && !a_snap(entry))
+            .collect();
+        let dropped = value.split(|c| c == ':' || c == ' ').filter(|e| !e.is_empty()).count()
+            - kept.len();
+        if dropped == 0 {
+            continue;
+        }
+        touched = true;
+        let joiner = if name == "LD_PRELOAD" { " " } else { ":" };
+        cleaned.push((
+            name,
+            (!kept.is_empty()).then(|| kept.join(joiner)),
+        ));
+    }
+    if !touched {
+        return;
+    }
+
+    for (name, value) in &cleaned {
+        match value {
+            Some(value) => std::env::set_var(name, value),
+            None => std::env::remove_var(name),
+        }
+    }
+    std::env::set_var(ALREADY, "1");
+
+    // Replace this process rather than spawning beside it: the loader has already mapped
+    // the wrong libraries, so only a fresh image helps, and `exec` keeps the pid — which
+    // matters because a supervisor or a pidfile may already be holding it.
+    let program = std::env::current_exe().unwrap_or_else(|_| "colai-toolbar".into());
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    eprintln!("[colai] a confined application's library paths were handed to this; restarting without them.");
+    let trouble = std::os::unix::process::CommandExt::exec(
+        std::process::Command::new(program).args(args),
+    );
+    // `exec` only returns on failure.
+    eprintln!("[colai] could not restart cleanly: {trouble}");
+}
+
+/// Set on the child, so it knows it is already the detached one.
+const DETACHED: &str = "COLAI_DETACHED";
+
+/// Step out of whoever started us, so the toolbar outlives them.
+///
+/// `show` runs an event loop and does not return. Started as an ordinary child — from a
+/// terminal, from a slash command, from anything — it dies when its parent does, which
+/// looks exactly like a toolbar that never opened.
+///
+/// The obvious fix is `setsid` in front of the command, and it is not available: Claude
+/// Code's sandbox refuses it outright as something it cannot statically analyse. That is a
+/// good reason to do it here rather than in one launcher's command line — a desktop overlay
+/// that only survives when it is started a particular way is a fragile thing to ship.
+///
+/// A new process group rather than a double fork: the point is to be detached from the
+/// parent's job control and to keep no shared stdio, and `process_group(0)` plus null
+/// stdio does both with nothing to get wrong.
+///
+/// `COLAI_FOREGROUND=1` opts out, for anything that wants to supervise the toolbar and
+/// needs it to stay a child — a service manager, or a test that must know when it exits.
+fn step_out_of_the_way(args: &[String]) {
+    let wanted = args.first().map(String::as_str);
+    if !matches!(wanted, Some("show") | Some("toggle") | None) {
+        // `hide` and `quit` talk to a toolbar that is already running and then exit. There
+        // is nothing to outlive.
+        return;
+    }
+    if std::env::var_os(DETACHED).is_some() || std::env::var_os("COLAI_FOREGROUND").is_some() {
+        return;
+    }
+    let Ok(program) = std::env::current_exe() else {
+        return;
+    };
+    let started = std::process::Command::new(program)
+        .args(std::env::args().skip(1))
+        .env(DETACHED, "1")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .process_group(0)
+        .spawn();
+    match started {
+        Ok(_) => std::process::exit(0),
+        // Carrying on in the foreground is better than not starting: the toolbar appears,
+        // and the only cost is that it goes when its parent does.
+        Err(trouble) => eprintln!("[colai] could not detach ({trouble}); staying in the foreground."),
+    }
+}
+
+use std::os::unix::process::CommandExt;
+
 fn main() {
+    without_somebody_elses_libraries();
+    // Before the screen check and before anything is built: whoever asked should be free
+    // the moment they have asked, not after a window has gone up.
+    step_out_of_the_way(&std::env::args().skip(1).collect::<Vec<_>>());
+
     /*
      * Before anything is built, because the alternative is a toolbar that works.
      *
