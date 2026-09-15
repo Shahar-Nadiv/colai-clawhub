@@ -33,6 +33,7 @@ mod colai_receivers;
 mod colai_send;
 mod gateway;
 mod gateway_device_identity;
+mod session;
 mod gateway_ws;
 mod hotkey;
 mod screen;

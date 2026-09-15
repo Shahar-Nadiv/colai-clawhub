@@ -11,5 +11,3 @@ toolbar/src-tauri/target/
 # repository people read to check what the plugin is.
 .pack/
 
-# Build output: `scripts/build-sidecar.mjs` produces this from `agent/sidecar.mjs`.
-agent/sidecar.bundle.mjs
