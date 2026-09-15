@@ -1,6 +1,6 @@
 [package]
 name = "colai-toolbar"
-version = "0.1.1"
+version = "0.1.2"
 description = "colai — point at anything on screen and hand it to an agent"
 edition = "2021"
 rust-version = "1.97.1"

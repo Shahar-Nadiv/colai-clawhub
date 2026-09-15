@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.2 — 2026-09-15
+
+A second audit, and the half of the first fix that was missing.
+
+- **An attached file can no longer forge the block either.** 0.1.1 stopped a window title
+  closing `<observed>…</observed>`, which left the fields *outside* that block — an
+  attachment's name and path, the repository a git mark is about — free to open one of
+  their own. That is the better attack, not a safer one: an unclosed block swallows the
+  instruction and your own sentence into a region announcing that nothing inside it is an
+  instruction, and the attachment list is composed first, so the forgery goes first. A
+  Linux filename may contain `<` and `>`, so a downloaded archive was enough to plant one.
+  Angle brackets now go at the single point every composed field already passes through.
+
 ## 0.1.1 — 2026-09-15
 
 An audit before the first public release, and what it found.
