@@ -99,6 +99,7 @@ type ToolbarHelpers = {
     surface: Surface,
     files?: Brought[],
   ) => string;
+  spentSaid: (dollars: number) => string;
   RECORD_LENGTHS: number[];
   carrying: (
     files: Brought[] | undefined,
@@ -392,7 +393,7 @@ function glyphsInTheRail(): Record<string, unknown> {
 
 const context: { helpers?: ToolbarHelpers } & Record<string, unknown> = {};
 vm.runInNewContext(
-  `${toolbarSource}\nthis.helpers = { TOOLS, DRAWS, dockFor, usable, boxOf, pathFor, gateFor, counted, MODES, summaryFor, screenAt, spanOf, detailOf, projectInFront, RECORD_LENGTHS, carrying, sizeOf, secondsLeft, recordFrame, RECORD_CLEAR, DESIGNS, DESIGN_FIRST, GITS, GIT_FIRST, gitKindOf, repoFor, isCommitting, MODE_FIRST, CLICK_MEANS, wholeDisplay, effortStops, effortAt, labelOf, homeOf, WHOLE_DISPLAY, scheduleOf, scheduleSays, nameFor, automationFor, AUTOMATION_FIRST, UNITS, REPEATS, FOLD_TIME, PENS, PEN_FIRST, PATHS, kindFor, ARROW_HEAD, ARROW_WIDE, ARROW_LEAST, ARROW_MOST, HIGHLIGHT_WIDE, placeOf, whereSaid, spotIn, spotSaid, samePlace, stillRunning, runsNow, runningSaid, RUN_QUIET, sheeted, asksSomething, choicesIn, questionIn, askedOf, CHOICE_MOST, canGoBack, rewindRefused, pointSaid, agoSaid, briefly, REWIND_SAYS, KEEPS_MARKING, numberOf, MOODS, moodOf, moodSaid, moodMark, STATES, stateOf, needingYou, workCountSaid, handHue, tokenAt, modesMatching, withoutToken, SOURCES, TAKES_SOURCE, sourceOf, broughtIn, unchosen, centredIn, FOLLOWS_WINDOW, anchorOf, intoWindow, ontoScreen, showingNow, asDrawn, entrySaid, doingOf, doingSaid, DOING_FIRST, DOING_MOST, DOING_QUIET, DOING_TOOLS };`,
+  `${toolbarSource}\nthis.helpers = { TOOLS, DRAWS, dockFor, usable, boxOf, pathFor, gateFor, counted, spentSaid, MODES, summaryFor, screenAt, spanOf, detailOf, projectInFront, RECORD_LENGTHS, carrying, sizeOf, secondsLeft, recordFrame, RECORD_CLEAR, DESIGNS, DESIGN_FIRST, GITS, GIT_FIRST, gitKindOf, repoFor, isCommitting, MODE_FIRST, CLICK_MEANS, wholeDisplay, effortStops, effortAt, labelOf, homeOf, WHOLE_DISPLAY, scheduleOf, scheduleSays, nameFor, automationFor, AUTOMATION_FIRST, UNITS, REPEATS, FOLD_TIME, PENS, PEN_FIRST, PATHS, kindFor, ARROW_HEAD, ARROW_WIDE, ARROW_LEAST, ARROW_MOST, HIGHLIGHT_WIDE, placeOf, whereSaid, spotIn, spotSaid, samePlace, stillRunning, runsNow, runningSaid, RUN_QUIET, sheeted, asksSomething, choicesIn, questionIn, askedOf, CHOICE_MOST, canGoBack, rewindRefused, pointSaid, agoSaid, briefly, REWIND_SAYS, KEEPS_MARKING, numberOf, MOODS, moodOf, moodSaid, moodMark, STATES, stateOf, needingYou, workCountSaid, handHue, tokenAt, modesMatching, withoutToken, SOURCES, TAKES_SOURCE, sourceOf, broughtIn, unchosen, centredIn, FOLLOWS_WINDOW, anchorOf, intoWindow, ontoScreen, showingNow, asDrawn, entrySaid, doingOf, doingSaid, DOING_FIRST, DOING_MOST, DOING_QUIET, DOING_TOOLS };`,
   context,
 );
 const {
@@ -406,6 +407,7 @@ const {
   counted,
   MODES,
   summaryFor,
+  spentSaid,
   screenAt,
   spanOf,
   detailOf,
@@ -699,6 +701,30 @@ describe("who the rail says can receive", () => {
     expect(counted(1, "agent")).toBe("1 agent");
     expect(counted(11, "session")).toBe("11 sessions");
     expect(counted(0, "session")).toBe("0 sessions");
+  });
+});
+
+describe("what a conversation has cost", () => {
+  /*
+   * New on this host. OpenClaw reached an agent somebody was already paying for however
+   * they paid for it; here every mark is a metered call against the user's own account,
+   * and the rail is the only place that number appears.
+   */
+  test("cents below a dollar, because $0.06 reads as nothing", () => {
+    expect(spentSaid(0.06)).toBe("6c");
+    expect(spentSaid(0.61)).toBe("61c");
+  });
+
+  test("dollars above one, to two places", () => {
+    expect(spentSaid(1.5)).toBe("$1.50");
+    expect(spentSaid(1453.1625)).toBe("$1453.16");
+  });
+
+  test("anything at all is not nothing", () => {
+    // A session that has cost a fraction of a cent should not read as free.
+    expect(spentSaid(0.001)).toBe("<1c");
+    // And nothing really is nothing — the rail draws no line at all for this.
+    expect(spentSaid(0)).toBe("");
   });
 });
 
@@ -1617,7 +1643,17 @@ describe("nothing is reachable only by right click", () => {
   });
 
   test("every menu a right click opens is opened by a visible control too", () => {
-    expect(hidden.size).toBeGreaterThan(0);
+    /*
+     * The rule outlives the thing it was written for.
+     *
+     * There are no right-click menus on this host: the only one was the send key's, which
+     * chose between sending now and scheduling, and scheduling was OpenClaw's — it ran
+     * agents in the background, where Claude Code is a session somebody is sitting in
+     * front of. With one item left the menu existed to be dismissed, so it went.
+     *
+     * The assertion stays, because the moment a right click grows a menu again this is
+     * what stops it being the only way to reach something.
+     */
     for (const menu of hidden) {
       if (ACCELERATORS.has(menu)) {
         continue;
@@ -1627,15 +1663,18 @@ describe("nothing is reachable only by right click", () => {
   });
 
   test("an accelerator offers nothing that is not reachable without it", () => {
-    // The send key's right click chooses between sending now and scheduling. Both
-    // panels open from a plain press elsewhere — the composer from the key itself, the
-    // schedule from a visible row inside the composer — so nobody who never right
-    // clicks loses anything. The moment that stops being true this is a hiding place,
-    // and the exemption above has to go rather than this assertion.
-    expect(offered.length).toBeGreaterThan(1);
+    // Same rule, same reason as above, and nothing currently exercises it. If an
+    // accelerator comes back, everything it offers must also be reachable by a plain
+    // press — otherwise the exemption above becomes a hiding place.
     for (const menu of offered) {
       expect(shown.has(menu), `${menu} is offered but not otherwise reachable`).toBe(true);
     }
+  });
+
+  test("nothing on this host is reachable only by right click", () => {
+    // The positive statement of it, so the two assertions above cannot quietly become
+    // vacuous without somebody noticing that they have.
+    expect(hidden.size, "a right-click menu exists again — check the rule above").toBe(0);
   });
 
   test("there is one mark for a menu, and it is the caret", () => {
@@ -4226,10 +4265,18 @@ describe("one light for every agent at once", () => {
     expect(carry.slice(0, 1400)).toMatch(/let Some\(real\) = readable\(asked, roots\)/);
     expect(carry.slice(0, 1400)).toMatch(/std::fs::read\(&real\)/);
 
-    // And the roots reaching it are the Gateway's, not an argument from the page.
-    expect(send).toContain("work_roots(&gateway)");
+    /*
+     * And the roots reaching it are worked out in Rust, not handed in by the page.
+     *
+     * They used to come from the Gateway, which enumerated every catalog and host it knew.
+     * Here they come from the conversation: one folder, the one it is being had in. That is
+     * a narrower gate, and it matters more than it did — under `acceptEdits` the working
+     * directory is also the boundary on what Claude may edit without being asked, so a page
+     * that could widen it could widen both at once.
+     */
+    expect(send).toContain("crate::session::work_roots(");
     const search = files.slice(files.indexOf("pub(crate) async fn colai_search_files("));
-    expect(search.slice(0, 500)).toContain("work_roots(&gateway)");
+    expect(search.slice(0, 500)).toContain("crate::session::work_roots(");
     expect(
       search.slice(0, 500),
       "the search command must not take roots from its caller",
@@ -4535,23 +4582,22 @@ describe("one light for every agent at once", () => {
 describe("what the send key can do with what is marked", () => {
   const rail = readFileSync(new URL("./toolbar/ui/toolbar-rail.js", import.meta.url), "utf8");
 
-  test("a right click asks which, rather than choosing one", () => {
-    // It used to drop straight into the schedule, so the second thing this key does was
-    // the only thing the gesture reached — and sending, the thing the key is named
-    // after, was not on the menu it opened.
-    const handler =
-      rail.match(/send\.addEventListener\("contextmenu"[\s\S]*?\n {2}\}\);/)?.[0] ?? "";
-    expect(handler).toContain('flyout("how")');
-    expect(handler).not.toContain('flyout("automate")');
-  });
-
-  test("both of the things it can do are on that menu", () => {
-    const rows = [...rail.matchAll(/howRow\(\s*"(\w+)",\s*\n?\s*"([^"]+)"/g)].map(
-      (found) => found[2]!,
-    );
-    expect(rows.length).toBe(2);
-    expect(rows.join(" | ")).toMatch(/Send now/);
-    expect(rows.join(" | ")).toMatch(/automation/i);
+  test("the send key does one thing, so it needs no menu", () => {
+    /*
+     * It used to do two: send now, or schedule it. The right click asked which — and
+     * before that it dropped straight into the schedule, so the second thing the key does
+     * was the only thing the gesture reached, and sending was not on the menu it opened.
+     *
+     * Scheduling was OpenClaw's. It ran agents in the background and could be told to run
+     * one later; Claude Code is a session somebody is sitting in front of. With one thing
+     * left there is nothing to ask about, so the menu and its right click are gone rather
+     * than left as a gesture that opens a list of one.
+     */
+    expect(rail).not.toContain('send.addEventListener("contextmenu"');
+    expect(rail).not.toContain("howRow(");
+    expect(rail).not.toContain('flyout("automate")');
+    // And the key still opens the composer, which is the one thing it does.
+    expect(rail).toContain("send.addEventListener(\"click\", toggleWork)");
   });
 });
 

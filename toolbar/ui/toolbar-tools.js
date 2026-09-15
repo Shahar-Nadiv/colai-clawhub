@@ -2751,6 +2751,24 @@ function detailOf(mark) {
 }
 
 /** A count with its noun, so the rail reads as a sentence rather than a gauge. */
+/**
+ * A running cost, at the size a rail has room for.
+ *
+ * Cents below a dollar, because "$0.06" reads as nothing and "6c" reads as a number. Two
+ * decimals above it. No trailing zeros on the cents: the point is the magnitude, not the
+ * accounting.
+ */
+function spentSaid(dollars) {
+  if (!(dollars > 0)) return "";
+  if (dollars < 1) {
+    const cents = Math.round(dollars * 100);
+    // Under a cent is still something rather than nothing — a session that has cost
+    // anything at all should not read as free.
+    return cents >= 1 ? `${cents}c` : "<1c";
+  }
+  return `$${dollars.toFixed(2)}`;
+}
+
 function counted(many, noun) {
   return `${many} ${noun}${many === 1 ? "" : "s"}`;
 }

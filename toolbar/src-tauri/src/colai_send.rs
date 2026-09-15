@@ -1,10 +1,9 @@
 //! Handing what was marked to whoever is receiving it.
 //!
-//! The toolbar offers three kinds of receiver — an agent, a conversation the Gateway is
-//! holding, and a conversation held in another agent entirely — and they look like three
-//! different things on the menu. They are not three different sends. Every one of them
-//! resolves to a session key, and from there a message with pictures attached goes out
-//! the same way for all of them.
+//! One kind of receiver: a conversation. OpenClaw offered three — an agent, a session it
+//! was holding, and a conversation held in another agent entirely — because it ran many
+//! agents on somebody's behalf. Claude Code has one Claude, so the only choice worth
+//! making is which conversation to carry on, and an empty one means start a new one.
 //!
 //! The message itself is composed in the page, not here. What an agent reads is a
 //! product decision that belongs next to the marks somebody made, and it is a pure

@@ -207,13 +207,10 @@ function buildRail() {
   // right click, the same as every other key with more behind it — "more about this
   // key" rather than another key.
   //
-  // It asks which rather than picking one. Right-clicking used to drop straight into
-  // the schedule, so the second thing this key can do was the only thing the gesture
-  // reached, and sending — the thing it is named after — was not on the menu it opened.
-  send.addEventListener("contextmenu", (event) => {
-    event.preventDefault();
-    flyout("how");
-  });
+  // Nothing behind the right click any more. It opened a menu of two — send now, or
+  // schedule it — and scheduling was OpenClaw's, which ran agents in the background.
+  // Claude Code is a session somebody is sitting in front of, so the menu would have had
+  // one item on it, which is a menu that exists to be dismissed.
   buttons.send = send;
 
   // The way back to OpenClaw itself, wearing OpenClaw's own face. A gear said
@@ -253,32 +250,8 @@ function buildRail() {
   for (const [id, kind] of Object.entries(GITS)) {
     gitRow(el.flyGit, id, kind);
   }
-  howRow("send", "Send now", "hand it to the agent straight away", openWork);
-  howRow("schedule", "Create an automation…", "the same thing, on a schedule", () => {
-    // Fresh every time. An automation is about one piece of work, and a half-filled
-    // schedule left over from the last one is a job somebody creates by accident.
-    state.cron = { ...AUTOMATION_FIRST };
-    flyout("automate");
-  });
   for (const seconds of RECORD_LENGTHS) lengthRow(el.flyRecord, seconds);
   for (const [id, pen] of Object.entries(PENS)) penRow(el.flyDraw, id, pen);
-}
-
-/**
- * One of the two things the send key can do with what is marked.
- *
- * Stacked, because the difference between them is not in their names — both send this
- * work to this agent — but in when it happens, and that is what the second line says.
- */
-function howRow(glyph, label, under, chose) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "row how-row";
-  button.innerHTML =
-    icon(glyph, 14) +
-    `<span class="how-words"><span>${label}</span><span class="row-under">${under}</span></span>`;
-  button.addEventListener("click", chose);
-  el.flyHow.append(button);
 }
 
 /** One of the lengths a recording can be, on the menu the record key opens. */

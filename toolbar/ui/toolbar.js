@@ -26,7 +26,6 @@ const el = {
   work: document.getElementById("work"),
   toasts: document.getElementById("toasts"),
   flights: document.getElementById("flights"),
-  flyHow: document.getElementById("fly-how"),
   flyAutomate: document.getElementById("fly-automate"),
   flyAgents: document.getElementById("fly-agents"),
   flyAsk: document.getElementById("fly-ask"),
@@ -64,6 +63,16 @@ const state = {
   // Null while the lists are good, a message while the Gateway could not be asked. The
   // two are different facts and the rail says which.
   whoTrouble: null,
+  /*
+   * What this conversation has cost, in dollars.
+   *
+   * New on this host and not a detail. On OpenClaw the toolbar reached an agent somebody
+   * was already paying for however they paid for it; here every mark is a metered call
+   * against the user's own account. A tool that spends somebody's money without saying so
+   * is one they are right to distrust, so it is on the rail rather than in a panel nobody
+   * opens.
+   */
+  spent: 0,
   // Why the Work panel has no conversations to show, when the reason is not "none".
   workTrouble: null,
   // Who gets what you point at. An agent is somebody who could answer; a session is a
@@ -444,11 +453,16 @@ function render() {
     : state.agents.length || talking()
       ? "Choose who receives"
       : "Agents";
+  /*
+   * Under the name: what is happening, or what it has cost.
+   *
+   * It used to count agents, which on this host is always one — and then a conversation
+   * count, which the picker below already shows. What is worth the line instead is the
+   * running total, because it is the one number nobody can see anywhere else.
+   */
   buttons.agents.querySelector(".agents-running").textContent = state.whoTrouble
     ? "unavailable"
-    : working ||
-      counted(state.agents.length, "agent") +
-        (talking() ? ` · ${counted(talking(), "conversation")}` : "");
+    : working || (state.spent > 0 ? spentSaid(state.spent) : "");
 
   // Which kind each tool that has kinds is currently set to. One rule rather than a
   // special case per tool: several rows share a tool and differ only in what they ask it
@@ -469,7 +483,6 @@ function render() {
   el.flyShape.hidden = state.open !== "shape";
   el.flyDesign.hidden = state.open !== "design";
   el.flyGit.hidden = state.open !== "git";
-  el.flyHow.hidden = state.open !== "how";
   el.flyAutomate.hidden = state.open !== "automate";
   // Folded, the six close up where they stand rather than vanishing — the stylesheet
   // animates it and `data-folded` is what it animates between. Not `hidden`: a key that
@@ -543,7 +556,6 @@ function render() {
     [el.flyDraw, buttons.draw],
     [el.flyRow, buttons.agents],
     [el.flyPoints, buttons.agents],
-    [el.flyHow, buttons.send],
     [el.flyAutomate, buttons.send],
 
     [el.flyAgents, buttons.agents],
@@ -1160,6 +1172,20 @@ async function start() {
    * would mean the pill said "Thinking" for the whole of a run and then named a tool
    * once the run was over.
    */
+  /*
+   * What the last turn cost, and what the conversation has cost.
+   *
+   * Only the running total is drawn. One turn is never the thing worth knowing — a person
+   * who has spent four dollars this afternoon wants to be told that, not that this
+   * particular mark was six cents.
+   */
+  void listen("colai:spent", (event) => {
+    const said = event && event.payload;
+    if (!said) return;
+    state.spent = Number(said.spent) || 0;
+    render();
+  }).catch(() => {});
+
   void listen("colai:doing", (event) => {
     const said = event && event.payload;
     if (!said || !said.name) return;

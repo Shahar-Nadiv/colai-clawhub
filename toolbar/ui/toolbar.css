@@ -971,23 +971,6 @@ body {
   padding-top: 7px;
   padding-bottom: 7px;
 }
-/* A choice that needs its mark beside it rather than above it: the icon on the left,
-   the name and what it means stacked to its right. */
-.how-row {
-  height: auto;
-  padding-top: 7px;
-  padding-bottom: 7px;
-  align-items: flex-start;
-}
-.how-row svg {
-  margin-top: 1px;
-  flex-shrink: 0;
-}
-.how-words {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
 
 .row-under {
   color: var(--muted);

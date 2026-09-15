@@ -357,10 +357,15 @@ pub(crate) struct Found {
 /// `src/app.tsx` — which is how somebody types a path they half remember.
 #[tauri::command]
 pub(crate) async fn colai_search_files(
-    gateway: tauri::State<'_, crate::gateway_ws::GatewayClient>,
     query: String,
+    // Which conversation the `@` is being typed into. The roots follow from it — a page
+    // that could name its own roots could name `/`.
+    session_key: Option<String>,
 ) -> Result<Vec<Found>, String> {
-    let roots = crate::colai_receivers::work_roots(&gateway).await;
+    let roots: Vec<std::path::PathBuf> = crate::session::work_roots(session_key.as_deref())
+        .into_iter()
+        .map(Into::into)
+        .collect();
     Ok(search_within(&roots, &query))
 }
 
