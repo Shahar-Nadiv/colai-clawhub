@@ -71,7 +71,7 @@ pub(crate) async fn colai_send(
     // Here to reach the main thread. Laying a recording out as one picture is drawing,
     // and drawing may only happen there — see `attach`.
     app: AppHandle,
-    gateway: State<'_, GatewayClient>,
+    session: State<'_, crate::session::Session>,
     shots: State<'_, MarkShots>,
     receiver: Receiver,
     message: String,
@@ -95,7 +95,15 @@ pub(crate) async fn colai_send(
         return Err("There is nothing to send.".to_string());
     }
     let mark_ids = mark_ids.unwrap_or_default();
-    let target = resolve(&gateway, &receiver).await?;
+    /*
+     * Which conversation this belongs to.
+     *
+     * OpenClaw had three kinds of receiver — an agent, a session, a thread in somebody
+     * else's project — because it ran many agents and the toolbar had to say which. Claude
+     * Code has one Claude and a pile of conversations, so there is one kind: a session,
+     * and an empty id means start a new one.
+     */
+    let key = (!receiver.id.trim().is_empty()).then(|| receiver.id.clone());
 
     /*
      * How this should be answered, before it is asked.
@@ -109,20 +117,17 @@ pub(crate) async fn colai_send(
      * back rather than swallowed, because a setting that silently did not apply is worse
      * than one that visibly did not. The next send lands it, the conversation now existing.
      */
-    let mut settings_trouble = None;
-    if model.is_some() || thinking_level.is_some() {
-        if let Err(trouble) = gateway
-            .set_answering(
-                &target.session_key,
-                target.agent_id.clone(),
-                model,
-                thinking_level,
-            )
-            .await
-        {
-            settings_trouble = Some(trouble);
-        }
-    }
+    /*
+     * Model and effort are not applied here.
+     *
+     * The Gateway kept them on the conversation and had a method to patch it. Claude Code
+     * takes the model when the process starts and keeps its own thinking setting, so there
+     * is nothing to patch mid-conversation — and a call that silently did nothing would be
+     * worse than not making it. The rail's pickers are removed on this host rather than
+     * left as controls that move nothing.
+     */
+    let mut settings_trouble: Option<String> = None;
+    let _ = (&model, &thinking_level);
     let (mut attachments, sheet_trouble) = attach(
         &app,
         &shots,
@@ -148,22 +153,42 @@ pub(crate) async fn colai_send(
     let files = files.unwrap_or_default();
     let mut refused: Vec<String> = Vec::new();
     if !files.is_empty() {
-        let roots = crate::colai_receivers::work_roots(&gateway).await;
+        // Where this conversation is being had, which is what decides what may be read.
+        // The Gateway was asked; here it is the cwd Claude Code recorded for the session.
+        let roots = crate::session::work_roots(key.as_deref());
+        let roots: Vec<std::path::PathBuf> = roots.into_iter().map(Into::into).collect();
         let brought = crate::colai_files::carry(&files, &roots);
         attachments.extend(brought.travelling);
         refused = brought.refused;
     }
     let carried = attachments.len() - pictures;
-    let sent = gateway
-        .chat_send_to(
-            target,
-            message,
-            attachments,
-            // Every send is its own send. The key exists so a transport retry cannot
-            // double-post, not to collapse two deliberate sends of the same marks.
-            &uuid::Uuid::new_v4().to_string(),
-        )
-        .await?;
+    /*
+     * Pictures travel; named files do not.
+     *
+     * A screenshot exists nowhere but in memory, so it has to go as bytes. A file the
+     * person named is already on disk and Claude Code can open it — the message says where
+     * it is, and sending a copy would mean the agent reading one of two things that are
+     * supposed to be the same file.
+     */
+    let images: Vec<String> = attachments
+        .iter()
+        .filter(|one| one.mime_type.starts_with("image/"))
+        .map(|one| one.content.clone())
+        .collect();
+    let cwd = crate::session::where_it_is_had(key.as_deref());
+    session.send(&app, key.clone(), message, images, cwd)?;
+    let sent = Sent {
+        session_key: key.unwrap_or_default(),
+        // The Gateway gave a run id to correlate against. Nothing here does: one
+        // conversation, one turn at a time, and the reply carries the session it is for.
+        run_id: String::new(),
+        pictures,
+        carried,
+        refused,
+        // See the note below: there is no second channel to miss.
+        watching: true,
+        settings_trouble,
+    };
     // Only once it has landed. A failed send that had already forgotten its pictures
     // would leave the marks in the tray with nothing behind them.
     //
@@ -173,22 +198,15 @@ pub(crate) async fn colai_send(
     if let Err(why) = shots.forget(&mark_ids) {
         eprintln!("[colai] the pictures could not be released after sending: {why}");
     }
-    // Listening is not worth failing the send over — the message has already landed,
-    // and all that is lost is the answer coming back to the screen rather than to the
-    // conversation. Worth saying, though, which is what `watching` is for.
-    let watching = gateway
-        .watch_session(&sent.target.session_key, true)
-        .await
-        .is_ok();
-    Ok(Sent {
-        session_key: sent.target.session_key,
-        run_id: sent.run_id,
-        pictures,
-        carried,
-        refused,
-        watching,
-        settings_trouble,
-    })
+    /*
+     * Nothing to subscribe to.
+     *
+     * The Gateway delivered a conversation's messages only to subscribers, so a send was
+     * followed by a request to listen and `watching` said whether that worked. Here the
+     * answer comes back down the pipe the message went up — there is no second channel to
+     * miss, so `watching` is true whenever anything was sent at all.
+     */
+    Ok(sent)
 }
 
 /// Which session a receiver turns out to be.
@@ -328,28 +346,19 @@ fn attach(
 /// where somebody can read it before agreeing to it.
 #[tauri::command]
 pub(crate) async fn colai_automate(
-    gateway: State<'_, GatewayClient>,
-    receiver: Receiver,
-    asked: CronAdd,
+    #[allow(unused_variables)] receiver: Receiver,
+    #[allow(unused_variables)] message: String,
+    #[allow(unused_variables)] schedule: CronAdd,
 ) -> Result<CronAdded, String> {
-    if asked.name.trim().is_empty() {
-        return Err("An automation needs a name.".to_string());
-    }
-    // Resolved the same way a send is, so "who receives this" means one thing on this
-    // surface. A thread is the only kind that costs anything, and the page has already
-    // asked before it gets here.
-    let target = resolve(&gateway, &receiver).await?;
-    // Where the job belongs, said the way the receiver said it. An agent names an
-    // agent; a conversation names its session and lets the Gateway work out whose it
-    // is. Left off entirely, the job would run against whatever default the Gateway
-    // picks — quietly somewhere other than where it was set up.
-    gateway
-        .cron_add(CronAdd {
-            agent_id: target.agent_id.clone(),
-            session_key: target.agent_id.is_none().then_some(target.session_key),
-            ..asked
-        })
-        .await
+    /*
+     * No scheduler on this host.
+     *
+     * OpenClaw ran agents in the background and could be told to run one later; Claude
+     * Code is a session somebody is sitting in front of. Rather than invent a scheduler
+     * inside a toolbar, this says so — and the rail's automation control is removed on
+     * this host rather than left as a button that explains itself only after being pressed.
+     */
+    Err("Scheduling is an OpenClaw feature; Claude Code has no scheduler.".to_string())
 }
 
 /// Where a conversation could be taken back to.
@@ -359,15 +368,18 @@ pub(crate) async fn colai_automate(
 /// question nobody had asked.
 #[tauri::command]
 pub(crate) async fn colai_points(
-    gateway: State<'_, GatewayClient>,
-    session_key: String,
+    #[allow(unused_variables)] session_key: String,
 ) -> Result<Vec<Point>, String> {
-    Ok(gateway
-        .chat_history(&session_key, POINTS_AT_MOST)
-        .await?
-        .into_iter()
-        .filter(|point| point.mine)
-        .collect())
+    /*
+     * Rewind is Claude Code's own, not the toolbar's.
+     *
+     * The Gateway exposed the points a conversation could be taken back to and a method to
+     * do it. Claude Code has `/rewind`, in the session the person is looking at, and a
+     * second way to do it from a toolbar would be a second idea of where a conversation
+     * currently is. Empty rather than an error: the rail draws no control for an empty
+     * list, which is the honest outcome.
+     */
+    Ok(Vec::new())
 }
 
 /// What was said in a conversation, both halves of it.
@@ -378,11 +390,12 @@ pub(crate) async fn colai_points(
 /// from: the Gateway has the transcript, so the panel asks for it rather than being the
 /// only thing that ever knew.
 #[tauri::command]
-pub(crate) async fn colai_said(
-    gateway: State<'_, GatewayClient>,
-    session_key: String,
-) -> Result<Vec<Point>, String> {
-    gateway.chat_history(&session_key, POINTS_AT_MOST).await
+pub(crate) async fn colai_said(session_key: String) -> Result<Vec<Point>, String> {
+    // Off the transcript, which on this host is the only record there is.
+    Ok(crate::session::what_was_said(&session_key, POINTS_AT_MOST as usize)
+        .into_iter()
+        .map(|(id, said, mine, at)| Point { id, said, at, mine })
+        .collect())
 }
 
 /// How far back a conversation offers to go.
@@ -397,14 +410,12 @@ const POINTS_AT_MOST: u32 = 40;
 /// The first thing on this surface that discards work. It says what it did.
 #[tauri::command]
 pub(crate) async fn colai_rewind(
-    gateway: State<'_, GatewayClient>,
-    session_key: String,
-    entry_id: String,
+    #[allow(unused_variables)] session_key: String,
+    #[allow(unused_variables)] entry_id: String,
 ) -> Result<Rewound, String> {
-    if entry_id.trim().is_empty() {
-        return Err("There is no prompt to go back to.".to_string());
-    }
-    gateway.sessions_rewind(&session_key, &entry_id).await
+    // See `colai_points`. Said plainly rather than silently doing nothing, because this
+    // one is only ever reached by someone who pressed something.
+    Err("Rewind belongs to Claude Code itself — use /rewind in the session.".to_string())
 }
 
 /// Stop a run that is underway.
@@ -415,10 +426,18 @@ pub(crate) async fn colai_rewind(
 /// to know which.
 #[tauri::command]
 pub(crate) async fn colai_stop(
-    gateway: State<'_, GatewayClient>,
-    session_key: String,
+    session: State<'_, crate::session::Session>,
+    #[allow(unused_variables)] session_key: String,
 ) -> Result<(), String> {
-    gateway.chat_abort(&session_key).await
+    /*
+     * Stop, by ending the process having the conversation.
+     *
+     * Blunt, and right here: Claude Code writes the transcript as it goes, so nothing is
+     * lost, and the next send starts a child that resumes exactly where this one stopped.
+     * The session key is ignored because there is only ever one conversation live.
+     */
+    session.interrupt();
+    Ok(())
 }
 
 /// Start listening to a conversation this toolbar did not start.
@@ -428,11 +447,15 @@ pub(crate) async fn colai_stop(
 /// replies keep arriving — otherwise it shows whatever was true at the instant it was
 /// opened while its own pill goes on saying "Working".
 #[tauri::command]
-pub(crate) async fn colai_watch(
-    gateway: State<'_, GatewayClient>,
-    session_key: String,
-) -> Result<(), String> {
-    gateway.watch_session(&session_key, true).await
+pub(crate) async fn colai_watch(#[allow(unused_variables)] session_key: String) -> Result<bool, String> {
+    /*
+     * Nothing to subscribe to, so nothing to fail.
+     *
+     * The Gateway delivered a conversation's messages only to subscribers, and this asked
+     * to be one. Here the answer comes back down the same pipe the message went up: there
+     * is no second channel, and therefore none to miss.
+     */
+    Ok(true)
 }
 
 /// Stop listening to a conversation.
@@ -441,11 +464,9 @@ pub(crate) async fn colai_watch(
 /// A subscription the Gateway is holding for a window that has gone is a socket kept
 /// open for nobody.
 #[tauri::command]
-pub(crate) async fn colai_unwatch(
-    gateway: State<'_, GatewayClient>,
-    session_key: String,
-) -> Result<(), String> {
-    gateway.watch_session(&session_key, false).await
+pub(crate) async fn colai_unwatch(#[allow(unused_variables)] session_key: String) -> Result<(), String> {
+    // See `colai_watch`: there is nothing to stop listening to.
+    Ok(())
 }
 
 /// Open a new conversation where the work is.
@@ -454,8 +475,15 @@ pub(crate) async fn colai_unwatch(
 /// it exists rather than an empty prompt somebody then has to explain themselves into.
 #[tauri::command]
 pub(crate) async fn colai_start_here(
-    gateway: State<'_, GatewayClient>,
-    asked: StartHere,
+    #[allow(unused_variables)] asked: StartHere,
 ) -> Result<(), String> {
-    gateway.start_here(asked).await
+    /*
+     * The Gateway could open a terminal on a project and start a conversation in it.
+     * Nothing here can: Claude Code is started by the person, in the directory they mean,
+     * and a toolbar spawning terminals on their behalf is a different product.
+     *
+     * A conversation started *by the toolbar* simply has no key yet — see `colai_send`,
+     * where an empty receiver id means exactly that.
+     */
+    Err("Start a conversation by running claude where you want it.".to_string())
 }

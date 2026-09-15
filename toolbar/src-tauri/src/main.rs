@@ -98,6 +98,21 @@ fn main() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            /*
+             * The Claude Code this machine has, and the conversation the toolbar is
+             * pointed at. Discovered once at startup: a toolbar that cannot find `claude`
+             * has nothing to say and should say so now rather than at the first send.
+             */
+            match session::Session::discover() {
+                Some(claude) => {
+                    eprintln!("[colai] talking to {}", claude.display());
+                    app.manage(session::Session::new(claude));
+                }
+                None => {
+                    eprintln!("[colai] no `claude` on PATH — the toolbar has nothing to talk to.");
+                    eprintln!("[colai] Install Claude Code, or set COLAI_CLAUDE to its path.");
+                }
+            }
             app.manage(gateway_ws::GatewayClient::new());
             app.manage(colai::ShapeState::default());
             app.manage(colai::ControlUi::default());

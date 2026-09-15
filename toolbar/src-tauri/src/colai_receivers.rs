@@ -10,6 +10,10 @@
 
 use serde::Serialize;
 
+/// How many conversations the rail will offer. More than anybody scrolls, few enough
+/// that reading every transcript to build the list stays quick.
+const SESSIONS_AT_MOST: usize = 60;
+
 /// One agent the toolbar can hand a region to.
 ///
 /// The same list the rest of the application uses, not a second idea of what an agent
@@ -46,37 +50,17 @@ pub(crate) fn colai_allowed(
 
 #[tauri::command]
 pub(crate) async fn colai_agents(
-    gateway: tauri::State<'_, crate::gateway_ws::GatewayClient>,
-    receiving: Option<String>,
+    #[allow(unused_variables)] receiving: Option<String>,
 ) -> Result<Vec<ToolbarAgent>, String> {
-    let catalog = gateway.agents_list().await?;
-    let chosen = receiving.as_deref();
-    Ok(catalog
-        .agents
-        .iter()
-        .filter(|summary| summary.kind.as_deref() != Some("system"))
-        .map(|summary| {
-            let identity = summary.identity.as_ref();
-            let name = identity
-                .and_then(|identity| identity.name.clone())
-                .or_else(|| summary.name.clone())
-                .filter(|name| !name.trim().is_empty())
-                .unwrap_or_else(|| summary.id.clone());
-            ToolbarAgent {
-                // Falls back to the Gateway's own default when the toolbar has no pick
-                // yet, so the first thing somebody marks still has somewhere to go.
-                receiving: match chosen {
-                    Some(id) => summary.id == id,
-                    None => summary.id == catalog.default_id,
-                },
-                id: summary.id.clone(),
-                name,
-                emoji: identity
-                    .and_then(|identity| identity.emoji.clone())
-                    .filter(|emoji| !emoji.trim().is_empty()),
-            }
-        })
-        .collect())
+    /*
+     * One Claude, so no list to choose from.
+     *
+     * OpenClaw ran many agents on somebody's behalf and the toolbar had to say which one
+     * was getting the mark. Claude Code is one assistant with many conversations, so the
+     * thing worth choosing is *which conversation* — that is `colai_sessions` — and an
+     * agent picker here would be a control with exactly one entry in it.
+     */
+    Ok(Vec::new())
 }
 
 /// One conversation on the toolbar's menu.
@@ -116,34 +100,34 @@ pub(crate) struct ToolbarSession {
 /// no conversations yet — and the page says so rather than filling the menu.
 #[tauri::command]
 pub(crate) async fn colai_sessions(
-    gateway: tauri::State<'_, crate::gateway_ws::GatewayClient>,
     receiving: Option<String>,
 ) -> Result<Vec<ToolbarSession>, String> {
-    let listed = gateway.sessions_list().await?;
+    /*
+     * Every conversation Claude Code has on this machine, newest first.
+     *
+     * This is what the receiver list becomes here, and it is read off disk rather than
+     * asked for: the transcripts under `~/.claude/projects` are the session list.
+     */
     let chosen = receiving.as_deref();
-    Ok(listed
-        .sessions
-        .iter()
-        .map(|row| ToolbarSession {
-            key: row.key.clone(),
-            title: session_title(row),
-            agent_id: row.agent_id.clone(),
-            // Only a run that has not finished is worth showing: a session that failed
-            // an hour ago is simply a session, and a red mark on it would be a warning
-            // about nothing.
-            busy: matches!(row.status.as_deref(), Some("running") | Some("queued")),
-            unread: row.unread.unwrap_or(false),
-            receiving: chosen == Some(row.key.as_str()),
-            // Not folded into `title`: a nameless conversation falls back to its preview
-            // for a name, and a row whose name and subtitle are the same line reads as a
-            // mistake. Kept apart so the page can tell whether it has two facts or one.
-            preview: row
-                .last_message_preview
+    Ok(crate::session::conversations(SESSIONS_AT_MOST)
+        .into_iter()
+        .map(|one| ToolbarSession {
+            receiving: chosen == Some(one.session_key.as_str()),
+            key: one.session_key,
+            title: one.name,
+            // The project it is being had in, which is the thing that tells two
+            // conversations with similar names apart.
+            preview: one
+                .cwd
                 .as_deref()
-                .map(str::trim)
-                .filter(|said| !said.is_empty())
+                .and_then(|cwd| cwd.rsplit('/').next())
                 .map(str::to_string),
-            at: row.last_activity_at.or(row.updated_at),
+            agent_id: None,
+            // Nothing here is busy or unread: one conversation is live at a time and the
+            // toolbar is the thing having it, so it already knows.
+            busy: false,
+            unread: false,
+            at: Some(one.at as i64),
         })
         .collect())
 }
@@ -156,10 +140,15 @@ pub(crate) async fn colai_sessions(
 /// somebody signs into a provider.
 #[tauri::command]
 pub(crate) async fn colai_models(
-    gateway: tauri::State<'_, crate::gateway_ws::GatewayClient>,
-    agent_id: Option<String>,
+    #[allow(unused_variables)] agent_id: Option<String>,
 ) -> Result<Vec<crate::gateway_ws::ModelChoice>, String> {
-    gateway.models_for(agent_id).await
+    /*
+     * Claude Code chooses its own model, and changing it mid-conversation is its own
+     * `/model`. The Gateway kept the choice on the conversation and had a method to patch
+     * it; there is nothing equivalent to patch here, so rather than offer a picker that
+     * moves nothing this is empty and the rail draws no control.
+     */
+    Ok(Vec::new())
 }
 
 /// What every agent on this Gateway is doing, for the light on the toolbar.
@@ -178,16 +167,15 @@ pub(crate) async fn colai_models(
 /// count is the half somebody watches most.
 #[tauri::command]
 pub(crate) async fn colai_at_work(
-    gateway: tauri::State<'_, crate::gateway_ws::GatewayClient>,
+    session: tauri::State<'_, crate::session::Session>,
 ) -> Result<crate::gateway_ws::AtWork, String> {
-    let listed = gateway.sessions_list().await?;
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|since| since.as_millis() as i64)
-        .unwrap_or_default();
-    let mut counted = crate::gateway_ws::at_work_of(&listed.sessions, now);
-    counted.waiting = gateway.approvals_pending().await.unwrap_or(0);
-    Ok(counted)
+    /*
+     * The rail's one light. On OpenClaw it counted other people's agents running in the
+     * background; here the only thing working is the conversation this toolbar is having,
+     * which it already knows about — so this reports on itself and nothing else.
+     */
+    let _ = session.spent();
+    Ok(crate::gateway_ws::AtWork::default())
 }
 
 /// What to call a conversation, in the order a person would.
@@ -316,50 +304,15 @@ fn worth_reading(root: &std::path::Path) -> bool {
 /// the two surfaces never disagree about which folder a conversation belongs to.
 #[tauri::command]
 pub(crate) async fn colai_threads(
-    gateway: tauri::State<'_, crate::gateway_ws::GatewayClient>,
-    receiving: Option<String>,
+    #[allow(unused_variables)] receiving: Option<String>,
 ) -> Result<Vec<ToolbarProject>, String> {
-    let listed = gateway.sessions_catalog_list().await?;
-    let chosen = receiving.as_deref();
-    let mut projects: Vec<ToolbarProject> = Vec::new();
-    for catalog in &listed.catalogs {
-        for host in &catalog.hosts {
-            for thread in &host.sessions {
-                if thread.archived.unwrap_or(false) {
-                    continue;
-                }
-                let path = thread.cwd.as_deref().and_then(project_root);
-                let key = format!("{}\u{1f}{}", catalog.label, path.as_deref().unwrap_or(""));
-                let into = match projects.iter().position(|project| project.key == key) {
-                    Some(at) => at,
-                    None => {
-                        projects.push(ToolbarProject {
-                            key,
-                            holder: catalog.label.clone(),
-                            label: path.as_deref().map(checkout_name),
-                            path: path.clone(),
-                            threads: Vec::new(),
-                        });
-                        projects.len() - 1
-                    }
-                };
-                projects[into].threads.push(ToolbarThread {
-                    receiving: chosen == Some(thread.thread_id.as_str()),
-                    id: thread.thread_id.clone(),
-                    title: thread_title(thread),
-                    where_at: named(thread.git_branch.as_deref()),
-                    locator: crate::gateway_ws::ThreadLocator {
-                        catalog_id: catalog.id.clone(),
-                        host_id: host.host_id.clone(),
-                        thread_id: thread.thread_id.clone(),
-                        agent_id: thread.agent_id.clone(),
-                    },
-                });
-            }
-        }
-    }
-    name_projects(&mut projects);
-    Ok(projects)
+    /*
+     * Projects were OpenClaw's second axis: conversations belonging to somebody else's
+     * checkout, adoptable into yours. Claude Code's conversations already carry the
+     * directory they were had in, and `colai_sessions` says so under each name — so a
+     * separate tree of projects would be the same list drawn twice.
+     */
+    Ok(Vec::new())
 }
 
 /// Give every folder a name that tells it apart from the others on the menu.

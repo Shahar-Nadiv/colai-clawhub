@@ -399,6 +399,28 @@ fn read_conversation(path: &Path) -> Option<Conversation> {
     })
 }
 
+/// Where a conversation is being had.
+///
+/// The cwd Claude Code recorded for it, which is the project it is about. `None` for a
+/// conversation that has not started, or one whose transcript never said.
+pub(crate) fn where_it_is_had(key: Option<&str>) -> Option<String> {
+    let key = key?;
+    conversations(400)
+        .into_iter()
+        .find(|one| one.session_key == key)
+        .and_then(|one| one.cwd)
+}
+
+/// The folders a message may carry a file out of.
+///
+/// The Gateway was asked this and answered with every catalog, host and session it knew.
+/// Here it is one folder: the one this conversation is being had in. That is a narrower
+/// gate than the Gateway's, deliberately — a file outside the project the agent is working
+/// in is one nobody asked to send.
+pub(crate) fn work_roots(key: Option<&str>) -> Vec<String> {
+    where_it_is_had(key).into_iter().collect()
+}
+
 /// What a recorded cost says, whichever way it was written.
 ///
 /// Its own function so the two shapes can be tested. See the note at the call site: this
@@ -409,6 +431,82 @@ fn cost_in(said: Option<&Value>) -> Option<f64> {
     said.as_f64()
         .or_else(|| said.as_str().and_then(|said| said.parse().ok()))
         .filter(|cost| cost.is_finite() && *cost >= 0.0)
+}
+
+/// What was said in a conversation, oldest first.
+///
+/// Read out of the transcript, because on this host the transcript is the only record —
+/// the Gateway kept history and could be asked for it; Claude Code writes a JSONL and that
+/// is that. Both sides of the conversation, because the panel shows both.
+///
+/// Tolerant by construction: a private format with no promise attached, so an entry that
+/// has changed shape is skipped rather than fatal.
+pub(crate) fn what_was_said(key: &str, most: usize) -> Vec<(String, String, bool, Option<i64>)> {
+    let Some(path) = transcript_of(key) else {
+        return Vec::new();
+    };
+    let Ok(file) = fs::File::open(&path) else {
+        return Vec::new();
+    };
+    let mut said = Vec::new();
+    for line in BufReader::new(file).lines().map_while(Result::ok) {
+        let Ok(entry) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        let mine = match entry.get("type").and_then(Value::as_str) {
+            Some("user") => true,
+            Some("assistant") => false,
+            _ => continue,
+        };
+        let Some(message) = entry.get("message") else {
+            continue;
+        };
+        let words = words_in(message.get("content"));
+        if words.trim().is_empty() {
+            continue;
+        }
+        let id = entry
+            .get("uuid")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        said.push((id, words, mine, None));
+    }
+    // Newest kept when there are more than the panel asked for, oldest first on the way
+    // out — the order it was said in.
+    if said.len() > most {
+        said.drain(..said.len() - most);
+    }
+    said
+}
+
+/// The text of a message, whichever way its content was written.
+fn words_in(content: Option<&Value>) -> String {
+    match content {
+        Some(Value::String(said)) => said.clone(),
+        Some(Value::Array(parts)) => parts
+            .iter()
+            .filter(|part| part.get("type").and_then(Value::as_str) == Some("text"))
+            .filter_map(|part| part.get("text").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join("\n\n"),
+        _ => String::new(),
+    }
+}
+
+/// Which file holds a conversation. Searched rather than computed: the directory name is
+/// the project path with its separators replaced, and reversing that is guesswork where
+/// looking is not.
+fn transcript_of(key: &str) -> Option<PathBuf> {
+    let home = std::env::var_os("HOME").map(PathBuf::from)?;
+    let projects = home.join(".claude").join("projects");
+    for dir in fs::read_dir(&projects).ok()?.flatten() {
+        let here = dir.path().join(format!("{key}.jsonl"));
+        if here.exists() {
+            return Some(here);
+        }
+    }
+    None
 }
 
 /// A title the rail has room for. Cut on a word, because a name that stops mid-word reads
@@ -496,5 +594,28 @@ mod reading {
         }
         // Newest first, which is the order the rail draws them in.
         assert!(found.windows(2).all(|pair| pair[0].at >= pair[1].at));
+    }
+}
+
+#[cfg(test)]
+mod transcripts {
+    use super::{conversations, what_was_said};
+
+    #[test]
+    #[ignore = "reads ~/.claude/projects on this machine"]
+    fn it_reads_back_what_was_said_in_a_real_conversation() {
+        let newest = conversations(1).pop().expect("a conversation");
+        let said = what_was_said(&newest.session_key, 40);
+        assert!(!said.is_empty(), "no turns read from {}", newest.name);
+        // Both sides, not only one: the panel shows the conversation, not a monologue.
+        // Both sides. Most `user` entries in an agentic session are tool results with no
+        // text and are skipped, so a narrow window can be all assistant — 6 was, which is
+        // why this asks for more rather than asserting on the last few.
+        assert!(said.iter().any(|(_, _, mine, _)| *mine), "nothing of theirs");
+        println!("  read {} turns, {} theirs", said.len(), said.iter().filter(|(_,_,m,_)| *m).count());
+        for (_, words, mine, _) in said.iter().take(6) {
+            let who = if *mine { "them" } else { "claude" };
+            println!("  {who:>6}: {}", words.replace('\n', " ").chars().take(64).collect::<String>());
+        }
     }
 }
