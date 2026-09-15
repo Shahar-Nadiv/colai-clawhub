@@ -957,167 +957,12 @@ function bringFiles(brought) {
   openWork();
 }
 
-/**
- * What else can be done to one conversation.
- *
- * One item today and built for more, which is why it is a menu rather than a button. It
- * says why something is not available rather than hiding it: a row that quietly offers
- * less than its neighbour is a row somebody assumes is broken.
- */
-function drawRowMenu() {
-  const about = state.rowMenu;
-  const rows = [];
-  const title = document.createElement("p");
-  title.className = "agents-title";
-  title.textContent = (about && about.name) || "This conversation";
-  rows.push(title);
-
-  const may = canGoBack(about, state.allowed);
-  const item = document.createElement("button");
-  item.type = "button";
-  item.className = "row row-stacked";
-  item.disabled = !may.can;
-  const name = document.createElement("span");
-  name.textContent = "Rewind…";
-  const says = document.createElement("span");
-  says.className = "row-under";
-  says.textContent = "go back to an earlier prompt you sent";
-  item.append(name, says);
-  item.addEventListener("click", () => void openPoints());
-  rows.push(item);
-  if (!may.can) {
-    const why = document.createElement("p");
-    why.className = "cron-bare";
-    why.textContent = may.why;
-    rows.push(why);
-  }
-  el.flyRow.replaceChildren(...rows);
-}
-
-/**
- * Ask the conversation where it could go back to.
- *
- * Asked when somebody opens the list rather than kept warm: a transcript grows with
- * every message, and a list fetched earlier is a list that is quietly out of date about
- * the thing somebody is about to act on.
- */
-async function openPoints() {
-  const about = state.rowMenu;
-  if (!about || !about.sessionKey) return;
-  state.points = { loading: true, list: [], trouble: null };
-  flyout("points");
-  try {
-    state.points.list = await invoke("colai_points", { sessionKey: about.sessionKey });
-  } catch (error) {
-    state.points.trouble = error && error.message ? error.message : String(error);
-  }
-  state.points.loading = false;
-  render();
-}
-
-/**
- * Where this conversation could be taken back to.
- *
- * Each row is one of somebody's own messages. The note under them is the important
- * sentence on this surface and it is stated once, plainly, before anything is chosen:
- * the conversation goes back, the files do not.
- */
-function drawPoints() {
-  const found = state.points;
-  const rows = [];
-  const title = document.createElement("p");
-  title.className = "agents-title";
-  title.textContent = (state.rowMenu && state.rowMenu.name) || "Rewind";
-  rows.push(title);
-
-  const bare = document.createElement("p");
-  bare.className = "cron-bare";
-  bare.textContent = REWIND_SAYS;
-  rows.push(bare);
-
-  if (found && found.loading) {
-    rows.push(saying("Looking…"));
-  } else if (found && found.trouble) {
-    rows.push(saying(`Could not read it — ${found.trouble}`));
-  } else if (!found || found.list.length === 0) {
-    // Honest about the useless answer. The transcript may be empty, or it may be a shape
-    // this build cannot find message ids in; either way there is nowhere to go, and
-    // saying so beats an empty list somebody stares at.
-    rows.push(saying("No prompts here to go back to."));
-  } else {
-    // The prompts scroll and the two lines above them do not. What that sentence says —
-    // that this touches the conversation and not the files — has to still be on screen
-    // at the moment somebody picks a row, and a panel that scrolls as a whole is a panel
-    // where the warning has left the screen by the time it matters.
-    const list = document.createElement("div");
-    list.className = "prompt-list scrolls";
-    const now = Date.now();
-    for (const point of [...found.list].reverse()) {
-      const item = document.createElement("button");
-      item.type = "button";
-      item.className = "row row-stacked prompt-row";
-      const { words, when } = pointSaid(point, now);
-      // The prompt itself, not a label for it. This is how somebody recognises which of
-      // their own messages they meant, so it gets room to be read rather than a slot on
-      // one line beside a timestamp.
-      const said = document.createElement("span");
-      said.className = "prompt-said";
-      said.textContent = words;
-      item.append(said);
-      if (when) {
-        const ago = document.createElement("span");
-        ago.className = "row-under";
-        ago.textContent = when;
-        item.append(ago);
-      }
-      item.title = point.said || "";
-      item.addEventListener("click", () => void goBack(point));
-      list.append(item);
-    }
-    rows.push(list);
-  }
-  el.flyPoints.replaceChildren(...rows);
-}
-
 /** One line of prose in a menu that has nothing else to show. */
 function saying(words) {
   const line = document.createElement("p");
   line.className = "agent-empty";
   line.textContent = words;
   return line;
-}
-
-/**
- * Do it, and say what was done.
- *
- * The first thing on this surface that discards work, so the receipt is not optional —
- * and what came back in the composer is the point of the whole exercise: your words
- * return so you can say them differently.
- */
-async function goBack(point) {
-  const about = state.rowMenu;
-  if (!about || !about.sessionKey || state.sending) return;
-  state.sending = true;
-  render();
-  try {
-    const back = await invoke("colai_rewind", {
-      sessionKey: about.sessionKey,
-      entryId: point.id,
-    });
-    state.open = null;
-    state.points = null;
-    if (back && back.editorText) state.text = back.editorText;
-    say(
-      `${about.name} is back to just before “${(point.said || "that prompt").slice(0, 40)}”. The files are as they were.`,
-      "receipt",
-    );
-    void loadWho();
-  } catch (error) {
-    state.trouble = rewindRefused(error, about.sessionKey);
-  } finally {
-    state.sending = false;
-    render();
-  }
 }
 
 /**
@@ -1789,30 +1634,14 @@ function whoRow({ face, name, note, busy, receiving, onPick, about }) {
     row.append(tail);
   }
   row.addEventListener("click", onPick);
-  if (!about) return row;
-
-  // What else can be done to this conversation. The dots and the right click open the
-  // same menu, deliberately: right click is the shortcut somebody who knows reaches for,
-  // and the dots are how anybody else finds out there is anything there at all. A menu
-  // with only the shortcut has already cost this project two "where is it?" questions.
-  const line = document.createElement("div");
-  line.className = "row-line";
-  const more = document.createElement("button");
-  more.type = "button";
-  more.className = "row-more";
-  more.textContent = "\u22ef";
-  more.title = `More for ${name}`;
-  more.setAttribute("aria-label", `More for ${name}`);
-  const open = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    state.rowMenu = about;
-    state.points = null;
-    flyout("row");
-  };
-  more.addEventListener("click", open);
-  row.addEventListener("contextmenu", open);
-  more.addEventListener("contextmenu", open);
-  line.append(row, more);
-  return line;
+  /*
+   * No menu on a row any more.
+   *
+   * It held one item — Rewind — and rewind is Claude Code's own `/rewind`, in the session
+   * the person is looking at. A second way to do it from a toolbar would be a second idea
+   * of where a conversation currently is, and the two would disagree the first time
+   * somebody used both. With nothing left on it, the dots and the right click opened an
+   * empty menu.
+   */
+  return row;
 }

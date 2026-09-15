@@ -20,8 +20,6 @@ const el = {
   flyGit: document.getElementById("fly-git"),
   flyRecord: document.getElementById("fly-record"),
   flyDraw: document.getElementById("fly-draw"),
-  flyRow: document.getElementById("fly-row"),
-  flyPoints: document.getElementById("fly-points"),
   library: document.getElementById("library"),
   work: document.getElementById("work"),
   toasts: document.getElementById("toasts"),
@@ -105,8 +103,6 @@ const state = {
   // yesterday's interval sitting in the box is a job somebody creates by accident.
   cron: { ...AUTOMATION_FIRST },
   // Which conversation the row menu is about, and what it found to go back to.
-  rowMenu: null,
-  points: null,
   // What this connection is allowed to do, as the Gateway itself reported it. Empty
   // until the handshake, and empty is not "everything".
   allowed: [],
@@ -515,9 +511,6 @@ function render() {
     ? "Drag toolbar · double click to bring it back"
     : "Drag toolbar · double click to put it away";
   if (state.open === "automate") drawAutomation();
-  el.flyRow.hidden = state.open !== "row";
-  el.flyPoints.hidden = state.open !== "points";
-  if (state.open === "row") drawRowMenu();
   if (state.open === "points") drawPoints();
   el.flyDraw.hidden = state.open !== "draw";
   for (const button of el.flyDraw.children) {
@@ -554,8 +547,6 @@ function render() {
     [el.flyGit, buttons.git],
     [el.flyRecord, buttons.record],
     [el.flyDraw, buttons.draw],
-    [el.flyRow, buttons.agents],
-    [el.flyPoints, buttons.agents],
     [el.flyAutomate, buttons.send],
 
     [el.flyAgents, buttons.agents],

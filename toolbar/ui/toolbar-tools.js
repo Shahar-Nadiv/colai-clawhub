@@ -1085,43 +1085,6 @@ const FOLD_TIME = 220;
  * could produce, so the panel says it where they read it before choosing.
  */
 
-/** What the rewind panel says about what it is and is not about to do. */
-const REWIND_SAYS =
-  "Takes this conversation back to just before that prompt. Your files are not touched — only the conversation.";
-
-/**
- * Whether a row in the conversations list can be taken back at all, and why not.
- *
- * Rewinding is a Gateway session's operation. Most of what this list shows is a thread —
- * a conversation the Gateway knows about but does not own — and one of those has no
- * session until it has been sent to. Saying which is which is the whole job: an action
- * offered and then refused teaches somebody the toolbar is broken.
- */
-function canGoBack(row, allowed) {
-  if (!row) return { can: false, why: "There is nothing selected." };
-  // No list is not an empty list. Before the Gateway has answered, this machine has not
-  // been refused anything — it has not been asked — and saying otherwise turns a moment
-  // of waiting into a permanent-sounding no.
-  if (!allowed || allowed.length === 0) {
-    return { can: false, why: "Still asking the Gateway what this machine may do." };
-  }
-  if (!allowed.includes("operator.admin")) {
-    return { can: false, why: "This machine is not allowed to rewind conversations." };
-  }
-  // Refused once for a reason that will not change while this is open. Asked and
-  // answered: the Gateway is the only thing that knows a conversation's history is owned
-  // elsewhere, so the answer is remembered rather than guessed at again.
-  const key = row.sessionKey || (row.kind === "session" ? row.id : null);
-  if (key && REFUSED.has(key)) return { can: false, why: REFUSED.get(key) };
-  if (row.kind === "session" && row.id) return { can: true, why: null };
-  if (row.kind === "thread") {
-    return row.sessionKey
-      ? { can: true, why: null }
-      : { can: false, why: "Send to this conversation once and it can be rewound after that." };
-  }
-  return { can: false, why: "An agent is not a conversation — pick one of its conversations." };
-}
-
 /**
  * Conversations the Gateway has already refused, and what it said.
  *
@@ -1144,45 +1107,6 @@ const REFUSED = new Map();
  */
 const HELD_ELSEWHERE =
   "This conversation is held by the agent that started it, which owns its history — rewind it there.";
-
-/**
- * The Gateway's refusal, in words somebody can act on.
- *
- * It says "session history changes are unavailable because this session is owned by an
- * external agent harness", which is true and is not addressed to anybody. The toolbar
- * knows what that means and can say the useful half.
- */
-function rewindRefused(said, sessionKey) {
-  const words = String((said && said.message) || said || "");
-  if (/external agent harness|owned by/i.test(words)) {
-    // A permanent fact about that conversation, so it is worth keeping: the next look at
-    // its menu says so instead of offering the same failure again.
-    if (sessionKey) REFUSED.set(sessionKey, HELD_ELSEWHERE);
-    return HELD_ELSEWHERE;
-  }
-  if (/archived/i.test(words)) {
-    const archived =
-      "This conversation is archived, and an archived conversation cannot be taken back.";
-    if (sessionKey) REFUSED.set(sessionKey, archived);
-    return archived;
-  }
-  return `Could not go back — ${words || "the Gateway did not say why."}`;
-}
-
-/**
- * A prompt somebody sent, as the row they will recognise it by.
- *
- * The words and the time kept apart, because they are read for different reasons: the
- * words are what somebody remembers writing, and the time is what tells two similar
- * prompts apart. The words get the room — they are the thing being chosen between.
- */
-function pointSaid(point, now) {
-  const words = (point.said || "").trim().replace(/\s+/g, " ");
-  return {
-    words: words || "(no words — an attachment)",
-    when: point.at ? agoSaid(point.at, now) : null,
-  };
-}
 
 /**
  * A colour for an agent, the same one every time.

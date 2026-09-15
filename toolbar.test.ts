@@ -188,18 +188,12 @@ type ToolbarHelpers = {
     answers: { heard?: number; turns?: { said: string; mine?: boolean }[] }[],
   ) => { answer: { heard?: number }; said: string } | null;
   CHOICE_MOST: number;
-  rewindRefused: (said: unknown, sessionKey?: string) => string;
-  canGoBack: (
-    row: { kind: string; id?: string; sessionKey?: string } | null,
-    allowed: string[] | undefined,
-  ) => { can: boolean; why: string | null };
   pointSaid: (
     point: { said?: string; at?: number | null },
     now: number,
   ) => { words: string; when: string | null };
   agoSaid: (at: number, now: number) => string;
   briefly: (at: number, now: number) => string;
-  REWIND_SAYS: string;
   KEEPS_MARKING: string[];
   MOODS: Record<string, { colour: string; says: (many: number) => string }>;
   doingOf: (message: unknown) => string | null;
@@ -393,7 +387,7 @@ function glyphsInTheRail(): Record<string, unknown> {
 
 const context: { helpers?: ToolbarHelpers } & Record<string, unknown> = {};
 vm.runInNewContext(
-  `${toolbarSource}\nthis.helpers = { TOOLS, DRAWS, dockFor, usable, boxOf, pathFor, gateFor, counted, spentSaid, MODES, summaryFor, screenAt, spanOf, detailOf, projectInFront, RECORD_LENGTHS, carrying, sizeOf, secondsLeft, recordFrame, RECORD_CLEAR, DESIGNS, DESIGN_FIRST, GITS, GIT_FIRST, gitKindOf, repoFor, isCommitting, MODE_FIRST, CLICK_MEANS, wholeDisplay, effortStops, effortAt, labelOf, homeOf, WHOLE_DISPLAY, scheduleOf, scheduleSays, nameFor, automationFor, AUTOMATION_FIRST, UNITS, REPEATS, FOLD_TIME, PENS, PEN_FIRST, PATHS, kindFor, ARROW_HEAD, ARROW_WIDE, ARROW_LEAST, ARROW_MOST, HIGHLIGHT_WIDE, placeOf, whereSaid, spotIn, spotSaid, samePlace, stillRunning, runsNow, runningSaid, RUN_QUIET, sheeted, asksSomething, choicesIn, questionIn, askedOf, CHOICE_MOST, canGoBack, rewindRefused, pointSaid, agoSaid, briefly, REWIND_SAYS, KEEPS_MARKING, numberOf, MOODS, moodOf, moodSaid, moodMark, STATES, stateOf, needingYou, workCountSaid, handHue, tokenAt, modesMatching, withoutToken, SOURCES, TAKES_SOURCE, sourceOf, broughtIn, unchosen, centredIn, FOLLOWS_WINDOW, anchorOf, intoWindow, ontoScreen, showingNow, asDrawn, entrySaid, doingOf, doingSaid, DOING_FIRST, DOING_MOST, DOING_QUIET, DOING_TOOLS };`,
+  `${toolbarSource}\nthis.helpers = { TOOLS, DRAWS, dockFor, usable, boxOf, pathFor, gateFor, counted, spentSaid, MODES, summaryFor, screenAt, spanOf, detailOf, projectInFront, RECORD_LENGTHS, carrying, sizeOf, secondsLeft, recordFrame, RECORD_CLEAR, DESIGNS, DESIGN_FIRST, GITS, GIT_FIRST, gitKindOf, repoFor, isCommitting, MODE_FIRST, CLICK_MEANS, wholeDisplay, effortStops, effortAt, labelOf, homeOf, WHOLE_DISPLAY, scheduleOf, scheduleSays, nameFor, automationFor, AUTOMATION_FIRST, UNITS, REPEATS, FOLD_TIME, PENS, PEN_FIRST, PATHS, kindFor, ARROW_HEAD, ARROW_WIDE, ARROW_LEAST, ARROW_MOST, HIGHLIGHT_WIDE, placeOf, whereSaid, spotIn, spotSaid, samePlace, stillRunning, runsNow, runningSaid, RUN_QUIET, sheeted, asksSomething, choicesIn, questionIn, askedOf, CHOICE_MOST, agoSaid, briefly, KEEPS_MARKING, numberOf, MOODS, moodOf, moodSaid, moodMark, STATES, stateOf, needingYou, workCountSaid, handHue, tokenAt, modesMatching, withoutToken, SOURCES, TAKES_SOURCE, sourceOf, broughtIn, unchosen, centredIn, FOLLOWS_WINDOW, anchorOf, intoWindow, ontoScreen, showingNow, asDrawn, entrySaid, doingOf, doingSaid, DOING_FIRST, DOING_MOST, DOING_QUIET, DOING_TOOLS };`,
   context,
 );
 const {
@@ -465,12 +459,8 @@ const {
   questionIn,
   askedOf,
   CHOICE_MOST,
-  canGoBack,
-  rewindRefused,
-  pointSaid,
   agoSaid,
   briefly,
-  REWIND_SAYS,
   KEEPS_MARKING,
   numberOf,
   MOODS,
@@ -2593,149 +2583,6 @@ describe("which conversation is waiting on an answer", () => {
   });
 });
 
-describe("taking a conversation back", () => {
-  const admin = ["operator.read", "operator.admin"];
-
-  test("a Gateway session can be gone back through", () => {
-    expect(canGoBack({ kind: "session", id: "s1", sessionKey: "s1" }, admin).can).toBe(true);
-  });
-
-  test("a thread cannot, until it has been sent to once", () => {
-    const cold = canGoBack({ kind: "thread", id: "t1" }, admin);
-    expect(cold.can).toBe(false);
-    expect(cold.why).toContain("Send to this conversation once");
-    expect(canGoBack({ kind: "thread", id: "t1", sessionKey: "s9" }, admin).can).toBe(true);
-  });
-
-  test("a conversation the Gateway has refused is not offered again", () => {
-    /*
-     * Whether a conversation's history is owned by the agent that started it is not
-     * something this side can see — on this machine the two that are arrive in the list
-     * as ordinary sessions. Guessing from the shape of a row got it exactly backwards:
-     * it refused conversations that rewind fine and offered the two that cannot.
-     *
-     * So it is asked by trying, once, and the answer is kept.
-     */
-    const row = { kind: "session", id: "held", sessionKey: "held" };
-    expect(canGoBack(row, admin).can).toBe(true);
-    rewindRefused(
-      new Error(
-        "Session history changes are unavailable because this session is owned by an external agent harness.",
-      ),
-      "held",
-    );
-    const now = canGoBack(row, admin);
-    expect(now.can).toBe(false);
-    expect(now.why).toContain("rewind it there");
-    // And only that one: nothing else is tarred with it.
-    expect(canGoBack({ kind: "session", id: "other", sessionKey: "other" }, admin).can).toBe(true);
-  });
-
-  test("older refusals still read plainly", () => {
-    // What it actually says is true and addressed to nobody. The toolbar knows what it
-    // means and can say the useful half.
-    const refused = rewindRefused(
-      new Error(
-        "Session history changes are unavailable because this session is owned by an external agent harness.",
-      ),
-    );
-    expect(refused).toContain("rewind it there");
-    expect(refused).not.toContain("harness");
-
-    expect(rewindRefused(new Error("Rewind is unavailable for archived sessions."))).toContain(
-      "archived",
-    );
-    // Anything it has not been taught is passed through rather than swallowed: a
-    // refusal nobody can read still beats one nobody can see.
-    expect(rewindRefused(new Error("the disk is on fire"))).toContain("the disk is on fire");
-    expect(rewindRefused(null)).toContain("did not say why");
-  });
-
-  test("an agent is not a conversation", () => {
-    expect(canGoBack({ kind: "agent", id: "main" }, admin).can).toBe(false);
-  });
-
-  test("without the scope it is not offered, and says why", () => {
-    // Read off the handshake rather than assumed. A button that always fails is worse
-    // than one that is not there.
-    const no = canGoBack({ kind: "session", id: "s1", sessionKey: "s1" }, ["operator.read"]);
-    expect(no.can).toBe(false);
-    expect(no.why).toContain("not allowed");
-  });
-
-  test("not having heard yet is not a refusal", () => {
-    // The Gateway connects a moment after the app does, so the first ask lands before
-    // there is anything to answer it. Reading that silence as "no" turned a moment of
-    // waiting into a permanent-sounding refusal that never corrected itself — which is
-    // exactly what shipped.
-    const row = { kind: "session", id: "s1", sessionKey: "s1" };
-    for (const nothing of [[], undefined]) {
-      const yet = canGoBack(row, nothing);
-      expect(yet.can).toBe(false);
-      expect(yet.why).toContain("Still asking");
-      expect(yet.why).not.toContain("not allowed");
-    }
-  });
-
-  test("the panel says what it does not do, before anything is chosen", () => {
-    // The one sentence that has to be there. Somebody who believes their work reverted
-    // and finds out later is the worst outcome this surface could produce, so it is
-    // stated where they read it rather than left to be discovered.
-    expect(REWIND_SAYS).toContain("files are not touched");
-    expect(REWIND_SAYS).toContain("only the conversation");
-  });
-
-  test("a prompt is its words and a time, kept apart", () => {
-    // They compete for the same room and the wrong one loses. The words are what
-    // somebody remembers; the time is what tells two similar messages apart.
-    const now = 1_000_000_000_000;
-    expect(pointSaid({ said: "fix  the header\n gap", at: now - 600_000 }, now)).toEqual({
-      words: "fix the header gap",
-      when: "10 minutes ago",
-    });
-    expect(pointSaid({ said: "no clock on this one", at: null }, now).when).toBeNull();
-  });
-
-  test("a message with no words is still a place, and says what it is", () => {
-    // An attachment-only message has a place in the transcript. Being unable to
-    // summarise it is no reason to make it unreachable or to show an empty row.
-    expect(pointSaid({ said: "", at: null }, 0).words).toContain("attachment");
-  });
-
-  test("how long ago is read in whichever unit the Gateway sent", () => {
-    const now = 1_000_000_000_000;
-    // Milliseconds, and the same instant in seconds, must not be four decades apart.
-    expect(agoSaid(now - 600_000, now)).toBe("10 minutes ago");
-    expect(agoSaid((now - 600_000) / 1000, now)).toBe("10 minutes ago");
-    expect(agoSaid(now - 30_000, now)).toBe("just now");
-    expect(agoSaid(now - 7_200_000, now)).toBe("2 hours ago");
-    // One of anything is one of it, not one of them.
-    expect(agoSaid(now - 3_600_000, now)).toBe("1 hour ago");
-    expect(agoSaid(now - 100_000, now)).toBe("2 minutes ago");
-    expect(agoSaid(now - 86_400_000, now)).toBe("1 day ago");
-  });
-
-  test("the panel's column of times is numbers, not a column of the word 'ago'", () => {
-    /*
-     * `agoSaid` writes a sentence, which is right in a list read one line at a time. In
-     * the Work panel every exchange carries one, and "4 minutes ago" repeated down the
-     * page buries the only part that differs. The panel gets the number; the sentence
-     * stays in the `title`, so hovering still spells it out.
-     */
-    const now = 1_000_000_000_000;
-    expect(briefly(now - 40_000, now)).toBe("40s");
-    expect(briefly(now - 240_000, now)).toBe("4m");
-    expect(briefly(now - 7_200_000, now)).toBe("2h");
-    expect(briefly(now - 172_800_000, now)).toBe("2d");
-    // Seconds or milliseconds, as with the sentence — same instant, same answer.
-    expect(briefly((now - 240_000) / 1000, now)).toBe("4m");
-    // Never longer than the sentence it replaces, at any age.
-    for (const apart of [0, 1_000, 59_000, 61_000, 3_599_000, 90_000_000]) {
-      expect(briefly(now - apart, now).length).toBeLessThanOrEqual(3);
-    }
-  });
-});
-
 describe("a mark belongs to what it was marked on", () => {
   /*
    * The bug this is about: point at something in a tab, switch tab, and the dot is still
@@ -4616,16 +4463,6 @@ describe("a list longer than the screen", () => {
     expect(rule).toContain("overscroll-behavior: contain");
   });
 
-  test("the prompts scroll, and the sentence above them does not", () => {
-    // What that sentence says — this touches the conversation, not the files — has to
-    // still be on screen at the moment somebody picks a row. A panel that scrolls whole
-    // is one where the warning has left the screen by the time it matters.
-    expect(compose).toContain('list.className = "prompt-list scrolls"');
-    const bare = compose.indexOf("bare.textContent = REWIND_SAYS");
-    const scroller = compose.indexOf('"prompt-list scrolls"');
-    expect(bare).toBeGreaterThan(-1);
-    expect(scroller).toBeGreaterThan(bare);
-  });
 });
 
 describe("every tool has a key somebody can find", () => {
@@ -5711,9 +5548,15 @@ describe("the work panel is a view of OpenClaw's conversations", () => {
   });
 
   test("the panel says how wide it is looking", () => {
-    // A filtered list that does not say it is filtered is indistinguishable from a list
-    // that has lost things — which is exactly how this read.
-    expect(work).toContain('["mine", "This agent"');
+    /*
+     * A filtered list that does not say it is filtered is indistinguishable from a list
+     * that has lost things — which is exactly how this read.
+     *
+     * The axis is the conversation on this host, not the agent: there is one Claude, so
+     * "this agent" would be every row there is. The filter itself was already right — the
+     * receiver is always a session here — so only the words changed.
+     */
+    expect(work).toContain('["mine", "This one"');
     expect(work).toMatch(/\["all", `Everything/);
     expect(page, "and the default is what it has always shown").toContain('scope: "mine"');
   });

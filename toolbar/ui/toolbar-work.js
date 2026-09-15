@@ -187,12 +187,17 @@ function workHead(waiting) {
    * is the difference between a filtered list and a list that has lost things. Two words
    * settle it — and make the narrow view a choice somebody can see rather than a wall.
    *
+   * On this host the axis is the conversation, not the agent. There is one Claude, so
+   * "this agent" would be every row there is; what somebody actually wants narrowed to is
+   * the conversation they are pointed at. The filter already did that — the receiver is
+   * always a session here — so only the words were wrong.
+   *
    * Only worth showing once there is something outside the filter to look at.
    */
   const beyond = state.history.length - shownWork().length;
   if (beyond > 0 || state.work.scope === "all") {
     for (const [id, label, why] of [
-      ["mine", "This agent", "Only the conversations of whoever is receiving"],
+      ["mine", "This one", "Only the conversation you are pointed at"],
       ["all", `Everything · ${state.history.length}`, "Every conversation colai can see"],
     ]) {
       const pick = document.createElement("button");
@@ -563,28 +568,14 @@ function actionsFor(entry, state_) {
   if (state_ === "failed") {
     add("Try again", true, "Send it again, unchanged", () => void resend(entry));
   }
-  const may = canGoBack(
-    { kind: "session", id: entry.sessionKey, sessionKey: entry.sessionKey },
-    state.allowed,
-  );
-  if (entry.sessionKey) {
-    const back = document.createElement("button");
-    back.type = "button";
-    back.className = "work-act";
-    back.disabled = !may.can;
-    back.textContent = "Rewind";
-    back.title = may.why || "Go back to an earlier prompt you sent";
-    back.addEventListener("click", () => {
-      state.rowMenu = {
-        kind: "session",
-        id: entry.sessionKey,
-        sessionKey: entry.sessionKey,
-        name: entry.who,
-      };
-      void openPoints();
-    });
-    acts.append(back);
-  }
+  /*
+   * No Rewind on these rows.
+   *
+   * Going back to an earlier prompt is Claude Code's own `/rewind`, in the session the
+   * person is looking at. A second way to do it from a toolbar would be a second idea of
+   * where a conversation currently is — and the two would disagree the first time somebody
+   * used both.
+   */
   return acts;
 }
 
