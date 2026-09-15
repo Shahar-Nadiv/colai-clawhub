@@ -5141,15 +5141,21 @@ describe("what the plugin ships", () => {
      * container, where three variants installed identically in six seconds and none of
      * them compiled anything.
      *
-     * So the binary is staged into `bin/` before the package is packed, and that is what
-     * ships — gzipped, because the registry takes files up to 10 MB and the binary is
-     * over 12. It is laid out on first use instead of on install; `src/unpack.ts` says
-     * why that is not the same thing as a postinstall. The container run under `test/` is
-     * what would notice if the host ever stopped forcing `--ignore-scripts`; nothing here
-     * reads OpenClaw's source to find out.
+     * So each binary is staged into its platform package before anything is packed, and
+     * that is what ships — gzipped, because the registry takes files up to 10 MB and the
+     * binary is over 12. It is laid out on first use instead of on install;
+     * `src/unpack.ts` says why that is not the same thing as a postinstall. The container
+     * run under `test/` is what would notice if the host ever stopped forcing
+     * `--ignore-scripts`; nothing here reads OpenClaw's source to find out.
      */
     expect(manifest.scripts?.postinstall, "a postinstall here can never run").toBeUndefined();
-    expect(shipped("bin/colai-toolbar.gz"), "the built toolbar travels in the tarball").toBe(true);
+    // Not in the wrapper — in the package for the machine that can run it.
+    expect(shipped("bin/colai-toolbar.gz"), "no binary travels in the wrapper").toBe(false);
+    for (const name of manifest.openclaw.install.requiredPlatformPackages) {
+      const which = name.slice("@colai/toolbar-".length);
+      const pkg = JSON.parse(readFileSync(new URL(`platforms/${which}/package.json`, dir), "utf8"));
+      expect(pkg.files, `${name} must carry the binary`).toContain("bin/colai-toolbar.gz");
+    }
     // Two ways to produce it, and they are not interchangeable: one for working on it
     // here, one for the copy strangers get. Which is which is settled by the test below
     // about publishing; this only asserts both exist.
@@ -5221,15 +5227,22 @@ describe("what the plugin ships", () => {
     expect(direct[0], "and only inside the helper").toBeGreaterThan(helper);
   });
 
-  test("npm refuses the machines the binary cannot run on", () => {
+  test("npm refuses the machines a binary cannot run on — in the package that holds it", () => {
     /*
-     * `bin/colai-toolbar` is one ELF for one architecture. Without `cpu`, npm installs it
-     * onto an arm64 machine perfectly happily, the host loads the plugin, and the toolbar
-     * exits 127 — a working install of a program that cannot run. `os` has always been
-     * here and does the same job for Windows and macOS; `cpu` was simply missing.
+     * A binary is one executable for one machine. Without `os` and `cpu`, npm installs it
+     * onto anything perfectly happily, the host loads the plugin, and the toolbar exits
+     * 127 — a working install of a program that cannot run.
+     *
+     * Those two keys used to sit on the wrapper, which was right while there was one
+     * binary and became exactly wrong once there were several: npm reads them before it
+     * considers a single optional dependency, so `os: ["linux"]` here would refuse a Mac
+     * the wrapper and it would never reach the Mac binary inside. The keys belong to the
+     * packages that actually hold an executable, and that is where they now are — tested
+     * against the platform manifests in `index.test.ts`.
      */
-    expect(manifest.os, "the binary is Linux-only").toEqual(["linux"]);
-    expect(manifest.cpu, "and it is one architecture, not any").toEqual(["x64"]);
+    expect(manifest.os, "the wrapper runs anywhere").toBeUndefined();
+    expect(manifest.cpu).toBeUndefined();
+    expect(Object.keys(manifest.optionalDependencies ?? {}).length).toBeGreaterThan(0);
   });
 
   test("the runtime the host actually loads is built by this package", () => {
@@ -5260,15 +5273,21 @@ describe("what the plugin ships", () => {
     expect(manifest.devDependencies?.esbuild, "declared, not borrowed").toBeTruthy();
   });
 
-  test("it looks in the shipped bin before any build directory", () => {
-    // `target/` exists only where somebody is working on the toolbar. Everywhere else
-    // `bin/` is the whole answer, so it is the one that is asked first.
+  test("it asks the installed package first and a build directory last", () => {
+    /*
+     * Three places, and the order is the whole behaviour: the platform package npm
+     * installed, then `platforms/` in a checkout, then `target/`. A `target/` build exists
+     * only on a machine where somebody is working on the toolbar, and preferring it would
+     * mean a developer's half-finished binary shadowing the one that was shipped.
+     */
     const entry = readFileSync(new URL("index.ts", dir), "utf8");
     const looking = entry.slice(entry.indexOf("function toolbarBinary"));
-    const inBin = looking.indexOf("bin/colai-toolbar");
-    const inTarget = looking.indexOf("target/release");
-    expect(inBin).toBeGreaterThan(-1);
-    expect(inBin).toBeLessThan(inTarget);
+    const installed = looking.indexOf("whereTheBuildIs");
+    const checkout = looking.indexOf('"platforms"');
+    const built = looking.indexOf("target/release");
+    expect(installed).toBeGreaterThan(-1);
+    expect(installed).toBeLessThan(checkout);
+    expect(checkout).toBeLessThan(built);
   });
 
   test("what index.ts imports, the package declares", () => {

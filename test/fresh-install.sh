@@ -81,10 +81,37 @@ fi
 echo "building the plugin runtime"
 (cd "$plugin" && node scripts/build-runtime.mjs)
 
-# One tarball for every variant: exactly what `npm publish` would upload, and the only
-# thing any container is allowed to see of this repo.
+echo "packing $plugin"
+#
+# The binary lives in a package of its own now — `@colai/toolbar-linux-x64` — which the
+# wrapper names as an optional dependency and npm fetches from the registry. That is the
+# thing this test most needs to exercise and the one thing it cannot: the platform package
+# is not published yet, and a container with no network to a registry that does not have it
+# would only ever prove the failure path.
+#
+# So both are packed, and the wrapper's dependency is pointed at the tarball beside it for
+# the length of the run. `file:` is a spec npm resolves exactly like any other, so the
+# install under test is the real one — same resolution, same lockfile, same layout on disk
+# — with only the source of the bytes changed. The manifest is put back afterwards, always,
+# including when this script is interrupted.
+echo "packing the linux-x64 binary"
+platform="$work/$( (cd "$plugin/platforms/linux-x64" && npm pack --pack-destination "$work" --silent) | tail -1 )"
+
+manifest="$plugin/package.json"
+cp "$manifest" "$work/package.json.real"
+restore_manifest() { cp "$work/package.json.real" "$manifest" 2>/dev/null || true; }
+trap restore_manifest EXIT INT TERM
+node -e '
+  const fs = require("node:fs");
+  const [file, tarball] = process.argv.slice(1);
+  const manifest = JSON.parse(fs.readFileSync(file, "utf8"));
+  manifest.optionalDependencies["@colai/toolbar-linux-x64"] = `file:${tarball}`;
+  fs.writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
+' "$manifest" "/work/$(basename "$platform")"
+
 echo "packing $plugin"
 tarball="$work/$( (cd "$plugin" && npm pack --pack-destination "$work" --silent) | tail -1 )"
+restore_manifest
 echo "packed $(basename "$tarball") ($(du -h "$tarball" | cut -f1))"
 echo
 
@@ -135,6 +162,7 @@ for variant in "${wanted[@]}"; do
   began=$(date +%s)
   if docker run --rm "${wants[@]}" "${screen[@]+"${screen[@]}"}" \
       -v "$tarball:/work/$(basename "$tarball"):ro" \
+      -v "$platform:/work/$(basename "$platform"):ro" \
       "$image" bash -euo pipefail -c "
         # --accept-capabilities because nothing in here can answer a prompt. A person
         # installing this is shown the same surface and accepts it themselves.
@@ -153,6 +181,25 @@ for variant in "${wanted[@]}"; do
           exit 1
         fi
         echo \"there: \$binary (\$(du -h \"\$binary\" | cut -f1))\"
+        #
+        # One build, and the right one.
+        #
+        # The wrapper names every platform package as an optional dependency, and the
+        # whole promise of that arrangement is that npm reads the \`os\` and \`cpu\` on each
+        # and installs only the one this machine can run. If that promise ever broke, the
+        # install would still succeed and still work here — it would just also carry a
+        # Mac binary to every Linux user, silently, which is exactly the kind of thing
+        # nobody notices until the tarball is twice the size it should be.
+        installed=\$(ls ~/.openclaw/npm/projects/*/node_modules/@colai/ 2>/dev/null | grep '^toolbar-' || true)
+        echo \"builds installed: \$(echo \$installed | tr '\\n' ' ')\"
+        if echo \"\$installed\" | grep -q 'darwin'; then
+          echo 'WRONG BUILD — a macOS package was installed on Linux'
+          exit 1
+        fi
+        if ! echo \"\$installed\" | grep -q 'toolbar-linux-x64'; then
+          echo 'MISSING BUILD — the linux-x64 package did not arrive'
+          exit 1
+        fi
         #
         # Shipped from another machine, so whether it can actually run here is the whole
         # question — and until now this did not ask it. It ran the binary, threw the exit

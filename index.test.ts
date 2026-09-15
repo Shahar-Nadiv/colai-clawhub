@@ -20,6 +20,7 @@ import { describe, expect, it as test } from "vitest";
 import colai from "./index.js";
 import { notWhatWasBuilt } from "./src/digest.js";
 import { withoutSomebodyElsesLibraries } from "./src/environment.js";
+import { buildFor, noBuildFor } from "./src/platform.js";
 import { toolbarOnScreen } from "./src/running.js";
 import { screenTrouble } from "./src/screen.js";
 import { Toolbar } from "./src/toolbar-process.js";
@@ -294,6 +295,53 @@ describe("the toolbar is not handed somebody else's libraries", () => {
         "withoutSomebodyElsesLibraries",
       );
     }
+  });
+});
+
+describe("which build of the toolbar this machine needs", () => {
+  test("a machine there is a build for gets its package name", () => {
+    expect(buildFor("linux", "x64")?.package).toBe("@colai/toolbar-linux-x64");
+  });
+
+  test("a machine there is no build for gets null, not a guess", () => {
+    // Returning something plausible here would produce a resolve failure deep in the
+    // install, which reads as a broken download rather than an unsupported computer.
+    expect(buildFor("darwin", "arm64")).toBeNull();
+    expect(buildFor("linux", "arm64")).toBeNull();
+    expect(buildFor("win32", "x64")).toBeNull();
+  });
+
+  test("the refusal names the machine and says what there is", () => {
+    /*
+     * "Cannot find module @colai/toolbar-darwin-arm64" is what this looked like from the
+     * outside before, and it sends a person looking for a failed install. The truth is
+     * that their computer is not one colai has been built for, and the sentence has to
+     * say both halves: which machine theirs is, and which ones are covered.
+     */
+    const said = noBuildFor("darwin", "arm64");
+    expect(said).toContain("darwin arm64");
+    expect(said).toContain("Linux on x86-64");
+    expect(said).not.toContain("Cannot find module");
+  });
+
+  test("the macOS scaffold stays in step even though nothing declares it", () => {
+    /*
+     * `platforms/darwin-arm64/` exists and is deliberately not in `BUILDS` or in
+     * `optionalDependencies` — there is no macOS binary yet, and naming one would promise
+     * a package npm cannot fetch. It is kept because it is the template the real thing
+     * will use, and a template nothing checks is a template that has rotted by the time
+     * somebody needs it.
+     */
+    const pkg = JSON.parse(
+      readFileSync(new URL("./platforms/darwin-arm64/package.json", import.meta.url), "utf8"),
+    );
+    expect(pkg.name).toBe("@colai/toolbar-darwin-arm64");
+    const wrapper = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
+    expect(pkg.version).toBe(wrapper.version);
+    expect(pkg.os).toEqual(["darwin"]);
+    expect(pkg.cpu).toEqual(["arm64"]);
+    // And it is not promised to anybody until there is something behind it.
+    expect(Object.keys(wrapper.optionalDependencies)).not.toContain(pkg.name);
   });
 });
 
@@ -610,13 +658,7 @@ describe("what the published package promises", () => {
   test("everything the toolbar needs at runtime is in the tarball", () => {
     // `files` is an allowlist. Dropping one of these produces a plugin that installs
     // cleanly and then does nothing, which no other test would notice.
-    for (const needed of [
-      "bin/colai-toolbar.gz",
-      "bin/colai-toolbar.sha256",
-      "dist/",
-      "toolbar/ui/",
-      "openclaw.plugin.json",
-    ]) {
+    for (const needed of ["dist/", "toolbar/ui/", "openclaw.plugin.json"]) {
       expect(manifest.files, `${needed} must ship`).toContain(needed);
     }
   });
@@ -645,7 +687,58 @@ describe("what the published package promises", () => {
     expect(manifest.license).toBeTruthy();
   });
 
-  test("npm refuses it where it cannot run, rather than installing a useless binary", () => {
-    expect(manifest.os).toEqual(["linux"]);
+  test("the wrapper installs anywhere, and the binaries are what refuse", () => {
+    /*
+     * `os: ["linux"]` used to sit here, and it was right when there was one binary. With a
+     * build per machine it is exactly wrong: npm reads it before it looks at a single
+     * optional dependency, so a Mac would be refused the wrapper and never reach the Mac
+     * binary inside it.
+     *
+     * The refusal moved to where the machine-specific thing actually is. Each platform
+     * package declares its own `os` and `cpu`, npm installs the one that matches, and a
+     * machine with no match gets a wrapper that names the problem itself — see
+     * `noBuildFor` in `src/platform.ts`.
+     */
+    expect(manifest.os, "the wrapper must not refuse any machine").toBeUndefined();
+    expect(manifest.cpu).toBeUndefined();
+  });
+
+  test("every build the wrapper promises is one the host will verify", () => {
+    /*
+     * Two lists that have to agree: `optionalDependencies` is how npm picks a build, and
+     * `openclaw.install.requiredPlatformPackages` is how OpenClaw checks npm picked one —
+     * it re-reads the lockfile, retries once with a cold cache, and rolls the install back
+     * if the matching build never arrived.
+     *
+     * A name in the first and not the second installs with no verification. A name in the
+     * second and not the first is a build OpenClaw waits for that npm was never told
+     * about.
+     */
+    const promised = Object.keys(manifest.optionalDependencies ?? {});
+    const verified = manifest.openclaw.install.requiredPlatformPackages;
+    expect(promised.length).toBeGreaterThan(0);
+    expect([...promised].sort()).toEqual([...verified].sort());
+    // Pinned exactly, not by range: a wrapper carries the digests of the binaries it
+    // trusts, so a floating range would let a binary it has never seen satisfy it.
+    for (const name of promised) {
+      expect(manifest.optionalDependencies[name]).toBe(manifest.version);
+    }
+  });
+
+  test("each platform package refuses every machine but its own", () => {
+    // The package that holds a binary is the one that knows which machine it is for.
+    for (const name of manifest.openclaw.install.requiredPlatformPackages) {
+      const which = name.slice("@colai/toolbar-".length);
+      const [os, cpu] = which.split("-");
+      const pkg = JSON.parse(
+        readFileSync(new URL(`./platforms/${which}/package.json`, import.meta.url), "utf8"),
+      );
+      expect(pkg.name).toBe(name);
+      expect(pkg.version, `${name} must ship in step with the wrapper`).toBe(manifest.version);
+      expect(pkg.os).toEqual([os]);
+      expect(pkg.cpu).toEqual([cpu]);
+      // It holds a binary and no code, so it must not claim an entry point.
+      expect(pkg.main).toBeUndefined();
+    }
   });
 });

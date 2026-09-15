@@ -20,6 +20,7 @@ import { existsSync, statSync } from "node:fs";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
 import { notWhatWasBuilt } from "./digest.js";
 import { withoutSomebodyElsesLibraries } from "./environment.js";
+import { buildFor } from "./platform.js";
 import { toolbarOnScreen, whereabouts } from "./running.js";
 import { screenTrouble } from "./screen.js";
 
@@ -126,7 +127,7 @@ export function registerColaiCli(program: CliProgram, toolbarBinary: () => strin
        * something to step around by using the documented command instead of the automatic
        * one. One gate, both doors.
        */
-      const wrong = notWhatWasBuilt(binary);
+      const wrong = notWhatWasBuilt(binary, buildFor()?.package ?? null);
       if (wrong) {
         console.error(`The colai toolbar ${wrong}`);
         process.exitCode = 1;
@@ -134,9 +135,7 @@ export function registerColaiCli(program: CliProgram, toolbarBinary: () => strin
       }
       return binary;
     }
-    console.error("The colai toolbar is not installed.");
-    console.error("The package ships it already built, so this means the install did not finish.");
-    console.error("Reinstall it: openclaw plugins install @colai/toolbar --force");
+    console.error("The colai toolbar could not be found. The line above says why.");
     process.exitCode = 1;
     return null;
   };

@@ -18,7 +18,7 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -77,21 +77,40 @@ mkdirSync(outDir, { recursive: true });
  *
  * Empty in a checkout, and empty is correct there: `npm run build` builds this *before*
  * `build-toolbar.mjs` produces the binary, so any digest taken here would be of the
- * previous one. It is only filled in by `scripts/prepublish.mjs`, which runs after a
- * release binary is staged and is the only path where a fixed digest means anything.
+ * previous one. It is only filled in by `scripts/ship.mjs`, which runs after a release
+ * binary is staged and is the only path where a fixed digest means anything.
+ *
+ * One digest per build, because there is one binary per machine. Whatever is staged under
+ * `platforms/` at stamping time goes in; a machine that has only built Linux stamps only
+ * Linux, and a wrapper published that way simply has nothing to say about the Mac binary —
+ * which is the honest outcome and is caught by `ship.mjs` before anything is published.
  */
-function builtDigest() {
-  if (process.env.COLAI_STAMP_DIGEST !== "1") return "";
-  const binary = join(root, "bin", "colai-toolbar");
-  if (!existsSync(binary)) {
-    console.error("colai: asked to stamp the digest, but there is no binary to stamp.");
+function builtDigests() {
+  if (process.env.COLAI_STAMP_DIGEST !== "1") return {};
+  const staged = join(root, "platforms");
+  if (!existsSync(staged)) {
+    console.error("colai: asked to stamp digests, but there is no platforms/ to stamp.");
     process.exit(1);
   }
-  return createHash("sha256").update(readFileSync(binary)).digest("hex");
+  const digests = {};
+  for (const name of readdirSync(staged).sort()) {
+    const binary = join(staged, name, "bin", "colai-toolbar");
+    if (!existsSync(binary)) continue;
+    digests[`@colai/toolbar-${name}`] = createHash("sha256")
+      .update(readFileSync(binary))
+      .digest("hex");
+  }
+  if (Object.keys(digests).length === 0) {
+    console.error("colai: asked to stamp digests, but no platform has a binary staged.");
+    process.exit(1);
+  }
+  return digests;
 }
 
-const stamped = builtDigest();
-if (stamped) console.log(`colai: stamping the runtime with digest ${stamped.slice(0, 12)}…`);
+const stamped = builtDigests();
+for (const [build, digest] of Object.entries(stamped)) {
+  console.log(`colai: stamping ${build} at ${digest.slice(0, 12)}…`);
+}
 
 const ran = spawnSync(
   build,
@@ -101,7 +120,7 @@ const ran = spawnSync(
     `--outfile=${outFile}`,
     "--platform=node",
     "--format=esm",
-    `--define:COLAI_BUILT_DIGEST=${JSON.stringify(stamped)}`,
+    `--define:COLAI_BUILT_DIGESTS=${JSON.stringify(JSON.stringify(stamped))}`,
     // The floor the package already claims: `openclaw.install.minHostVersion` is
     // >=2026.9.1, whose Node is 22. Targeting lower would be a promise nothing keeps.
     "--target=node22",

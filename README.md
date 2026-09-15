@@ -29,6 +29,12 @@ openclaw plugins install @colai/toolbar
 The toolbar ships already built, so nothing compiles on your machine and no Rust toolchain
 is needed. It starts with the Gateway and puts itself on screen.
 
+The toolbar is a native program, so there is one of it per kind of machine. The package you
+install carries no binary at all — it names one per platform, and npm fetches only the one
+your computer can run. Nothing runs at install time to arrange this, and you do not choose
+anything. Today there is one build, **Linux on x86-64**; any other machine is told so by
+name rather than left with a broken install.
+
 It travels compressed and unpacks itself the first time it is asked for, which means the
 plugin's own directory has to be writable on that first run — it is, on a normal install.
 The unpacked binary is checked against the digest shipped with it before anything runs.

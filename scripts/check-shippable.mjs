@@ -27,7 +27,21 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const binary = join(root, "bin", "colai-toolbar");
+/*
+ * Which build this run is about.
+ *
+ * There is one binary per machine now, each in a platform package of its own. This script
+ * measures one of them — the Linux build by default, because that is the one this machine
+ * can produce; CI passes the name of whichever it just built.
+ *
+ * The glibc and home-directory checks below are Linux questions and are skipped for any
+ * other build. That is not a hole: a macOS binary has its own things to check and no
+ * `readelf` to check them with, and pretending otherwise would be a check that passes by
+ * not looking.
+ */
+const which = process.argv[2] ?? "linux-x64";
+const home = join(root, "platforms", which);
+const binary = join(home, "bin", "colai-toolbar");
 const provenance = `${binary}.build.json`;
 const digestFile = `${binary}.sha256`;
 
@@ -35,18 +49,10 @@ const digestFile = `${binary}.sha256`;
 const OLDEST_SUPPORTED = "2.35";
 
 /** What the tarball is useless without, whatever else is in it. */
-// `bin/colai-toolbar.gz` and not `bin/`: the uncompressed binary is over the registry's
-// 10 MB per-file limit and cannot be published, so shipping the directory would ship a
-// tarball nobody can upload. See `src/unpack.ts`.
-const MUST_SHIP = [
-  "bin/colai-toolbar.gz",
-  "bin/colai-toolbar.sha256",
-  "dist/",
-  "toolbar/ui/",
-  "openclaw.plugin.json",
-  "README.md",
-  "LICENSE",
-];
+// What the *wrapper* must ship. The binary is not on this list any more and must not be:
+// it lives in the platform packages, and a wrapper carrying one would send every Linux
+// user a macOS binary they can never run. `MUST_NOT_SHIP` below is the other half.
+const MUST_SHIP = ["dist/", "toolbar/ui/", "openclaw.plugin.json", "README.md", "LICENSE"];
 
 function older(left, right) {
   const [leftMajor, leftMinor] = left.split(".").map(Number);
@@ -105,8 +111,10 @@ if (!existsSync(provenance)) {
 const built = JSON.parse(readFileSync(provenance, "utf8"));
 
 // ── the glibc floor, measured ────────────────────────────────────────────────
-const measured = glibcFloor();
-if (measured === null) {
+// The glibc floor is a question about an ELF; a Mach-O has nothing to answer it with.
+const onLinux = which.startsWith("linux-");
+const measured = onLinux ? glibcFloor() : null;
+if (onLinux && measured === null) {
   console.warn("colai: readelf is not available, so the glibc floor is taken on trust.");
 }
 const floor = measured ?? built.glibc ?? "99.99";
@@ -130,7 +138,7 @@ if (measured !== null && built.glibc && measured !== built.glibc) {
 // Tauri embeds its build context path and `--remap-path-prefix` cannot reach it, so this
 // is the one check that actually proves the release image did its job.
 const bytes = readFileSync(binary);
-const homes = [...bytes.toString("latin1").matchAll(/\/home\/[A-Za-z0-9._-]+/g)];
+const homes = onLinux ? [...bytes.toString("latin1").matchAll(/\/home\/[A-Za-z0-9._-]+/g)] : [];
 if (homes.length > 0) {
   const seen = [...new Set(homes.map(([found]) => found))].slice(0, 3);
   complaints.push(
@@ -155,6 +163,17 @@ if (!existsSync(digestFile)) {
 
 // ── everything it needs at runtime is allowed into the tarball ───────────────
 const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+// The binary travels in `@colai/toolbar-<platform>`, never in the wrapper. `files` is an
+// allowlist, so this can only go wrong by somebody adding it back on purpose — which is
+// exactly the change that would quietly put the tarball back over the registry's limit.
+const shipped = manifest.files.filter((file) => file.startsWith("bin/"));
+if (shipped.length > 0) {
+  complaints.push(
+    `\`files\` ships ${shipped.join(", ")}. The binary belongs to the platform packages ` +
+      "under `platforms/`, not to the wrapper.",
+  );
+}
+
 const missing = MUST_SHIP.filter((needed) => !manifest.files.includes(needed));
 if (missing.length > 0) {
   complaints.push(

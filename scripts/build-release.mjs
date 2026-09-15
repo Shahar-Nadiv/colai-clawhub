@@ -104,8 +104,21 @@ try {
     process.exit(1);
   }
 
-  mkdirSync(join(root, "bin"), { recursive: true });
-  const staged = join(root, "bin", "colai-toolbar");
+  /*
+   * Into the platform package, not into the plugin's own `bin/`.
+   *
+   * There is one binary per machine now and they are published as packages of their own —
+   * `@colai/toolbar-linux-x64` and the rest — so each build belongs beside the manifest
+   * that declares the `os` and `cpu` it is for. The wrapper ships no binary at all.
+   *
+   * This script only ever produces the Linux one: it builds inside a container, and macOS
+   * cannot be built in one. The Mac build comes from CI on a real macOS runner and stages
+   * into `platforms/darwin-arm64/` the same way.
+   */
+  const WHICH = "linux-x64";
+  const home = join(root, "platforms", WHICH, "bin");
+  mkdirSync(home, { recursive: true });
+  const staged = join(home, "colai-toolbar");
   copyFileSync(join(work, "out", "colai-toolbar"), staged);
 
   const digest = createHash("sha256").update(readFileSync(staged)).digest("hex");
@@ -129,9 +142,11 @@ try {
   writeFileSync(archive, gzipSync(readFileSync(staged), { level: 9 }));
 
   const asMegabytes = (bytes) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  console.log(`colai: staged at bin/colai-toolbar, runs on glibc ${glibc} and newer.`);
   console.log(
-    `colai: ships as bin/colai-toolbar.gz — ` +
+    `colai: staged at platforms/${WHICH}/bin/colai-toolbar, runs on glibc ${glibc} and newer.`,
+  );
+  console.log(
+    `colai: ships as @colai/toolbar-${WHICH} — ` +
       `${asMegabytes(statSync(staged).size)} unpacked, ${asMegabytes(statSync(archive).size)} packed.`,
   );
   console.log(`colai: sha256 ${digest}`);

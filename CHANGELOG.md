@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.1.3 — unreleased
+
+The binary moves out of the plugin and into a package per machine.
+
+- **`@colai/toolbar` no longer carries a binary.** It names one platform package per kind
+  of machine as an optional dependency, each declaring the `os` and `cpu` it is for, and
+  npm installs only the one that matches. This is how esbuild and swc ship, and OpenClaw
+  supports it directly: `openclaw.install.requiredPlatformPackages` makes the host verify
+  the matching build actually arrived, retry once with a cold cache, and roll the install
+  back if it did not.
+- **`os: ["linux"]` is gone from the plugin**, and that is the point of the change: npm
+  reads it before it considers a single optional dependency, so it refused a Mac the
+  package before the Mac could ever be offered a Mac binary. The refusal now lives in the
+  packages that hold an executable.
+- **A machine with no build is told which machine it is.** "Cannot find module" sent people
+  looking for a failed download; it now says there is no build for `darwin arm64` and names
+  what there is.
+- The digest compiled into the runtime is one per build. It stays in the wrapper rather
+  than moving beside each binary, which makes the gate stronger: the wrapper is a different
+  package from the binary it vouches for.
+
+There is still one build, Linux x86-64. Nothing about what the toolbar does has changed.
+
 ## 0.1.2 — 2026-09-15
 
 A second audit, and the half of the first fix that was missing.

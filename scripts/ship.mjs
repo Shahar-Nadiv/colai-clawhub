@@ -100,26 +100,51 @@ console.log(`  ${report.entryCount} files, ${megabytes(report.size)} packed`);
 // individually because a tarball that is the right size and is missing one of these
 // installs cleanly and then does nothing.
 const shipped = new Set(report.files.map((file) => file.path));
-const needed = [
-  "dist/index.js",
-  "bin/colai-toolbar.gz",
-  "bin/colai-toolbar.sha256",
-  "README.md",
-  "LICENSE",
-];
+const needed = ["dist/index.js", "README.md", "LICENSE"];
 const absent = needed.filter((file) => !shipped.has(file));
 if (absent.length > 0) {
   console.error(`\ncolai: the tarball is missing ${absent.join(", ")}. Nothing was published.`);
   process.exit(1);
 }
 
-// ── 4. and that the stamp took ───────────────────────────────────────────────
-const digest = readFileSync(join(root, "bin", "colai-toolbar.sha256"), "utf8").trim();
+const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+
+// ── 4. every build the wrapper promises, and a digest for each ──────────────
+//
+// The wrapper declares its platform packages twice — once as `optionalDependencies`, which
+// is how npm picks one, and once as `requiredPlatformPackages`, which is how OpenClaw
+// checks npm picked one. Publishing a wrapper that names a build nobody staged produces an
+// install that succeeds and then cannot find its toolbar, on that platform only, which is
+// the worst shape of bug: invisible to whoever published it.
 const runtime = readFileSync(join(root, "dist", "index.js"), "utf8");
-if (!runtime.includes(digest)) {
-  console.error("\ncolai: the runtime was not stamped with the binary's digest.");
-  console.error("Without it, deleting the .sha256 beside the binary disables the check.");
+const promised = Object.keys(manifest.optionalDependencies ?? {});
+const declared = manifest.openclaw?.install?.requiredPlatformPackages ?? [];
+
+const disagree = promised.filter((name) => !declared.includes(name));
+if (disagree.length > 0) {
+  console.error(`\ncolai: ${disagree.join(", ")} is an optional dependency but is not in`);
+  console.error("openclaw.install.requiredPlatformPackages, so the host will not verify it.");
   process.exit(1);
+}
+
+for (const name of promised) {
+  const which = name.slice("@colai/toolbar-".length);
+  const beside = join(root, "platforms", which, "bin", "colai-toolbar.sha256");
+  if (!existsSync(beside)) {
+    console.error(`\ncolai: ${name} is promised but nothing is staged in platforms/${which}.`);
+    console.error("Build it first, or take it out of optionalDependencies. Nothing was published.");
+    process.exit(1);
+  }
+  // The stamp is what makes the gate survive somebody deleting the digest beside the
+  // binary, and there is one per build — so a wrapper missing one silently stops checking
+  // that platform while still checking the others.
+  const digest = readFileSync(beside, "utf8").trim();
+  if (!runtime.includes(digest)) {
+    console.error(`\ncolai: the runtime carries no digest for ${name}.`);
+    console.error("Without it, deleting the .sha256 beside that binary disables the check.");
+    process.exit(1);
+  }
+  console.log(`  ${name} — staged, digest ${digest.slice(0, 12)}…`);
 }
 
 // The commit a reviewer would be sent to. Reported rather than assumed: a publish that

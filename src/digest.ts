@@ -22,19 +22,40 @@ import { existsSync, readFileSync } from "node:fs";
  * be deleted by anybody who can replace the thing it describes — and deleting it used to
  * make the check disappear without a word, which is the one way a gate must never fail.
  *
+ * There is one digest per build now, because there is one binary per machine and they live
+ * in packages of their own — `@colai/toolbar-linux-x64` and the rest. That makes this
+ * stronger rather than weaker: the digest is compiled into the wrapper, and the wrapper is
+ * a different package from the binary it vouches for, so replacing one does not put the
+ * other within reach. It does mean a new binary needs a new wrapper, which is the right
+ * coupling: the wrapper names exactly which binaries it trusts.
+ *
  * No digest of either kind means a developer build, straight out of `target/`. Those are
  * not staged and have nothing to compare against; refusing them would mean refusing to run
  * the thing somebody just compiled.
  */
-declare const COLAI_BUILT_DIGEST: string;
+declare const COLAI_BUILT_DIGESTS: Record<string, string>;
 
-/** What `scripts/prepublish.mjs` wrote in. Empty in a checkout. */
-const BUILT_DIGEST = typeof COLAI_BUILT_DIGEST === "string" ? COLAI_BUILT_DIGEST.trim() : "";
+/** What `build-runtime.mjs` wrote in, keyed by platform package. Empty in a checkout. */
+const BUILT_DIGESTS: Record<string, string> =
+  typeof COLAI_BUILT_DIGESTS === "object" && COLAI_BUILT_DIGESTS ? COLAI_BUILT_DIGESTS : {};
 
-export function notWhatWasBuilt(binary: string): string | null {
+/**
+ * The digest compiled in for one build, if there is one.
+ *
+ * The name comes from `platform.ts`, which is the one table that decides which machine
+ * this is. This file does not look at `process.platform` at all — two places deciding that
+ * would be two places to disagree, and the one that matters here is whichever build was
+ * actually resolved and unpacked.
+ */
+export function digestFor(build: string | null): string {
+  return (build ? BUILT_DIGESTS[build] : undefined)?.trim() ?? "";
+}
+
+export function notWhatWasBuilt(binary: string, build: string | null = null): string | null {
   const beside = `${binary}.sha256`;
   const hasBeside = existsSync(beside);
-  if (!BUILT_DIGEST && !hasBeside) {
+  const compiled = digestFor(build);
+  if (!compiled && !hasBeside) {
     return null;
   }
   let expected: string;
@@ -43,7 +64,7 @@ export function notWhatWasBuilt(binary: string): string | null {
     // The published digest is the authority. The sibling file is what a local release
     // build has and a published package also carries, and it is only consulted when
     // nothing was written in.
-    expected = BUILT_DIGEST || readFileSync(beside, "utf8").trim();
+    expected = compiled || readFileSync(beside, "utf8").trim();
     actual = createHash("sha256").update(readFileSync(binary)).digest("hex");
   } catch (error) {
     return `could not check the toolbar against its digest: ${String(error)}`;

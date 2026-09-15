@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import { buildPluginConfigSchema, definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { z } from "zod";
 import { notWhatWasBuilt } from "./src/digest.js";
+import { binaryUnder, buildFor, noBuildFor, whereTheBuildIs } from "./src/platform.js";
 import { whereabouts } from "./src/running.js";
 import { screenTrouble } from "./src/screen.js";
 import { Toolbar } from "./src/toolbar-process.js";
@@ -93,24 +94,66 @@ function logFile(stateDir: string): string {
   return join(stateDir, "logs", "colai-toolbar.log");
 }
 
+/**
+ * The toolbar this machine should run, laid out and ready to spawn.
+ *
+ * Three places, in order, and the order is the point:
+ *
+ *  1. The platform package npm installed — `@colai/toolbar-linux-x64` and friends. This is
+ *     what every real install uses. The binary arrives gzipped and is unpacked on first
+ *     use; `unpack.ts` says why.
+ *  2. `platforms/<name>/bin/` in a checkout, where `build-release.mjs` stages it.
+ *  3. `target/release` or `target/debug`, for somebody who has just run `cargo build`.
+ *
+ * The three ways this returns null are three different situations and get three different
+ * sentences, because "nothing happened" sends a person looking in the wrong place. A
+ * machine with no build at all is not a broken install, and saying so is the difference
+ * between somebody filing a bug and somebody understanding.
+ */
 function toolbarBinary(): string | null {
-  // The shipped one arrives compressed and is laid out on first use — see `unpack.ts`
-  // for why. A checkout and a `cargo build` have no archive and skip straight past this.
-  const shipped = join(here, "bin/colai-toolbar");
-  const archive = `${shipped}.gz`;
-  if (!existsSync(shipped) && existsSync(archive)) {
-    const trouble = layOutTheToolbar(archive, shipped);
-    if (trouble) {
-      console.error(`The colai toolbar ${trouble}`);
-      return null;
+  const build = buildFor();
+  if (!build) {
+    console.error(noBuildFor());
+    return null;
+  }
+
+  const roots = [whereTheBuildIs(import.meta.url), join(here, "platforms", archOf(build))];
+  for (const root of roots) {
+    if (!root) {
+      continue;
+    }
+    const { binary, archive } = binaryUnder(root);
+    if (existsSync(binary)) {
+      return binary;
+    }
+    if (existsSync(archive)) {
+      const trouble = layOutTheToolbar(archive, binary);
+      if (trouble) {
+        console.error(`The colai toolbar ${trouble}`);
+        return null;
+      }
+      return binary;
     }
   }
-  const paths = [
-    shipped,
+
+  // Straight out of `cargo build`, which stages nothing and needs no unpacking.
+  const built = [
     join(here, "toolbar/src-tauri/target/release/colai-toolbar"),
     join(here, "toolbar/src-tauri/target/debug/colai-toolbar"),
-  ];
-  return paths.find((path) => existsSync(path)) ?? null;
+  ].find((path) => existsSync(path));
+  if (built) {
+    return built;
+  }
+
+  console.error(`The colai toolbar is installed but ${build.package} is not.`);
+  console.error("npm skips an optional dependency it cannot fetch, and this is that.");
+  console.error("Reinstall it: openclaw plugins install @colai/toolbar --force");
+  return null;
+}
+
+/** `@colai/toolbar-linux-x64` → `linux-x64`, which is what the checkout directory is called. */
+function archOf(build: { package: string }): string {
+  return build.package.slice("@colai/toolbar-".length);
 }
 
 export default definePluginEntry({
@@ -190,7 +233,7 @@ export default definePluginEntry({
           );
           return;
         }
-        const swapped = notWhatWasBuilt(binary);
+        const swapped = notWhatWasBuilt(binary, buildFor()?.package ?? null);
         if (swapped) {
           ctx.logger.error(`colai: ${swapped}`);
           return;
