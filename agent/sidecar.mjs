@@ -158,13 +158,22 @@ async function readingReplies() {
         continue;
       }
       if (message.type === "assistant") {
+        /*
+         * Forwarded whole, in the shape the page already reads.
+         *
+         * `spokenBy` in `toolbar-answers.js` takes a message with `role: "assistant"` and
+         * a content array of `{type: "text"}` blocks — which is the Messages API shape,
+         * which is exactly what the SDK hands over. So this does not translate anything:
+         * re-packing it into some colai-shaped reply would be inventing a second format
+         * for the same thing and a second place for them to disagree.
+         */
+        say({ event: "reply", sessionKey: session, message: message.message });
         for (const block of message.message.content ?? []) {
-          // What it is doing, while it does it — the rail's "doing" pill.
+          // What it is doing, while it is doing it — the pill on the rail. Only the start
+          // of a call: a result says a thing has finished, and a status one step behind
+          // the work is worse than none.
           if (block.type === "tool_use") {
-            say({ event: "doing", tool: block.name });
-          }
-          if (block.type === "text" && block.text.trim()) {
-            say({ event: "reply", said: block.text, session });
+            say({ event: "doing", name: block.name, args: block.input ?? {}, sessionKey: session });
           }
         }
         continue;

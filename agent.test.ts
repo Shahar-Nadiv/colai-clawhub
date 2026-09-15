@@ -64,6 +64,30 @@ describe("the session sidecar", () => {
     expect(code).not.toMatch(/\bwithoutHome\b|\basGiven\b|\bobserved\(/);
   });
 
+  test("replies arrive in the shape the page already reads", () => {
+    /*
+     * `spokenBy` in `toolbar-answers.js` takes `{role: "assistant", content: [{type:
+     * "text", text}]}` — the Messages API shape, which is what the SDK hands over. So the
+     * sidecar forwards the assistant message whole rather than re-packing it.
+     *
+     * Asserted here because the temptation is to invent a tidier colai-shaped reply, and
+     * that would be a second format for the same thing: two places to disagree, and the
+     * disagreement shows up as a toolbar that silently draws nothing.
+     */
+    const code = sidecar.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+    expect(code).toContain("message: message.message");
+    expect(code).toMatch(/event: "reply"[\s\S]{0,80}sessionKey/);
+  });
+
+  test("the doing pill gets the three fields it reads", () => {
+    // `toolbar.js` drops any doing event without `name`, and uses `args` and `sessionKey`.
+    const code = sidecar.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+    const doing = code.slice(code.indexOf('event: "doing"'));
+    for (const field of ["name:", "args:", "sessionKey:"]) {
+      expect(doing.slice(0, 200), `doing carries ${field}`).toContain(field);
+    }
+  });
+
   test("a bundle exists to ship, once it has been built", () => {
     // Not a hard failure in a fresh checkout — `npm run build:sidecar` makes it — but the
     // packaging test above is meaningless if nothing ever produces the file it names.
