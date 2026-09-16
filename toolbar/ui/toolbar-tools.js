@@ -1888,6 +1888,36 @@ function doingName(part) {
 }
 
 /** What one call to one tool is doing, or nothing if it cannot be said. */
+/**
+ * Why a tool call did not do what it set out to do.
+ *
+ * Its counterpart is `doingTool`, which names a call as it starts. This names how it ended,
+ * and only ever for the endings worth interrupting somebody about — a call that worked needs
+ * no sentence, it needs the pill to stop.
+ *
+ * `never` means it did not run at all, and which of those it was matters: a rule refusing
+ * something is a setting somebody can change, a person rejecting it is a decision already
+ * made, and an interruption is neither.
+ */
+const NEVER_RAN = {
+  "user-rejected": "You turned that down.",
+  "permission-rule": "A permission rule refused that.",
+  interrupted: "That was interrupted.",
+  cancelled: "That was cancelled.",
+};
+
+function troubleSaid(said) {
+  if (!said) return "";
+  const never = said.never ? String(said.never) : "";
+  if (never) {
+    // Unknown kinds keep their own word rather than becoming "something went wrong", which
+    // is the sentence that sends people looking in the wrong place.
+    return NEVER_RAN[never] || `That did not run — ${asGiven(never)}.`;
+  }
+  const words = asGiven(said.said || "");
+  return words ? `That did not work — ${words}` : "That did not work.";
+}
+
 function doingTool(part) {
   const name = doingName(part);
   if (!name) return null;

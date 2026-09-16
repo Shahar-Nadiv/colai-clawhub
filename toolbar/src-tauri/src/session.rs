@@ -35,6 +35,16 @@ const REPLY_EVENT: &str = "colai:reply";
 const DOING_EVENT: &str = "colai:doing";
 /// The one genuinely new fact on this host: what the conversation has cost so far.
 const SPENT_EVENT: &str = "colai:spent";
+/// How a tool call ended. Without this the pill says "Editing hero.css" and then nothing
+/// ever says whether it worked — the worst shape a failure can take, because it looks
+/// exactly like still working.
+const DID_EVENT: &str = "colai:did";
+/// What Claude Code says about itself at the start of every turn: which model, which
+/// session, which directory, what it can do. colai flew blind without it.
+const SESSION_EVENT: &str = "colai:session";
+/// The conversation was summarised and the middle of it is gone. Said out loud, because
+/// otherwise history appears to silently lose its own past.
+const FOLDED_EVENT: &str = "colai:folded";
 
 /// One conversation on this machine, for the rail to choose between.
 #[derive(Debug, Clone, Serialize)]
@@ -235,13 +245,21 @@ impl Session {
         let mut child = run
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()
             .map_err(|trouble| format!("could not start claude: {trouble}"))?;
 
         let saying = child.stdin.take().ok_or("claude took no input")?;
         let hearing = child.stdout.take().ok_or("claude said nothing")?;
+        // Kept rather than dropped on the floor. `Stdio::null()` meant a claude that died
+        // of a missing library, a bad flag or a refused login said so into nowhere, and the
+        // toolbar reported only that nothing had happened.
+        let trouble = child.stderr.take();
         let app = app.clone();
+        if let Some(trouble) = trouble {
+            let said = app.clone();
+            std::thread::spawn(move || complain(said, trouble));
+        }
         std::thread::spawn(move || listen(app, hearing));
 
         Ok(Talking { child, saying, key })
@@ -262,69 +280,377 @@ impl Talking {
 
 /// Everything `claude` says, turned into the events the page already draws.
 fn listen(app: AppHandle, hearing: std::process::ChildStdout) {
-    let mut spent = 0.0_f64;
     for line in BufReader::new(hearing).lines() {
         let Ok(line) = line else { break };
         let Ok(frame) = serde_json::from_str::<Value>(&line) else {
             continue;
         };
-        let kind = frame.get("type").and_then(Value::as_str).unwrap_or_default();
-        let session = frame
-            .get("session_id")
-            .and_then(Value::as_str)
-            .map(str::to_string);
+        for (name, body) in what_it_said(&frame) {
+            let _ = app.emit_to(crate::colai::OVERLAY_LABEL, name, body);
+        }
+    }
+}
 
-        if kind == "assistant" {
-            let Some(message) = frame.get("message") else {
-                continue;
+/// One frame of stream-json, as the events the page should hear about it.
+///
+/// Separated from the reading so it can be tested against recorded frames without a window,
+/// a process or a display — which is the only way the frames colai used to drop can be
+/// proved to stay handled.
+fn what_it_said(frame: &Value) -> Vec<(&'static str, Value)> {
+    let mut out: Vec<(&'static str, Value)> = Vec::new();
+    let kind = frame.get("type").and_then(Value::as_str).unwrap_or_default();
+    let session = frame
+        .get("session_id")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+
+    {
+        macro_rules! to {
+            ($name:expr, $body:expr $(,)?) => {
+                out.push(($name, $body))
             };
-            // Forwarded whole. `spokenBy` in `toolbar-answers.js` reads `{role:
-            // "assistant", content: [{type: "text"}]}`, which is the shape this already
-            // is — re-packing it would be a second format for the same thing.
-            let _ = app.emit_to(
-                crate::colai::OVERLAY_LABEL,
-                REPLY_EVENT,
-                json!({"sessionKey": session, "message": message}),
-            );
-            // And what it has just picked up, for the pill on the rail. Only the start of
-            // a call: a result names something that has already stopped happening.
-            if let Some(content) = message.get("content").and_then(Value::as_array) {
-                for block in content {
-                    if block.get("type").and_then(Value::as_str) == Some("tool_use") {
-                        let _ = app.emit_to(
-                            crate::colai::OVERLAY_LABEL,
-                            DOING_EVENT,
-                            json!({
-                                "name": block.get("name"),
-                                "args": block.get("input").cloned().unwrap_or(json!({})),
-                                "sessionKey": session,
-                            }),
-                        );
+        }
+
+        match kind {
+            // ── what Claude Code says about itself ───────────────────────────────────
+            //
+            // Re-sent at the start of every turn rather than once, so this is the current
+            // truth and not a greeting. It carries the session id — which is the only way a
+            // conversation colai started has a name before it reaches disk — along with the
+            // model actually answering, the directory it is working in, and the lists the
+            // rail needs to stop guessing: tools, slash commands, capabilities.
+            "system" if subtype(&frame) == "init" => to!(SESSION_EVENT,
+                json!({
+                    "sessionKey": session,
+                    "model": frame.get("model"),
+                    "cwd": frame.get("cwd"),
+                    "permissionMode": frame.get("permissionMode"),
+                    "tools": frame.get("tools"),
+                    "slashCommands": frame.get("slash_commands"),
+                    "terminalOnly": frame.get("terminal_slash_commands"),
+                    "capabilities": frame.get("capabilities"),
+                    "agents": frame.get("agents"),
+                    "version": frame.get("claude_code_version"),
+                }),
+            ),
+
+            // The conversation was summarised. Said out loud so the Work panel can mark the
+            // seam, rather than letting its own history appear to lose the middle of itself.
+            "system" if subtype(&frame) == "compact_boundary" => to!(FOLDED_EVENT,
+                json!({
+                    "sessionKey": session,
+                    "why": frame.pointer("/compact_metadata/trigger"),
+                    "before": frame.pointer("/compact_metadata/pre_tokens"),
+                    "after": frame.pointer("/compact_metadata/post_tokens"),
+                }),
+            ),
+
+            // ── what it is saying, and what it has picked up ─────────────────────────
+            "assistant" => {
+                let Some(message) = frame.get("message") else {
+                    return out;
+                };
+                // Forwarded whole. `spokenBy` in `toolbar-answers.js` reads `{role:
+                // "assistant", content: [{type: "text"}]}`, which is the shape this already
+                // is — re-packing it would be a second format for the same thing.
+                to!(REPLY_EVENT,
+                    json!({
+                        "sessionKey": session,
+                        "message": message,
+                        // How much room is left. The question every long conversation
+                        // eventually raises, and it arrives here unasked for.
+                        "context": frame.get("context_usage"),
+                        // Non-null when a subagent said it, so the rail can say whose work
+                        // this is rather than attributing it to the main thread.
+                        "inside": frame.get("parent_tool_use_id"),
+                    }),
+                );
+                // And what it has just picked up, for the pill on the rail. Only the start
+                // of a call: a result names something that has already stopped happening.
+                if let Some(content) = message.get("content").and_then(Value::as_array) {
+                    for block in content {
+                        if block.get("type").and_then(Value::as_str) == Some("tool_use") {
+                            to!(DOING_EVENT,
+                                json!({
+                                    "name": block.get("name"),
+                                    "args": block.get("input").cloned().unwrap_or(json!({})),
+                                    // The handle the outcome arrives under, so a pill can be
+                                    // finished rather than left running for ever.
+                                    "id": block.get("id"),
+                                    "sessionKey": session,
+                                }),
+                            );
+                        }
                     }
                 }
             }
+
+            // ── how those calls ended ────────────────────────────────────────────────
+            //
+            // The frame colai used to drop, and the reason a failed tool left no trace at
+            // all. Claude Code echoes each `tool_use` back as a `tool_result` inside a user
+            // message; `is_error` says whether it worked, and `tool_result_meta` says when
+            // it never ran — refused by a rule, rejected by a person, interrupted.
+            "user" => {
+                let Some(content) = frame.pointer("/message/content").and_then(Value::as_array)
+                else {
+                    return out;
+                };
+                let refusals = frame.get("tool_result_meta").and_then(Value::as_array);
+                for block in content {
+                    if block.get("type").and_then(Value::as_str) != Some("tool_result") {
+                        continue;
+                    }
+                    let id = block.get("tool_use_id").and_then(Value::as_str);
+                    let refused = refusals.and_then(|rows| {
+                        rows.iter()
+                            .find(|row| row.get("id").and_then(Value::as_str) == id)
+                            .and_then(|row| row.get("non_execution_kind").cloned())
+                    });
+                    to!(DID_EVENT,
+                        json!({
+                            "id": id,
+                            "wrong": block.get("is_error").and_then(Value::as_bool).unwrap_or(false),
+                            "said": briefly(&said_in(block.get("content"))),
+                            "never": refused,
+                            "sessionKey": session,
+                        }),
+                    );
+                }
+            }
+
+            // ── the end of a turn ────────────────────────────────────────────────────
+            "result" => {
+                /* Read, not accumulated.
+                 *
+                 * `total_cost_usd` is already the running total for the session — the
+                 * schema says so in as many words, and says to read the latest rather than
+                 * summing across results. Adding each turn to a total of our own counted
+                 * every turn twice over, and worse the longer somebody talked. */
+                let spent = cost_in(frame.get("total_cost_usd")).unwrap_or(0.0);
+                to!(SPENT_EVENT,
+                    json!({
+                        "sessionKey": session,
+                        "spent": spent,
+                        "outcome": frame.get("subtype"),
+                        "wrong": frame.get("is_error"),
+                        "turns": frame.get("num_turns"),
+                        "took": frame.get("duration_ms"),
+                        "usage": frame.get("usage"),
+                        // Tools that were asked for and refused. Until the approval card
+                        // exists this is the only account of what a permission mode cost.
+                        "refused": frame.get("permission_denials"),
+                        // More is coming without anybody sending anything.
+                        "queued": frame.get("queued_turn_count"),
+                    }),
+                );
+            }
+
+            _ => {}
+        }
+    }
+
+    out
+}
+
+#[cfg(test)]
+mod frames {
+    //! Every frame colai used to drop, and what it now says about it.
+    //!
+    //! Recorded shapes rather than live ones: the point is that a frame arriving in the
+    //! documented form produces the event the page is waiting for. A live session proves the
+    //! form is right; these prove it stays handled.
+    use super::*;
+
+    fn heard(frame: Value) -> Vec<(&'static str, Value)> {
+        what_it_said(&frame)
+    }
+    fn only(frame: Value, name: &str) -> Value {
+        let heard = heard(frame);
+        let found: Vec<_> = heard.iter().filter(|(kind, _)| *kind == name).collect();
+        assert_eq!(found.len(), 1, "expected one {name}, got {heard:?}");
+        found[0].1.clone()
+    }
+
+    #[test]
+    fn init_carries_the_session_the_model_and_what_this_host_can_do() {
+        // The frame colai never read, which is why a conversation it started had no id until
+        // a disk scan found one, and why the model picker had nothing to offer.
+        let said = only(
+            json!({
+                "type": "system", "subtype": "init",
+                "session_id": "abc-123", "model": "claude-sonnet-5",
+                "cwd": "/home/someone/project", "permissionMode": "acceptEdits",
+                "tools": ["Read", "Edit"], "slash_commands": ["review", "clear"],
+                "terminal_slash_commands": ["clear"],
+                "capabilities": ["interrupt_receipt_v1"],
+            }),
+            SESSION_EVENT,
+        );
+        assert_eq!(said["sessionKey"], "abc-123");
+        assert_eq!(said["model"], "claude-sonnet-5");
+        assert_eq!(said["cwd"], "/home/someone/project");
+        assert_eq!(said["permissionMode"], "acceptEdits");
+        assert_eq!(said["tools"][1], "Edit");
+        assert_eq!(said["slashCommands"][0], "review");
+        // Which of those a GUI must not offer, because they only mean something in a terminal.
+        assert_eq!(said["terminalOnly"][0], "clear");
+        assert_eq!(said["capabilities"][0], "interrupt_receipt_v1");
+    }
+
+    #[test]
+    fn a_tool_that_worked_says_so_against_the_call_that_started_it() {
+        let said = only(
+            json!({
+                "type": "user", "session_id": "s",
+                "message": {"role": "user", "content": [
+                    {"type": "tool_result", "tool_use_id": "call_1", "content": "ok"}
+                ]},
+            }),
+            DID_EVENT,
+        );
+        assert_eq!(said["id"], "call_1", "tied to the tool_use, or a pill cannot be finished");
+        assert_eq!(said["wrong"], false);
+    }
+
+    #[test]
+    fn a_tool_that_failed_is_not_silence() {
+        // The whole reason for this event. Before it, the pill said "Editing hero.css" and
+        // then nothing ever said whether it worked — which looks exactly like still working.
+        let said = only(
+            json!({
+                "type": "user",
+                "message": {"role": "user", "content": [
+                    {"type": "tool_result", "tool_use_id": "call_2", "is_error": true,
+                     "content": [{"type": "text", "text": "File does not exist."}]}
+                ]},
+            }),
+            DID_EVENT,
+        );
+        assert_eq!(said["wrong"], true);
+        assert!(said["said"].as_str().unwrap().contains("does not exist"));
+    }
+
+    #[test]
+    fn a_tool_that_never_ran_says_which_kind_of_never() {
+        let said = only(
+            json!({
+                "type": "user",
+                "message": {"role": "user", "content": [
+                    {"type": "tool_result", "tool_use_id": "call_3", "content": ""}
+                ]},
+                "tool_result_meta": [{"id": "call_3", "non_execution_kind": "user-rejected"}],
+            }),
+            DID_EVENT,
+        );
+        assert_eq!(said["never"], "user-rejected");
+    }
+
+    #[test]
+    fn a_tool_call_carries_the_handle_its_outcome_will_arrive_under() {
+        let said = only(
+            json!({
+                "type": "assistant",
+                "message": {"role": "assistant", "content": [
+                    {"type": "tool_use", "id": "call_9", "name": "Edit",
+                     "input": {"file_path": "/x/y.js"}}
+                ]},
+            }),
+            DOING_EVENT,
+        );
+        assert_eq!(said["id"], "call_9");
+        assert_eq!(said["name"], "Edit");
+        assert_eq!(said["args"]["file_path"], "/x/y.js");
+    }
+
+    #[test]
+    fn cost_is_read_and_never_accumulated() {
+        /* The bug this replaces: `total_cost_usd` is already the running total for the
+         * session, and colai added each turn's figure to a total of its own — counting every
+         * turn twice over, and worse the longer somebody talked. */
+        let one = only(json!({"type": "result", "subtype": "success", "total_cost_usd": 0.11}), SPENT_EVENT);
+        assert_eq!(one["spent"], 0.11);
+        let two = only(json!({"type": "result", "subtype": "success", "total_cost_usd": 0.19}), SPENT_EVENT);
+        assert_eq!(two["spent"], 0.19, "the latest total, not 0.11 + 0.19");
+    }
+
+    #[test]
+    fn a_result_carries_how_it_ended_not_only_what_it_cost() {
+        let said = only(
+            json!({
+                "type": "result", "subtype": "error_during_execution", "is_error": true,
+                "num_turns": 3, "duration_ms": 8100, "total_cost_usd": 0.4,
+                "usage": {"input_tokens": 10},
+                "permission_denials": [{"tool_name": "Bash"}],
+            }),
+            SPENT_EVENT,
+        );
+        assert_eq!(said["outcome"], "error_during_execution");
+        assert_eq!(said["wrong"], true);
+        assert_eq!(said["turns"], 3);
+        assert_eq!(said["refused"][0]["tool_name"], "Bash");
+    }
+
+    #[test]
+    fn a_folded_conversation_says_so_rather_than_losing_its_middle() {
+        let said = only(
+            json!({
+                "type": "system", "subtype": "compact_boundary",
+                "compact_metadata": {"trigger": "auto", "pre_tokens": 90000, "post_tokens": 12000},
+            }),
+            FOLDED_EVENT,
+        );
+        assert_eq!(said["why"], "auto");
+        assert_eq!(said["before"], 90000);
+    }
+
+    #[test]
+    fn a_frame_nobody_handles_is_silence_not_a_crash() {
+        assert!(heard(json!({"type": "stream_event", "event": {}})).is_empty());
+        assert!(heard(json!({"type": "control_request", "request": {}})).is_empty());
+        assert!(heard(json!({})).is_empty());
+    }
+}
+
+/// The frame's `subtype`, or nothing.
+fn subtype(frame: &Value) -> &str {
+    frame.get("subtype").and_then(Value::as_str).unwrap_or_default()
+}
+
+/// Whatever a tool result actually said, as text.
+///
+/// The content is a string on the simple path and a list of blocks on the rest; both mean
+/// the same thing to somebody reading a row on the rail.
+fn said_in(content: Option<&Value>) -> String {
+    match content {
+        Some(Value::String(text)) => text.clone(),
+        Some(Value::Array(blocks)) => blocks
+            .iter()
+            .filter(|block| block.get("type").and_then(Value::as_str) == Some("text"))
+            .filter_map(|block| block.get("text").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join(" "),
+        _ => String::new(),
+    }
+}
+
+/// Anything `claude` complains about on the way down.
+///
+/// Its stderr used to go to `Stdio::null()`, so a missing library, a refused login or a
+/// flag this build does not know became a toolbar that simply never answered. Forwarded as
+/// trouble the page can show, because a reason somebody can act on is the whole difference.
+fn complain(app: AppHandle, trouble: std::process::ChildStderr) {
+    for line in BufReader::new(trouble).lines() {
+        let Ok(line) = line else { break };
+        let line = line.trim();
+        if line.is_empty() {
             continue;
         }
-
-        if kind == "result" {
-            spent += frame
-                .get("total_cost_usd")
-                .and_then(Value::as_f64)
-                .unwrap_or(0.0);
-            // Said out loud, because on this host every mark is a metered call against the
-            // user's own account. A tool that spends somebody's money quietly is one they
-            // are right to distrust.
-            let _ = app.emit_to(
-                crate::colai::OVERLAY_LABEL,
-                SPENT_EVENT,
-                json!({
-                    "sessionKey": session,
-                    "cost": frame.get("total_cost_usd").and_then(Value::as_f64).unwrap_or(0.0),
-                    "spent": spent,
-                    "outcome": frame.get("subtype"),
-                }),
-            );
-        }
+        let _ = app.emit_to(
+            crate::colai::OVERLAY_LABEL,
+            "colai:trouble",
+            json!({ "said": briefly(line) }),
+        );
     }
 }
 

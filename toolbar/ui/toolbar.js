@@ -608,23 +608,6 @@ function redrawMarksSoon() {
  * Timed from the words rather than from the render, because this runs on every frame and
  * restarting the clock each time would mean it never ran out.
  */
-/**
- * What each way of being disconnected means, for somebody who did not cause it.
- *
- * The Gateway sends a notice of its own for most of these and it wins — these are the
- * words for when it has nothing to add, and they name the next thing to do rather than
- * the state, because a state is not an instruction.
- */
-const GATEWAY_TROUBLE = {
-  down: "Claude Code is not answering. Retrying…",
-  // Kept because the page reads this table by key and an absent key draws nothing.
-  // Neither can happen here: there is nothing to pair with and no credential to hold —
-  // the toolbar runs `claude` as whoever started it.
-  "pairing-required": "This machine is not paired yet.",
-  "credential-required": "Claude Code needs signing in to before it will answer.",
-  "tls-failure": "The connection could not be trusted.",
-};
-
 let saidLast = "";
 let fadingTrouble = null;
 /**
@@ -1190,14 +1173,68 @@ async function start() {
     if (!said || !said.name) return;
     const doing = doingTool({ name: said.name, args: said.args || {} });
     if (!doing) return;
-    state.doing = { said: doing, sessionKey: said.sessionKey || null, at: Date.now() };
+    state.doing = {
+      said: doing,
+      // The handle its outcome arrives under, so this pill can be finished rather than
+      // left running until something else happens to replace it.
+      id: said.id || null,
+      sessionKey: said.sessionKey || null,
+      at: Date.now(),
+    };
     render();
   }).catch(() => {});
 
-  void listen("colai:gateway", (event) => {
+  /*
+   * How that call ended.
+   *
+   * The event this whole listener list was missing. A tool used to start and then simply
+   * stop being mentioned — which on a rail looks identical to a tool still running, so a
+   * failed edit and a slow one were the same picture. `never` says it did not run at all:
+   * refused by a rule, rejected by somebody, interrupted.
+   */
+  void listen("colai:did", (event) => {
     const said = event && event.payload;
-    if (!said || said.state === "up") return;
-    state.trouble = said.notice || GATEWAY_TROUBLE[said.state] || GATEWAY_TROUBLE.down;
+    if (!said) return;
+    const doing = state.doing;
+    if (doing && said.id && doing.id && doing.id !== said.id) return;
+    state.doing = null;
+    if (said.wrong || said.never) {
+      state.trouble = troubleSaid(said);
+    }
+    render();
+  }).catch(() => {});
+
+  /*
+   * What Claude Code says about itself, at the start of every turn.
+   *
+   * It is the session id that matters here, and it fixes something that was quietly broken:
+   * a reply is filed by finding the waiting send with the same `sessionKey`, but a
+   * conversation the toolbar *starts* has no id — `colai_send` returns an empty one, because
+   * nothing knows the name yet. Claude Code names it in this frame, moments later, and every
+   * reply then arrives under a name the page has never heard, matches nothing, and is
+   * dropped. So the send still waiting without an id is that conversation, and adopts it.
+   */
+  void listen("colai:session", (event) => {
+    const said = event && event.payload;
+    if (!said || !said.sessionKey) return;
+    const nameless = (state.answers || []).find((answer) => !answer.sessionKey);
+    if (!nameless) return;
+    nameless.sessionKey = said.sessionKey;
+    render();
+  }).catch(() => {});
+
+  /*
+   * Whatever `claude` complained about on the way down.
+   *
+   * This replaces a listener for `colai:gateway`, which nothing on this host could ever
+   * emit — a leftover of the Gateway build, so the trouble banner it drove was unreachable
+   * and a toolbar that failed to start said nothing at all. Its stderr is the reason, and
+   * it is now carried here.
+   */
+  void listen("colai:trouble", (event) => {
+    const said = event && event.payload;
+    if (!said || !said.said) return;
+    state.trouble = String(said.said);
     render();
   }).catch(() => {});
 
