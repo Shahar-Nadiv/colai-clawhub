@@ -1,0 +1,19 @@
+# The receiver. One file, no build step, free tier.
+#
+#   npx wrangler deploy                      # publishes it
+#   npx wrangler secret put GITHUB_TOKEN     # the token, prompted for, never in this file
+#
+# The token is a fine-grained personal access token with ONE repository selected — the
+# private data repo — and one permission, Contents: Read and write. It is the only secret
+# in this system and it never reaches the browser.
+
+name = "colai-waitlist"
+main = "receiver.js"
+compatibility_date = "2026-09-16"
+
+[vars]
+# The private repository the enrollments are committed to. Create it first, private.
+DATA_REPO = "Shahar-Nadiv/colai-waitlist-data"
+
+# The one site allowed to post here. Change it if the page moves to a custom domain.
+ALLOWED_ORIGIN = "https://shahar-nadiv.github.io"

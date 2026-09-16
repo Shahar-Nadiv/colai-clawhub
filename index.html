@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>colai — show it instead</title>
+<meta name="description" content="Point at it. Box it. Draw the path. colai turns whatever is on your screen into a prompt your coding agent understands.">
+<meta property="og:title" content="colai — some things can't be typed. Show it instead.">
+<meta property="og:description" content="Point at it. Box it. Draw the path. colai turns whatever is on your screen — any app, any window, the whole OS — into a prompt your coding agent understands.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#07080b">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#07080b; --panel:rgb(22 25 32 / 90%); --line:rgb(255 255 255 / 10%);
+  --head:#f4f4f5; --body:#a9a9b2; --mute:#8b8b94; --dim:#6c6c75;
+  --red:#ff5c5c; --red-cta:#d13c3c; --green:#22c55e;
+  --sans:"Instrument Sans",-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--ink);color:#bcbcc0;font-family:var(--sans);letter-spacing:-0.01em;-webkit-font-smoothing:antialiased}
+body{overflow-x:hidden}
+a{color:var(--red)}a:hover{color:#ffa3a3}
+::selection{background:var(--red);color:#fff}
+img{max-width:100%}
+[hidden]{display:none !important}
+
+@keyframes rise{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
+@keyframes drift{from{transform:translate(0,0)}to{transform:translate(-80px,-48px)}}
+@keyframes aurora{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-120px,60px) scale(1.15)}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgb(34 197 94 / 45%)}60%{box-shadow:0 0 0 8px rgb(34 197 94 / 0%)}}
+@keyframes sweep{from{transform:translateX(-140%) skewX(-16deg)}to{transform:translateX(340%) skewX(-16deg)}}
+.in{animation:rise .9s cubic-bezier(.16,1,.3,1) both}
+
+/* ── page furniture ──────────────────────────────────────────────────────── */
+.bg-grid{position:fixed;inset:-120px;background-image:linear-gradient(rgb(255 255 255 / 3.5%) 1px,transparent 1px),linear-gradient(90deg,rgb(255 255 255 / 3.5%) 1px,transparent 1px);background-size:80px 80px;animation:drift 14s linear infinite;-webkit-mask-image:radial-gradient(70% 70% at 50% 40%,#000 30%,transparent 100%);mask-image:radial-gradient(70% 70% at 50% 40%,#000 30%,transparent 100%);pointer-events:none}
+.bg-aurora{position:fixed;right:-200px;top:-140px;width:900px;height:900px;border-radius:999px;background:radial-gradient(closest-side,rgb(255 92 92 / 16%),transparent);filter:blur(30px);animation:aurora 18s ease-in-out infinite;pointer-events:none}
+.bg-vignette{position:fixed;inset:0;background:radial-gradient(ellipse 78% 70% at 50% 50%,transparent 60%,rgb(0 0 0 / 45%) 100%);pointer-events:none}
+.wrap{position:relative;z-index:2;max-width:1160px;margin:0 auto;padding-inline:24px}
+
+header.bar{display:flex;align-items:center;gap:14px;padding-block:28px}
+.logo{font-size:18px;font-weight:700;letter-spacing:-0.04em;color:var(--head)}
+.logo-sub{font-family:var(--mono);font-size:11px;letter-spacing:0.22em;color:var(--mute)}
+.bar-cta{margin-left:auto;font-size:13px;font-weight:500;color:#bcbcc0;text-decoration:none;border:1px solid rgb(255 255 255 / 14%);border-radius:999px;padding:8px 16px}
+.bar-cta:hover{color:var(--head);border-color:rgb(255 255 255 / 28%)}
+
+/* ── hero ────────────────────────────────────────────────────────────────── */
+.hero{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(320px,440px);gap:48px;align-items:center;padding-block:28px 20px}
+.eyebrow{display:inline-flex;align-items:center;gap:12px;font-family:var(--mono);font-size:12px;letter-spacing:0.24em;color:var(--red)}
+.eyebrow i{width:8px;height:8px;border-radius:99px;background:var(--red);box-shadow:0 0 14px rgb(255 92 92 / 70%)}
+h1{margin:26px 0 0;font-size:clamp(38px,5.4vw,76px);font-weight:600;letter-spacing:-0.05em;line-height:1.03;color:var(--head);text-wrap:balance}
+h1 em{font-style:normal;color:var(--red)}
+.hero-foot{margin-top:34px;display:flex;flex-wrap:wrap;align-items:center;gap:22px}
+.jump{display:inline-flex;align-items:center;gap:8px;color:#bcbcc0;font-size:15px;font-weight:500;text-decoration:none}
+.jump span{color:var(--red)}
+.count{display:inline-flex;align-items:center;gap:10px;font-size:13px;color:var(--mute)}
+.count i{width:7px;height:7px;border-radius:99px;background:var(--green);animation:pulse 2.2s ease-out infinite}
+.count b{color:var(--head);font-weight:600}
+
+/* ── the card ────────────────────────────────────────────────────────────── */
+.card-glow{position:relative}
+.card-glow::before{content:"";position:absolute;inset:-40px;border-radius:40px;background:radial-gradient(closest-side,rgb(255 92 92 / 18%),transparent);filter:blur(24px);pointer-events:none}
+.card{position:relative;padding:26px;border-radius:22px;background:var(--panel);border:1px solid var(--line);box-shadow:0 30px 80px rgb(0 0 0 / 50%);backdrop-filter:blur(12px) saturate(1.6);display:grid;gap:18px}
+.card-kicker{font-family:var(--mono);font-size:11px;letter-spacing:0.26em;color:var(--red)}
+.card-title{margin-top:8px;font-size:25px;font-weight:600;letter-spacing:-0.04em;color:var(--head);line-height:1.12}
+.card-sub{margin-top:6px;font-size:14px;color:var(--mute)}
+label.field{display:grid;gap:8px}
+.field-label{display:flex;justify-content:space-between;gap:12px;font-size:12px;font-weight:500;color:var(--mute)}
+.wordcount{font-family:var(--mono);color:var(--dim)}
+.wordcount[data-near="close"]{color:#f59e0b}
+.wordcount[data-near="full"]{color:var(--red)}
+input,textarea{width:100%;padding:14px 16px;border-radius:12px;border:1px solid rgb(255 255 255 / 12%);background:#0e1015;color:var(--head);font-family:inherit;font-size:16px;transition:border-color .12s,box-shadow .12s}
+textarea{resize:vertical;min-height:110px;font-size:15px;line-height:1.55}
+input:focus,textarea:focus{outline:none;border-color:var(--red);box-shadow:0 0 0 3px rgb(255 92 92 / 18%)}
+::placeholder{color:#5d5d66}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font-family:inherit;font-size:13px;font-weight:500;padding:8px 14px;border-radius:999px;cursor:pointer;border:1px solid rgb(255 255 255 / 12%);background:transparent;color:#bcbcc0;transition:border-color .12s,background .12s,color .12s}
+.chip:hover{border-color:rgb(255 255 255 / 28%);color:var(--head)}
+.chip[aria-pressed="true"]{border-color:var(--red);background:rgb(255 92 92 / 12%);color:var(--red)}
+.cta{display:inline-flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:16px 22px;border-radius:999px;border:0;background:var(--red-cta);color:#fff;font-family:inherit;font-size:16px;font-weight:600;cursor:pointer;box-shadow:0 1px 3px rgb(255 92 92 / 20%);transition:background .12s,box-shadow .12s,transform .12s}
+.cta:hover:not(:disabled){background:#ff7070;box-shadow:0 8px 30px rgb(255 92 92 / 35%);transform:translateY(-1px)}
+.cta:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.fineprint{text-align:center;font-size:12px;color:var(--dim)}
+.hp{position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden}
+.note{font-size:13px;line-height:1.5;padding:10px 14px;border-radius:10px}
+.note[data-kind="bad"]{background:rgb(255 92 92 / 10%);border:1px solid rgb(255 92 92 / 30%);color:#ffb0b0}
+.note[data-kind="ok"]{background:rgb(34 197 94 / 10%);border:1px solid rgb(34 197 94 / 30%);color:#9ae6b4}
+
+/* ── the thank-you ───────────────────────────────────────────────────────── */
+.done{position:relative;padding:38px 28px;border-radius:22px;background:var(--panel);border:1px solid rgb(34 197 94 / 35%);box-shadow:0 30px 80px rgb(0 0 0 / 50%),0 0 60px rgb(34 197 94 / 10%);text-align:center}
+.tick{display:inline-grid;place-items:center;width:64px;height:64px;border-radius:999px;background:rgb(34 197 94 / 14%);border:1.5px solid var(--green);color:var(--green);font-size:26px}
+.done h2{margin:22px 0 0;font-size:30px;font-weight:600;letter-spacing:-0.04em;color:var(--head)}
+.done-line{margin-top:10px;font-size:15px;color:var(--body)}
+.done-line b{font-family:var(--mono);color:var(--head);font-weight:500}
+.echo{margin-top:22px;padding:16px 18px;border-radius:12px;background:rgb(255 255 255 / 4%);border:1px solid rgb(255 255 255 / 8%);text-align:left;font-size:14px;line-height:1.55;color:#bcbcc0;white-space:pre-wrap;overflow-wrap:anywhere}
+.again{margin-top:22px;background:transparent;border:0;color:var(--mute);font-family:inherit;font-size:13px;cursor:pointer;text-decoration:underline}
+
+/* ── the film ─────────────────────────────────────────────────────────────── */
+.stage-wrap{padding-block:48px 24px}
+.stage{position:relative;max-width:1000px;margin:0 auto;padding:14px;border-radius:24px;background:radial-gradient(900px 500px at 50% 0%,#151821 0%,#0b0c10 70%);border:1px solid rgb(255 255 255 / 8%)}
+.film{position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:16/9}
+.film video{display:block;width:100%;height:100%;object-fit:cover}
+/* One control, because there is only one thing worth deciding: whether to hear it. The
+   film plays regardless — muted autoplay is the only kind a browser will start. */
+/* When autoplay is refused — low power mode, a data saver, a browser that simply says no —
+   a still frame with no way to start it is the worst outcome. This is that way. */
+.play{position:absolute;inset:0;display:grid;place-items:center;width:100%;height:100%;border:0;background:rgb(7 8 11 / 45%);color:var(--head);font:inherit;font-size:15px;font-weight:600;cursor:pointer}
+.play::before{content:"";display:block;width:0;height:0;border-left:22px solid currentColor;border-top:14px solid transparent;border-bottom:14px solid transparent;margin-bottom:10px}
+.sound{position:absolute;right:14px;bottom:14px;display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border-radius:999px;border:1px solid rgb(255 255 255 / 18%);background:rgb(10 12 16 / 72%);backdrop-filter:blur(8px);color:var(--head);font:inherit;font-size:13px;font-weight:500;cursor:pointer;transition:border-color .12s,background .12s}
+.sound:hover{border-color:var(--red);background:rgb(10 12 16 / 88%)}
+.stage-cap{margin-top:18px;text-align:center;font-family:var(--mono);font-size:11px;letter-spacing:0.2em;color:var(--dim)}
+
+/* ── narrower than a laptop ───────────────────────────────────────────────── */
+/* ── where it runs ────────────────────────────────────────────────────────── */
+/*
+ * Three facts, as a list, because that is what they are. The version before this was a flex
+ * row with a shell command wedged into the end of it — which told somebody to install the
+ * OpenClaw build on a page whose film says "a Claude Code plugin", and which is in any case
+ * the wrong thing to ask of a reader whose next action is an email address.
+ */
+/* Its width is the film's, not its own. A 560px column under a 1000px video reads as an
+   afterthought however well the rows are set — the rhythm of the page is the thing doing
+   the work, and three rows stacked is a phone's answer to a question desktop is not asking. */
+.where{max-width:1000px;margin:0 auto;padding-block:64px 0}
+.where-kicker{margin:0 0 20px;text-align:center;font-family:var(--mono);font-size:10px;letter-spacing:0.28em;color:var(--dim)}
+.where-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgb(255 255 255 / 7%);border:1px solid rgb(255 255 255 / 7%);border-radius:16px;overflow:hidden}
+/* The name on one line and its state under it, rather than the two fighting for a third of
+   a row. The status hangs under the name and not the dot, so the three left edges agree. */
+.where-list li{display:flex;flex-wrap:wrap;align-items:center;gap:5px 11px;padding:22px 24px;background:#0b0c10;color:var(--head)}
+.where-list b{font-size:17px;font-weight:500;letter-spacing:-0.01em}
+.dot{flex:none;width:7px;height:7px;border-radius:99px}
+/* Shipped is alive and says so; the others are simply outlined, which reads as "not yet"
+   without needing a word for it. */
+.dot.on{background:var(--green);animation:pulse 2.4s ease-out infinite}
+.dot.next{box-shadow:inset 0 0 0 1.5px var(--dim)}
+.when{flex:1 0 100%;margin-left:18px;font-family:var(--mono);font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:var(--dim)}
+.where-list li:first-child .when{color:var(--green)}
+
+footer{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px;max-width:1000px;margin:0 auto;padding-block:44px 48px;border-top:1px solid rgb(255 255 255 / 6%);margin-top:56px;font-size:13px;color:var(--dim)}
+footer .mark{font-weight:600;letter-spacing:-0.03em;color:#bcbcc0}
+footer .tag{flex:1 1 auto;min-width:0}
+footer .rights{font-family:var(--mono);font-size:11px;letter-spacing:0.16em}
+
+/* ── narrower than a laptop ───────────────────────────────────────────────── */
+@media (max-width:900px){
+  .hero{grid-template-columns:1fr;gap:28px;padding-block:16px 8px}
+  /* The glow is drawn 40px outside the card, which on a narrow screen is 40px outside the
+     viewport — and that is what was making the page scroll sideways. */
+  .card-glow::before{display:none}
+  .stage{padding:10px;border-radius:18px}
+  .where{padding-block:44px 0}
+}
+
+/* ── a phone ──────────────────────────────────────────────────────────────── */
+@media (max-width:640px){
+  .wrap{padding-inline:16px}
+  header.bar{padding-block:18px;gap:10px}
+  /* The header CTA and the form are the same action, and the form is right there. Keeping
+     both means a button that scrolls you six pixels. */
+  .bar-cta{display:none}
+  h1{font-size:clamp(32px,9vw,44px);line-height:1.06}
+  .hero-foot{margin-top:22px;gap:14px}
+  .card{padding:20px;gap:15px;border-radius:18px}
+  .card-title{font-size:22px}
+  /* 16px or iOS zooms the page in when the field takes focus, and never zooms back out. */
+  input,textarea{font-size:16px;padding:13px 14px}
+  textarea{min-height:92px}
+  .done{padding:28px 20px}
+  .done h2{font-size:24px}
+  .stage-wrap{padding-block:28px 16px}
+  .stage-cap{font-size:10px;letter-spacing:0.14em}
+  .sound,.play{font-size:13px}
+  .sound{right:10px;bottom:10px;padding:8px 12px}
+  .where{padding-block:36px 0}
+  /* Back to a stack, and back to one line each — at this width a name with its state
+     beneath it is two half-empty lines where one would do. */
+  .where-list{grid-template-columns:1fr}
+  .where-list li{flex-wrap:nowrap;padding:14px 15px;gap:10px}
+  .where-list b{font-size:15px}
+  .when{flex:0 0 auto;margin-left:auto;font-size:10px}
+  footer{margin-top:36px}
+  footer{padding-block:28px 34px;gap:6px 14px;font-size:12px}
+  /* The strapline takes the whole width on its own line rather than squeezing between the
+     name and the year, which at this size left it two words wide. */
+  footer .tag{flex:1 0 100%;order:3}
+}
+
+/* ── a small phone ────────────────────────────────────────────────────────── */
+@media (max-width:380px){
+  .wrap{padding-inline:14px}
+  .chips{gap:6px}
+  .chip{padding:7px 11px;font-size:12px}
+  .cta{padding:15px 18px;font-size:15px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="bg-aurora"></div>
+<div class="bg-vignette"></div>
+
+<div class="wrap">
+
+<header class="bar">
+  <span class="logo">colai</span>
+  <span class="logo-sub">TOOLBAR</span>
+  <a class="bar-cta" href="#join">Join the waitlist</a>
+</header>
+
+<section class="hero" id="join">
+  <div>
+    <div class="in eyebrow"><i></i>VISUAL PROMPTING FOR YOUR AGENT</div>
+    <h1 class="in" style="animation-delay:.1s">Some things can't be typed. <em>Show it instead.</em></h1>
+    <div class="in hero-foot" style="animation-delay:.3s">
+      <a class="jump" href="#film-stage">Watch it — 1 min <span>↓</span></a>
+      <span class="count" id="wl-count-wrap" hidden><i></i><b id="wl-count">—</b> already waiting</span>
+    </div>
+  </div>
+
+  <div class="in card-glow" style="animation-delay:.25s">
+    <form class="card" id="wl-form" novalidate>
+      <div>
+        <div class="card-kicker">EARLY ACCESS</div>
+        <div class="card-title">Join the waitlist</div>
+        <div class="card-sub">Tell us what you'd want it to do — the wish box shapes what ships first.</div>
+      </div>
+
+      <label class="field">
+        <span class="field-label"><span>Work email</span></span>
+        <input id="wl-email" type="email" inputmode="email" autocomplete="email" placeholder="you@company.com" required>
+      </label>
+
+      <div class="field">
+        <span class="field-label"><span>Where would you run it?</span></span>
+        <div class="chips" id="wl-chips"></div>
+      </div>
+
+      <label class="field">
+        <span class="field-label"><span>What would you want it to do?</span><span class="wordcount" id="wl-words">0 / 200 words</span></span>
+        <textarea id="wl-wish" rows="4" placeholder="The one thing you keep failing to describe in words…"></textarea>
+      </label>
+
+      <div class="hp" aria-hidden="true"><label>Company<input id="wl-hp" type="text" name="company" tabindex="-1" autocomplete="off"></label></div>
+
+      <div class="note" id="wl-note" hidden></div>
+      <button class="cta" id="wl-cta" type="submit">Join the waitlist</button>
+      <div class="fineprint">No spam. One email when your invite is ready.</div>
+    </form>
+
+    <div class="done" id="wl-done" hidden>
+      <div class="tick">✓</div>
+      <h2 id="wl-headline">You're on the list.</h2>
+      <div class="done-line">Position <b id="wl-position">—</b> · we'll write to <b id="wl-sent-to"></b></div>
+      <div class="echo" id="wl-wish-echo"></div>
+      <button class="again" id="wl-again" type="button">Add another address</button>
+    </div>
+  </div>
+</section>
+
+<section class="stage-wrap" id="film-stage">
+  <div class="stage">
+    <div class="film">
+      <video id="film" poster="./colai-poster.jpg" muted loop playsinline preload="metadata"
+             aria-label="The colai toolbar, across a robotics simulation, a PCB, a game and a web app"></video>
+      <button class="play" id="play" type="button" hidden>Play</button>
+      <button class="sound" id="sound" type="button" aria-pressed="false">Sound on</button>
+    </div>
+    <div class="stage-cap">ONE TOOLBAR · ANYTHING ON YOUR SCREEN</div>
+  </div>
+</section>
+
+<section class="where">
+  <p class="where-kicker">WHERE IT RUNS</p>
+  <ul class="where-list">
+    <li><span class="dot on"></span><b>OpenClaw</b><span class="when">Available now</span></li>
+    <li><span class="dot next"></span><b>Claude Code</b><span class="when">Next</span></li>
+    <li><span class="dot next"></span><b>Cursor</b><span class="when">Next</span></li>
+  </ul>
+</section>
+
+<footer>
+  <span class="mark">colai</span>
+  <span class="tag">Point. Box. Draw. On whatever is on your screen.</span>
+  <span class="rights">© 2026</span>
+</footer>
+
+</div>
+
+<script src="./config.js"></script>
+<script src="./waitlist.js"></script>
+<script>
+  /*
+   * Getting a video to start on a phone.
+   *
+   * Four things have to be true and all four were not. `playsinline` or iOS takes it
+   * fullscreen; `muted` set as a property and not only an attribute, because the attribute
+   * alone is read too late by some builds; the file laid out so it streams rather than
+   * needing the whole download first — which the original did not, and is why this never
+   * started on a phone; and a smaller file on a small screen, because a data saver refuses
+   * to autoplay something it thinks is expensive.
+   *
+   * And when it is refused anyway, something to press. A still frame with no way to start
+   * it is worse than no video.
+   */
+  (function () {
+    var film = document.getElementById("film");
+    var sound = document.getElementById("sound");
+    var play = document.getElementById("play");
+    if (!film) return;
+
+    // Chosen here rather than with `media` on a <source>, which browsers do not honour for
+    // video. Width, not a user-agent guess: a narrow window deserves the small one too.
+    var small = window.matchMedia("(max-width: 760px)").matches;
+    film.src = small ? "./colai-mobile.mp4" : "./colai.mp4";
+    film.muted = true;
+    film.playsInline = true;
+
+    function offer(show) {
+      if (play) play.hidden = !show;
+      if (sound) sound.hidden = show;
+    }
+
+    function start() {
+      var going = film.play();
+      if (!going || typeof going.catch !== "function") return;
+      going.then(function () { offer(false); }).catch(function () { offer(true); });
+    }
+
+    if (play) {
+      play.addEventListener("click", function () {
+        // A tap is the gesture every browser accepts, so this is also the moment to let
+        // sound in if somebody had already asked for it.
+        offer(false);
+        void film.play();
+      });
+    }
+    if (sound) {
+      sound.addEventListener("click", function () {
+        film.muted = !film.muted;
+        sound.textContent = film.muted ? "Sound on" : "Sound off";
+        sound.setAttribute("aria-pressed", String(!film.muted));
+        if (film.paused) void film.play();
+      });
+    }
+
+    film.addEventListener("playing", function () { offer(false); });
+    film.addEventListener("pause", function () { offer(true); });
+    // Metadata first, so a phone is not asked to commit to the whole thing to show a frame.
+    if (film.readyState >= 2) start();
+    else film.addEventListener("loadeddata", start, { once: true });
+    start();
+  })();
+</script>
+</body>
+</html>
