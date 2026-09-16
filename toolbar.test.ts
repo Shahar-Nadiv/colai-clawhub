@@ -3382,6 +3382,19 @@ describe("copying what is here, or bringing something in", () => {
       expect(typeof DESIGNS[id]!.brings === "function", id).toBe(takes);
     }
     expect(Object.keys(SOURCES)).toEqual(["copy", "library"]);
+
+    /*
+     * And the row is only offered when there is somewhere to bring one in from. Searching a
+     * catalogue means asking one, the asking went through the OpenClaw Gateway, and there is
+     * no Gateway here — so `colai_libraries` returns nothing and the choice disappears rather
+     * than becoming a door with nothing behind it.
+     */
+    const compose = readFileSync(new URL("./toolbar/ui/toolbar-compose.js", import.meta.url), "utf8");
+    expect(compose, "the source row is gated on having a library").toMatch(
+      /TAKES_SOURCE\.includes\(kindIdOf\(mark\)\) && \(state\.libraries \|\| \[\]\)\.length > 0/,
+    );
+    const rust = readFileSync(new URL("./toolbar/src-tauri/src/colai_library.rs", import.meta.url), "utf8");
+    expect(rust, "and this host offers none").toMatch(/fn colai_libraries\(\) -> Vec<Named> \{(?:.|\n)*?Vec::new\(\)/);
   });
 
   test("a wireframe is a copy however the mark is labelled", () => {

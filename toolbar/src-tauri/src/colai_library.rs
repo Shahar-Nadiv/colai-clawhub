@@ -65,6 +65,9 @@ struct Library {
  * discovery call that answers "which of these is you", so the four spellings are the
  * contract, written down.
  */
+// Unread while `colai_libraries` returns nothing. Kept rather than deleted: it is the
+// catalogue, not the plumbing, and the plumbing is the part that is missing.
+#[allow(dead_code)]
 const LIBRARIES: &[Library] = &[Library {
     label: "21st.dev",
     called: "21st",
@@ -151,13 +154,20 @@ pub(crate) async fn colai_library_search(
 /// uses, instead of a sentence that drifts away from the code it is describing.
 #[tauri::command]
 pub(crate) fn colai_libraries() -> Vec<Named> {
-    LIBRARIES
-        .iter()
-        .map(|library| Named {
-            label: library.label.to_string(),
-            called: library.called.to_string(),
-        })
-        .collect()
+    /*
+     * Empty on this host, and the emptiness is the switch.
+     *
+     * Searching a catalogue means asking one — and the search went through the OpenClaw
+     * Gateway, which is not here. `colai_library_search` says so and returns an error, which
+     * meant choosing "From a library" opened a window that failed the moment it drew.
+     *
+     * The rail offers the library only when there is a library to offer, so returning
+     * nothing takes the choice off the mark popup entirely rather than leaving a door with
+     * nothing behind it. None of the rest is deleted: the window, the picking, the guard
+     * against sending a half-chosen component are all real and all tested, and the day
+     * something can answer a search this becomes one line again.
+     */
+    Vec::new()
 }
 
 /// A catalogue the toolbar could read, named twice: for a person, and for the field.

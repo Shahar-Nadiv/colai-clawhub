@@ -42,12 +42,6 @@ use tauri::Manager;
 
 /// How long to wait before asking for the Gateway again, and the cap it grows to.
 ///
-/// `ensure_ready` already spends up to fifteen seconds installing and starting the
-/// service, so this is for the case where that whole attempt failed — a machine still
-/// booting, a Gateway being upgraded. Doubling to a minute keeps a laptop that is simply
-/// offline from spinning.
-const FIRST_RETRY: Duration = Duration::from_secs(2);
-const LONGEST_RETRY: Duration = Duration::from_secs(60);
 
 /// Variables that tell the loader where to find libraries, modules and locales.
 ///

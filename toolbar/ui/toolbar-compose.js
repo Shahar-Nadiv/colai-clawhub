@@ -155,7 +155,16 @@ function drawPopup() {
     // than copied. A second row rather than more kinds: "component, copied" and
     // "component, from a catalogue" are one thing with two sources, and making them two
     // chips in the first row would say they were two different things to build.
-    if (TAKES_SOURCE.includes(kindIdOf(mark))) {
+    /*
+     * And only when there is somewhere to bring one in from.
+     *
+     * Choosing a source is a choice between copying what is on screen and picking out of a
+     * catalogue, and picking out of a catalogue means searching one. On a host with no
+     * catalogue to search the second option is a door with nothing behind it, so the row
+     * does not appear at all rather than appearing and failing when pressed. One library
+     * arriving turns it back on.
+     */
+    if (TAKES_SOURCE.includes(kindIdOf(mark)) && (state.libraries || []).length > 0) {
       const sources = document.createElement("div");
       sources.className = "mode-row source-row";
       for (const [id, source] of Object.entries(SOURCES)) {
