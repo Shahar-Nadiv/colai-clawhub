@@ -22,7 +22,6 @@ commands.allow = [
   "colai_sessions",
   "colai_threads",
   "colai_capture_mark",
-  "colai_forget_marks",
   "colai_cut_recording",
   "colai_send",
   "colai_unwatch",
@@ -35,9 +34,7 @@ commands.allow = [
   "colai_summon",
   "colai_allow_now",
   "colai_undo",
-  "colai_points",
   "colai_said",
-  "colai_rewind",
   "colai_start_here",
   "colai_automate",
   "colai_showing",
@@ -51,5 +48,4 @@ commands.allow = [
   "colai_pick_folder",
   "colai_search_files",
   "colai_release",
-  "colai_open_settings",
 ]

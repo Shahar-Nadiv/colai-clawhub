@@ -321,14 +321,6 @@ pub(crate) async fn colai_capture_mark(
     })
 }
 
-/// Forget the pictures for marks that were undone or have been sent.
-#[tauri::command]
-pub(crate) fn colai_forget_marks(
-    shots: tauri::State<'_, MarkShots>,
-    ids: Vec<String>,
-) -> Result<(), String> {
-    shots.forget(&ids)
-}
 
 #[cfg(target_os = "linux")]
 fn picture_of(

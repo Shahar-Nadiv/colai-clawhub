@@ -330,24 +330,6 @@ pub(crate) async fn colai_automate(
 
 /// Where a conversation could be taken back to.
 ///
-/// Only what the operator said. An answer is not somewhere to go back to — rewinding to
-/// one would discard the prompt that produced it and leave the conversation asking a
-/// question nobody had asked.
-#[tauri::command]
-pub(crate) async fn colai_points(
-    #[allow(unused_variables)] session_key: String,
-) -> Result<Vec<Point>, String> {
-    /*
-     * Rewind is Claude Code's own, not the toolbar's.
-     *
-     * The Gateway exposed the points a conversation could be taken back to and a method to
-     * do it. Claude Code has `/rewind`, in the session the person is looking at, and a
-     * second way to do it from a toolbar would be a second idea of where a conversation
-     * currently is. Empty rather than an error: the rail draws no control for an empty
-     * list, which is the honest outcome.
-     */
-    Ok(Vec::new())
-}
 
 /// What was said in a conversation, both halves of it.
 ///
@@ -374,16 +356,6 @@ const POINTS_AT_MOST: u32 = 40;
 
 /// Take a conversation back to one of its own prompts.
 ///
-/// The first thing on this surface that discards work. It says what it did.
-#[tauri::command]
-pub(crate) async fn colai_rewind(
-    #[allow(unused_variables)] session_key: String,
-    #[allow(unused_variables)] entry_id: String,
-) -> Result<Rewound, String> {
-    // See `colai_points`. Said plainly rather than silently doing nothing, because this
-    // one is only ever reached by someone who pressed something.
-    Err("Rewind belongs to Claude Code itself — use /rewind in the session.".to_string())
-}
 
 /// Stop a run that is underway.
 ///

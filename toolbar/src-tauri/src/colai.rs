@@ -883,26 +883,6 @@ pub(crate) fn colai_release(app: AppHandle) -> Result<(), String> {
 /// window and pressing the claw said so — "There is no main window to show" — which is
 /// true and useless.
 ///
-/// It answers even when it cannot help. The claw is the one control that survives the
-/// rail being put away, so a press on it that does nothing at all is the toolbar looking
-/// broken at the moment it has least to show for itself.
-#[tauri::command]
-pub(crate) async fn colai_open_settings(
-    #[allow(unused_variables)] app: AppHandle,
-) -> Result<(), String> {
-    /*
-     * Nothing to open.
-     *
-     * This opened OpenClaw's dashboard — a web application the Gateway served, where the
-     * agents and their settings lived. Claude Code is the terminal the person already has
-     * in front of them; there is no second window to send them to, and opening a browser
-     * at nothing would be worse than the key not being there.
-     *
-     * The key itself comes off the rail; this stays so that a stale page cannot invoke a
-     * command that no longer exists.
-     */
-    Err("There is no separate application to open — Claude Code is where this goes.".to_string())
-}
 
 /// One screen, in the overlay's own coordinates, with what the desktop keeps of it.
 ///
