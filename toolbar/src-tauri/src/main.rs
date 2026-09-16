@@ -338,6 +338,9 @@ fn main() {
             colai_send::colai_send,
             colai_send::colai_start_here,
             colai_send::colai_stop,
+            colai_send::colai_answer,
+            colai_send::colai_allow_now,
+            colai_send::colai_undo,
             colai_send::colai_watch,
             colai_send::colai_unwatch
         ])

@@ -1906,6 +1906,66 @@ const NEVER_RAN = {
   cancelled: "That was cancelled.",
 };
 
+/**
+ * What Claude Code is about to do, as something a person can look at and judge.
+ *
+ * `can_use_tool` arrives with the tool's real input, so for the two that change files this
+ * can show the change itself rather than a sentence describing it — which is the difference
+ * between approving a thing and approving a claim about a thing.
+ *
+ * Everything else falls back to the words Claude Code already supplies. A `Bash` command has
+ * no before and after worth drawing; it has a command, and that is what it should say.
+ */
+const SHOWS_A_CHANGE = { Edit: true, Write: true, NotebookEdit: true };
+/** Enough to judge an edit by; past this it is a file, not a change. */
+const DIFF_MOST = 40;
+
+function askedFor(request) {
+  if (!request || !request.tool) return null;
+  const tool = String(request.tool);
+  const input = request.input || {};
+  const where = input.file_path ? withoutHome(String(input.file_path)) : "";
+
+  // The words Claude Code chose, fenced: `why` is its own explanation and may carry terminal
+  // escapes, which is not something to put on a rail unexamined.
+  const said = observed(request.title || request.description || "");
+
+  if (!SHOWS_A_CHANGE[tool]) {
+    return { tool, where, said, lines: [], whole: false };
+  }
+
+  // Write has no "before" — the whole content is the change.
+  const before = typeof input.old_string === "string" ? input.old_string : "";
+  const after =
+    typeof input.new_string === "string"
+      ? input.new_string
+      : typeof input.content === "string"
+        ? input.content
+        : "";
+
+  const lines = [];
+  const take = (text, sign) => {
+    if (!text) return;
+    for (const line of String(text).split("\n")) {
+      lines.push({ sign, said: asGiven(line) });
+    }
+  };
+  take(before, "−");
+  take(after, "+");
+
+  return {
+    tool,
+    where,
+    said,
+    // Trimmed, and the trimming is admitted rather than silent: a diff that stops without
+    // saying so invites somebody to approve the part they can see.
+    lines: lines.slice(0, DIFF_MOST),
+    whole: lines.length > DIFF_MOST,
+    // Every occurrence, not just the first, is a materially different change.
+    everywhere: input.replace_all === true,
+  };
+}
+
 function troubleSaid(said) {
   if (!said) return "";
   const never = said.never ? String(said.never) : "";

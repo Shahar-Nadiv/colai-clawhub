@@ -397,14 +397,60 @@ pub(crate) async fn colai_stop(
     #[allow(unused_variables)] session_key: String,
 ) -> Result<(), String> {
     /*
-     * Stop, by ending the process having the conversation.
+     * Stop the turn, not the process.
      *
-     * Blunt, and right here: Claude Code writes the transcript as it goes, so nothing is
-     * lost, and the next send starts a child that resumes exactly where this one stopped.
-     * The session key is ignored because there is only ever one conversation live.
+     * This used to kill the child, which does stop it and also throws away the result frame
+     * — and with it the cost of everything that had already happened, so a conversation
+     * somebody interrupted under-reported what it had spent. `interrupt` ends the turn and
+     * leaves the conversation standing.
+     *
+     * Killing remains the fallback: a child that has stopped reading its own pipe cannot be
+     * asked to do anything, and stop has to work then most of all.
      */
-    session.interrupt();
+    if session.stop_turn().is_err() {
+        session.interrupt();
+    }
     Ok(())
+}
+
+/// Answer the question the rail is showing.
+///
+/// The turn is stopped until this returns — `can_use_tool` is not news, it is a question,
+/// and Claude Code is waiting on the other end of the pipe.
+#[tauri::command]
+pub(crate) async fn colai_answer(
+    session: State<'_, crate::session::Session>,
+    id: String,
+    allow: bool,
+    message: Option<String>,
+) -> Result<(), String> {
+    // Whatever somebody typed as a reason goes to Claude, so it travels through the same
+    // fence as everything else that is not ours: it is about to become part of a prompt.
+    let said = crate::session::plainly(message.as_deref().unwrap_or_default());
+    session.answer(&id, allow, &said)
+}
+
+/// Change what may happen without being asked, from now on.
+#[tauri::command]
+pub(crate) async fn colai_allow_now(
+    session: State<'_, crate::session::Session>,
+    mode: String,
+) -> Result<(), String> {
+    session.allow_now(&mode)
+}
+
+/// Put every file back to how it was before the given prompt.
+///
+/// With `dry_run` it reports what would change and changes nothing, which is what the
+/// confirmation shows — rewinding also reverts anything a person edited by hand while the
+/// agent was working, and those are not the agent's to put back.
+#[tauri::command]
+pub(crate) async fn colai_undo(
+    session: State<'_, crate::session::Session>,
+    prompt: String,
+    dry_run: bool,
+) -> Result<(), String> {
+    session.undo_since(&prompt, dry_run)
 }
 
 /// Start listening to a conversation this toolbar did not start.

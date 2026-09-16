@@ -45,6 +45,9 @@ const SESSION_EVENT: &str = "colai:session";
 /// The conversation was summarised and the middle of it is gone. Said out loud, because
 /// otherwise history appears to silently lose its own past.
 const FOLDED_EVENT: &str = "colai:folded";
+/// Claude Code is asking whether it may do something. The one frame that needs an answer
+/// rather than a listener: nothing happens until it gets one.
+const ASKS_EVENT: &str = "colai:asks";
 
 /// One conversation on this machine, for the rail to choose between.
 #[derive(Debug, Clone, Serialize)]
@@ -143,8 +146,21 @@ impl Session {
             .collect();
         content.push(json!({"type": "text", "text": message}));
 
+        /* Named, and said to be a person's.
+         *
+         * The uuid is the handle `rewind_files` is addressed by — without one there is no
+         * way to say "put the files back to before I asked". It comes back on the result
+         * frame as `user_message_uuids`, which is also how a reply is tied to the send that
+         * caused it rather than to whatever was waiting.
+         *
+         * `origin` says a person typed this. Claude Code gates some behaviour on knowing
+         * that, and absent it the answer is no — a host wrapping somebody's keyboard is
+         * expected to say so. */
+        let prompt = format!("colai-{}", now_ms());
         let frame = json!({
             "type": "user",
+            "uuid": prompt,
+            "origin": {"kind": "human"},
             "message": {"role": "user", "content": content},
         });
 
@@ -202,15 +218,15 @@ impl Session {
             /*
              * Nobody is sitting in front of this to approve anything.
              *
-             * `--permission-prompts` defaults to `host`, and the host is meant to be an SDK
-             * with a callback. The toolbar drives the CLI directly and has no callback, so
-             * every prompt was being denied anyway — this says so deliberately instead of
-             * arriving at the same place by accident. Anything that would ask is refused,
-             * the refusal comes back as a tool result, and Claude explains it in the reply,
-             * which is at least a sentence somebody can act on.
+             * `host` means this toolbar answers. It used to say `none`, which denied
+             * anything that would ask before a person ever heard about it — deliberate at
+             * the time, because there was nowhere to show the question. There is now: a
+             * `can_use_tool` control request arrives here, the rail draws what is about to
+             * happen, and the answer goes back down the same pipe. Nothing proceeds until
+             * it does, which is the point.
              */
             "--permission-prompts",
-            "none",
+            "host",
         ]);
         /*
          * What may happen without being asked.
@@ -267,6 +283,13 @@ impl Session {
 }
 
 impl Talking {
+    /// Write one frame down the pipe.
+    fn say(&mut self, frame: &Value) -> Result<(), String> {
+        writeln!(self.saying, "{frame}")
+            .and_then(|()| self.saying.flush())
+            .map_err(|trouble| format!("claude stopped listening: {trouble}"))
+    }
+
     /// Whether the child is still running.
     ///
     /// `try_wait` rather than assuming: a `claude` that has exited — crashed, or ended
@@ -289,6 +312,111 @@ fn listen(app: AppHandle, hearing: std::process::ChildStdout) {
             let _ = app.emit_to(crate::colai::OVERLAY_LABEL, name, body);
         }
     }
+}
+
+impl Session {
+    /// Answer a `can_use_tool` the page has just shown somebody.
+    ///
+    /// Nothing happens in the conversation until this is sent — the turn is stopped, waiting.
+    /// That is why a refusal carries words: `message` is what Claude is told, so it can try
+    /// something else rather than stall, and a person who says no gets to say why.
+    pub fn answer(&self, id: &str, allow: bool, message: &str) -> Result<(), String> {
+        let decided = if allow {
+            json!({ "behavior": "allow" })
+        } else {
+            json!({
+                "behavior": "deny",
+                "message": if message.is_empty() { "You turned this down." } else { message },
+                // What chose it, which is not the same as what was chosen. Claude Code keeps
+                // this to tell a person's decision from a rule's.
+                "decisionClassification": "user_reject",
+            })
+        };
+        self.control(json!({
+            "subtype": "can_use_tool_response",
+            "request_id": id,
+            "response": decided,
+        }))
+    }
+
+    /// Change what may happen without being asked, mid-conversation.
+    ///
+    /// The mode was an environment variable read once when the process started, so changing
+    /// it meant a new conversation. It is a control request, so it applies to the next tool.
+    pub fn allow_now(&self, mode: &str) -> Result<(), String> {
+        // The same allow-list `permission_asked` uses, and for the same reason:
+        // bypassPermissions needs a flag this never passes, so asking for it here would be a
+        // request Claude Code refuses and a rail that lies about what it did.
+        if !matches!(mode, "default" | "acceptEdits" | "plan" | "auto" | "dontAsk") {
+            return Err(format!("{mode} is not a mode this toolbar offers"));
+        }
+        self.control(json!({ "subtype": "set_permission_mode", "mode": mode }))
+    }
+
+    /// Stop the turn without killing the process.
+    ///
+    /// `colai_stop` used to kill the child, which loses the result frame — and with it the
+    /// cost of everything that had already happened. This ends the turn and leaves the
+    /// conversation standing.
+    pub fn stop_turn(&self) -> Result<(), String> {
+        self.control(json!({ "subtype": "interrupt" }))
+    }
+
+    /// Put every file back the way it was before the given prompt.
+    ///
+    /// Addressed by the uuid of the user message that started the turn, which is why one is
+    /// stamped on everything sent. `dry_run` asks what would change without changing it —
+    /// that answer is what a confirmation shows, because rewinding also reverts anything a
+    /// person edited by hand while the agent was working, and those are not the agent's to
+    /// put back.
+    pub fn undo_since(&self, prompt: &str, dry_run: bool) -> Result<(), String> {
+        self.control(json!({
+            "subtype": "rewind_files",
+            "user_message_id": prompt,
+            "dry_run": dry_run,
+        }))
+    }
+
+    fn control(&self, request: Value) -> Result<(), String> {
+        let mut held = self.talking.lock().map_err(|_| "the session is wedged")?;
+        let live = held.as_mut().ok_or("nothing is running to answer")?;
+        if !live.still_there() {
+            return Err("claude is no longer running".into());
+        }
+        let id = request
+            .get("request_id")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("colai-{}", now_ms()));
+        live.say(&json!({
+            "type": "control_request",
+            "request_id": id,
+            "request": request,
+        }))
+    }
+}
+
+/// A reason somebody typed, made safe to put in a prompt.
+///
+/// These are the user's own words rather than something read off the machine, so they are
+/// not fenced the way a window title is — they are simply flattened. Control characters go
+/// because they are not typed, and a length cap goes on because a deny message is a
+/// sentence to an agent and not a place to paste a file.
+pub(crate) fn plainly(said: &str) -> String {
+    let flat: String = said
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    let flat = flat.split_whitespace().collect::<Vec<_>>().join(" ");
+    flat.chars().take(500).collect()
+}
+
+/// Milliseconds since the epoch, for naming a request uniquely.
+fn now_ms() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|since| since.as_millis())
+        .unwrap_or(0)
 }
 
 /// One frame of stream-json, as the events the page should hear about it.
@@ -417,6 +545,37 @@ fn what_it_said(frame: &Value) -> Vec<(&'static str, Value)> {
                         }),
                     );
                 }
+            }
+
+            /* ── may I? ──────────────────────────────────────────────────────────────
+             *
+             * The turn is stopped until this is answered, so it is the one frame that is a
+             * question rather than news. Everything the card needs to draw the thing about
+             * to happen is already here: the tool, and its real input — for an edit that is
+             * `{file_path, old_string, new_string}`, which is the change itself and not a
+             * description of it.
+             *
+             * `title`, `description` and `decision_reason` are Claude Code's own words for
+             * the request, used for tools with no preview worth drawing. `decision_reason`
+             * may carry terminal escapes, so it goes through the same fence as anything
+             * else read off the machine rather than straight onto a rail. */
+            "control_request"
+                if frame.pointer("/request/subtype").and_then(Value::as_str)
+                    == Some("can_use_tool") =>
+            {
+                to!(
+                    ASKS_EVENT,
+                    json!({
+                        "id": frame.get("request_id"),
+                        "tool": frame.pointer("/request/tool_name"),
+                        "input": frame.pointer("/request/input"),
+                        "title": frame.pointer("/request/title"),
+                        "description": frame.pointer("/request/description"),
+                        "why": frame.pointer("/request/decision_reason"),
+                        "defaultNo": frame.pointer("/request/default_to_no"),
+                        "sessionKey": session,
+                    })
+                );
             }
 
             // ── the end of a turn ────────────────────────────────────────────────────
@@ -602,6 +761,50 @@ mod frames {
         );
         assert_eq!(said["why"], "auto");
         assert_eq!(said["before"], 90000);
+    }
+
+    #[test]
+    fn a_permission_request_carries_the_change_itself() {
+        /* The fact the whole approval card rests on: `can_use_tool` hands over the tool's
+         * real input before it runs, and an edit's input is the before and after text. So
+         * the rail can draw the change rather than a sentence about it. */
+        let said = only(
+            json!({
+                "type": "control_request", "request_id": "req_7",
+                "request": {
+                    "subtype": "can_use_tool", "tool_name": "Edit",
+                    "input": {
+                        "file_path": "/p/src/rail.js",
+                        "old_string": "const gap = 8;",
+                        "new_string": "const gap = 12;",
+                    },
+                    "title": "Edit rail.js", "default_to_no": false,
+                },
+            }),
+            ASKS_EVENT,
+        );
+        assert_eq!(said["id"], "req_7", "the handle the answer must go back under");
+        assert_eq!(said["tool"], "Edit");
+        assert_eq!(said["input"]["old_string"], "const gap = 8;");
+        assert_eq!(said["input"]["new_string"], "const gap = 12;");
+        assert_eq!(said["defaultNo"], false);
+    }
+
+    #[test]
+    fn a_control_request_that_is_not_a_question_is_not_one() {
+        // Only `can_use_tool` stops the world. Everything else on that channel is ours.
+        assert!(heard(json!({
+            "type": "control_request", "request_id": "x",
+            "request": {"subtype": "mcp_message"}
+        }))
+        .is_empty());
+    }
+
+    #[test]
+    fn a_typed_reason_is_flattened_before_it_becomes_part_of_a_prompt() {
+        assert_eq!(plainly("  no   thanks \n\t stop "), "no thanks stop");
+        assert_eq!(plainly("a\u{0}b"), "a b");
+        assert_eq!(plainly(&"x".repeat(900)).chars().count(), 500);
     }
 
     #[test]
