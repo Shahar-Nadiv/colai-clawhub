@@ -3646,6 +3646,55 @@ describe("slash means what it means everywhere else", () => {
   });
 });
 
+describe("one global scope, and the traps in it", () => {
+  /*
+   * These scripts are classic `<script>` tags, so every top-level `function` is a global and
+   * a bare identifier in any file can silently resolve to one in another.
+   *
+   * That is not theoretical. `toolbar-compose.js` drew the `/` and `@` menu from a bare
+   * `showing`, while every other line in the same closure said `asking.showing`. There is a
+   * `function showing()` in `toolbar-mark.js`, so the bare word found it, and a function has
+   * no `.map`. It had been there since the first commit and never fired, because nothing in
+   * the suite types into a box.
+   */
+  const files = ["toolbar.js", "toolbar-answers.js", "toolbar-compose.js", "toolbar-rail.js",
+                 "toolbar-work.js", "toolbar-mark.js", "toolbar-live.js", "toolbar-toast.js",
+                 "toolbar-dock.js", "toolbar-send.js", "toolbar-library.js", "toolbar-tools.js"];
+  const read = (name: string) =>
+    readFileSync(new URL(`./toolbar/ui/${name}`, import.meta.url), "utf8");
+
+  test("no global function is used as if it were a value", () => {
+    const declared = new Set<string>();
+    for (const name of files) {
+      for (const m of read(name).matchAll(/^(?:async )?function ([A-Za-z_$][\w$]*)\(/gm)) {
+        declared.add(m[1]!);
+      }
+    }
+    expect(declared.size, "the page should have plenty of globals").toBeGreaterThan(50);
+
+    const wrong: string[] = [];
+    for (const file of files) {
+      const source = read(file);
+      for (const fn of declared) {
+        // A local of the same name shadows the global and is correct — `runsNow` does exactly
+        // that with `still`. Only flag a file that never binds the name itself.
+        if (new RegExp(`(?:const|let|var)\\s+${fn}\\b`).test(source)) continue;
+        const used = new RegExp(
+          `(?<![\\w.$])${fn}\\.(?:map|filter|forEach|slice|join|includes|length)\\b`,
+        );
+        // The spread operator ends in a dot, so `...showing` reads to the lookbehind above
+        // exactly like `asking.showing` does — which is how this check missed the very bug
+        // it was written for. Spreads are blanked before the scan.
+        const at = source
+          .split("\n")
+          .findIndex((line) => used.test(line.replaceAll("...", " ")));
+        if (at >= 0) wrong.push(`${file}:${at + 1} — ${fn} is a function, not a list`);
+      }
+    }
+    expect(wrong, "a bare name here resolves to a function in another file").toEqual([]);
+  });
+});
+
 describe("every element the page reaches for is on the page", () => {
   /*
    * Written after shipping a toolbar that threw on every single render.

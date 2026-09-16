@@ -757,7 +757,15 @@ function askField(go) {
     asking.picked = Math.min(asking.picked, Math.max(0, asking.showing.length - 1));
     menu.hidden = asking.showing.length === 0;
     menu.replaceChildren(
-      ...showing.map((row, at) => {
+      /*
+       * `asking.showing`, not a bare `showing`.
+       *
+       * These scripts share one global scope, and `toolbar-mark.js` declares a function of
+       * that name — so the bare word resolved to it, and a function has no `.map`. Every
+       * other line in this closure already says `asking.showing`; this one did not, and had
+       * not since the first commit, because nothing ever typed `/` into the box.
+       */
+      ...asking.showing.map((row, at) => {
         const one = document.createElement("button");
         one.type = "button";
         one.className = "ask-menu-row";
