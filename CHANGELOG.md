@@ -15,6 +15,12 @@ The plugin can be installed rather than pointed at.
   clone contains is the whole of what you get. The 4 MB archive travels in the repository
   and the 11 MB binary it unpacks to does not; the launcher unpacks it into `~/.cache/colai`
   on first use and checks it against the digest beside it every time before running it.
+- **595 MB of `node_modules` no longer lands in every install.** Claude Code installs a
+  plugin by copying its checkout, and a `package-lock.json` in it makes the installer run
+  npm over the manifest beside it — which here is the OpenClaw npm wrapper, so an install
+  fetched 328 packages including OpenClaw itself into the plugin directory of somebody who
+  wanted a toolbar. The lockfile is gone from this branch: a clone is 14 MB, and an install
+  is now what the clone is.
 - **A machine with no build is told which machine it is**, rather than being handed an
   x86-64 binary and shown `Exec format error`.
 - **`commands/README.md` was a command.** Every `.md` in `commands/` becomes one, so a note

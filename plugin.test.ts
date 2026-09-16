@@ -187,6 +187,29 @@ describe("what actually travels in a clone", () => {
     expect(ignored(join("bin", "colai-toolbar.built")), "a local build is nobody else's").toBe(true);
   });
 
+  test("no lockfile, because a lockfile is an npm install in somebody else's plugin dir", () => {
+    /*
+     * Claude Code installs a plugin by copying its checkout, and a `package-lock.json`
+     * sitting in it makes the installer run npm over the manifest beside it. That manifest
+     * here is the OpenClaw npm wrapper, so the install fetched 328 packages and 595 MB —
+     * OpenClaw itself among them — into the plugin directory of somebody who asked for a
+     * toolbar and needs none of it: the launcher is a shell script and the toolbar is a
+     * binary.
+     *
+     * A `package.json` with dependencies is harmless alone. The lockfile is the trigger,
+     * which is why this is the thing being asserted, and why it was measured rather than
+     * reasoned about.
+     */
+    const ignored = (path: string) =>
+      spawnSync("git", ["check-ignore", "-q", path], { cwd: root }).status === 0;
+    const tracked =
+      spawnSync("git", ["ls-files", "--error-unmatch", "package-lock.json"], { cwd: root })
+        .status === 0;
+
+    expect(tracked, "a lockfile must never reach an install").toBe(false);
+    expect(ignored("package-lock.json"), "and must not be able to sneak back").toBe(true);
+  });
+
   test("the archive in this checkout is the binary its digest claims", () => {
     // Not a property of the code — a property of the four files that are about to be
     // committed. A digest written beside an archive by hand, or left behind by an earlier

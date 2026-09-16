@@ -25,3 +25,16 @@ platforms/*/bin/*
 !platforms/*/bin/colai-toolbar.gz
 !platforms/*/bin/colai-toolbar.sha256
 !platforms/*/bin/colai-toolbar.build.json
+
+# Not in a Claude Code plugin's clone, and the reason is not tidiness.
+#
+# Claude Code installs a plugin by copying its checkout — and if a `package-lock.json` is
+# sitting there, it runs an npm install over it. This package's manifest is the OpenClaw
+# npm wrapper that also lives here, so that install fetched 328 packages and 595 MB,
+# including OpenClaw itself, into the plugin directory of somebody who wanted a toolbar.
+# Nothing here needs a single one of them: the launcher is a shell script and the toolbar
+# is a binary.
+#
+# A `package.json` with dependencies is harmless on its own; the lockfile is what turns it
+# into an install. Measured, not assumed — see `plugin.test.ts`.
+package-lock.json
