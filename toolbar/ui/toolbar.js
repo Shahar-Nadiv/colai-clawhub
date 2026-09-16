@@ -29,7 +29,6 @@ const el = {
   work: document.getElementById("work"),
   toasts: document.getElementById("toasts"),
   flights: document.getElementById("flights"),
-  flyAutomate: document.getElementById("fly-automate"),
   flyAgents: document.getElementById("fly-agents"),
   flyAsk: document.getElementById("fly-ask"),
   agentAnswer: document.getElementById("agent-answer"),
@@ -106,7 +105,6 @@ const state = {
   // The automation being written, while the panel is open. Started from its own
   // defaults each time rather than kept: a schedule is about one piece of work, and
   // yesterday's interval sitting in the box is a job somebody creates by accident.
-  cron: { ...AUTOMATION_FIRST },
   // Which conversation the row menu is about, and what it found to go back to.
   // What this connection is allowed to do, as the Gateway itself reported it. Empty
   // until the handshake, and empty is not "everything".
@@ -494,7 +492,6 @@ function render() {
   el.flyShape.hidden = state.open !== "shape";
   el.flyDesign.hidden = state.open !== "design";
   el.flyGit.hidden = state.open !== "git";
-  el.flyAutomate.hidden = state.open !== "automate";
   // Folded, the six close up where they stand rather than vanishing — the stylesheet
   // animates it and `data-folded` is what it animates between. Not `hidden`: a key that
   // disappears takes two hundred pixels of rail with it in one frame, and a toolbar
@@ -525,7 +522,6 @@ function render() {
   el.grip.title = state.away
     ? "Drag toolbar · double click to bring it back"
     : "Drag toolbar · double click to put it away";
-  if (state.open === "automate") drawAutomation();
   if (state.open === "points") drawPoints();
   el.flyDraw.hidden = state.open !== "draw";
   for (const button of el.flyDraw.children) {

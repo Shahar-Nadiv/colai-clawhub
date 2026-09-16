@@ -4434,9 +4434,6 @@ describe("one light for every agent at once", () => {
     expect(compose, "a mark's note in its popup").toMatch(/note\.dataset\.field = `popup-note:/);
     expect(compose, "where a design goes").toMatch(/where\.dataset\.field = `dest:/);
     expect(compose, "how hard to think").toContain('bar.dataset.field = "effort"');
-    expect(compose, "an automation's name").toContain('name.dataset.field = "cron-name"');
-    expect(compose, "how many").toContain('amount.dataset.field = "cron-amount"');
-    expect(compose, "the scheduled fields").toMatch(/input\.dataset\.field = `field:/);
     expect(library, "the library search").toContain('find.dataset.field = "library-find"');
     expect(work, "the reply field").toMatch(/field\.dataset\.field = `say:/);
 
