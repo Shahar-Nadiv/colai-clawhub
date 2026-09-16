@@ -10,8 +10,8 @@ Point at anything on your screen and hand it to an agent.
 
 A small rail that floats over every application on your desktop. Draw a box round a thing,
 point at a thing, measure it, pick a colour off it, record a few seconds of it — then say
-what you want in a sentence and send it to an OpenClaw agent, along with a picture of
-exactly what you meant.
+what you want in a sentence and send it to Claude Code, along with a picture of exactly
+what you meant.
 
 It belongs to no application. There is no plugin to install in your editor, no browser
 extension, no SDK. If it is on the screen, you can point at it — a canvas game, a PCB in a
@@ -23,30 +23,33 @@ extension, no SDK. If it is on the screen, you can point at it — a canvas game
 ## Install
 
 ```bash
-openclaw plugins install @colai/toolbar
+claude plugin marketplace add Shahar-Nadiv/colai-clawhub
+claude plugin install colai@colai
 ```
+
+Then, in any Claude Code session:
+
+```
+/colai:show
+```
+
+The toolbar comes up and stays up. It is a desktop overlay, not a subprocess of that
+conversation — closing the session leaves it on screen. Put it away and press
+<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Space</kbd> to bring it back, or use the tray icon. Set
+`COLAI_HOTKEY` to change the shortcut.
+
+It talks to the `claude` you are already signed in to. There is no API key to paste, no
+second account, and no service to run — it starts a Claude Code session of its own behind
+the rail and streams the replies back into the Work panel.
+
+**Every mark costs tokens on your own Claude account**, the same as anything else you ask
+Claude Code. The rail shows what the conversation has cost so far.
 
 The toolbar ships already built, so nothing compiles on your machine and no Rust toolchain
-is needed. It starts with the Gateway and puts itself on screen.
-
-The toolbar is a native program, so there is one of it per kind of machine. The package you
-install carries no binary at all — it names one per platform, and npm fetches only the one
-your computer can run. Nothing runs at install time to arrange this, and you do not choose
-anything. Today there is one build, **Linux on x86-64**; any other machine is told so by
-name rather than left with a broken install.
-
-It travels compressed and unpacks itself the first time it is asked for, which means the
-plugin's own directory has to be writable on that first run — it is, on a normal install.
-The unpacked binary is checked against the digest shipped with it before anything runs.
-
-```bash
-openclaw colai show      # put it on screen
-openclaw colai hide      # put it away
-openclaw colai toggle    # either
-```
-
-Or press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Space</kbd> from anywhere. Set `COLAI_HOTKEY`
-to change it.
+is needed. Today there is one build, **Linux on x86-64**; any other machine is told so by
+name rather than left with a broken install. It travels compressed, unpacks itself into
+`~/.cache/colai/` the first time you ask for it, and is checked against the digest shipped
+beside it before it is ever run.
 
 ## Requirements
 
@@ -56,7 +59,7 @@ to change it.
 | **OS**             | Linux, x86-64. glibc 2.35 or newer (Ubuntu 22.04, Debian 12, Fedora 38, and anything later). |
 | **Libraries**      | WebKitGTK 4.1, libsoup 3, GTK 3                                                              |
 | **Tools**          | `xprop` and `xwininfo`, from `x11-utils`                                                     |
-| **OpenClaw**       | 2026.9.1 or newer, with a model provider already configured                                  |
+| **Claude Code**    | Signed in. Anything colai sends is billed to that account.                                   |
 
 ```bash
 # Debian / Ubuntu
@@ -115,31 +118,37 @@ If a mark would capture your **whole desktop** — which is what a screenshot or
 means if you click without dragging — the composer says so before you send it.
 
 Nothing else leaves. There is no telemetry, no analytics, no crash reporting and no update
-check. Everything the toolbar sends goes to your own OpenClaw Gateway.
+check. Everything the toolbar sends goes to the Claude Code you are already signed in to,
+on your own machine — colai runs no server and holds no account of its own.
 
-The one exception is the component library: opening it loads preview pictures from `cdn.21st.dev`, so that host sees your IP address while the panel is open. Nothing about your screen or your prompt goes with them — the search itself runs through your own Gateway — and the toolbar refuses a preview from any other host.
+The one exception is the component library: opening it loads preview pictures from `cdn.21st.dev`, so that host sees your IP address while the panel is open. Nothing about your screen or your prompt goes with them, and the toolbar refuses a preview from any other host.
 
 ## Where things live
 
-|                               |                                                                   |
-| ----------------------------- | ----------------------------------------------------------------- |
-| Device key                    | `~/.config/ai.colai.toolbar/quickchat-gateway-device.json` (0600) |
-| Rail position, recent prompts | `~/.local/share/ai.colai.toolbar/`                                |
-| Log                           | `<openclaw state dir>/logs/colai-toolbar.log`                     |
+|                               |                                      |
+| ----------------------------- | ------------------------------------ |
+| Rail position, recent prompts | `~/.local/share/ai.colai.toolbar/`   |
+| Which toolbar is running      | `~/.config/ai.colai.toolbar/`        |
+| The unpacked toolbar          | `~/.cache/colai/`                    |
 
-`openclaw plugins uninstall @colai/toolbar` removes the plugin; the two directories above
-are yours to delete.
+Conversations are Claude Code's own, in `~/.claude/`, and colai neither adds to that nor
+keeps a second copy.
+
+`claude plugin uninstall colai` removes the plugin; the three directories above are yours
+to delete.
 
 ## Troubleshooting
 
-**Nothing appears.** Check the log. The most common causes are a Wayland session, a missing
-`libwebkit2gtk-4.1`, and a Gateway that is not running.
+**Nothing appears.** Run `colai-toolbar show` in a terminal and read what it says — the two
+usual causes, a Wayland session and a missing `libwebkit2gtk-4.1`, both name themselves
+there. Started from a snap-packaged terminal or editor, the toolbar drops that snap's
+library paths and restarts itself; the line saying so is expected.
 
 **Marks do not say which window they were made on.** `x11-utils` is not installed — the
 toolbar says so on startup, in the log.
 
-**No tray icon.** Some GNOME sessions ship no AppIndicator extension. Use
-`openclaw colai toggle` or the hotkey.
+**No tray icon.** Some GNOME sessions ship no AppIndicator extension. Use the hotkey, or
+`/colai:show` again.
 
 ## Licence
 

@@ -1,16 +1,27 @@
-# Build output. The binary is 13 MB and is rebuilt from `release/Dockerfile`; what a
-# reviewer needs is the source it was built from, and what a user needs is the npm
-# tarball, which carries it.
-bin/
+# Build output.
+#
+# `bin/` is not ignored wholesale any more, because one file in it is now source: the
+# launcher `/colai:show` reaches on PATH. Everything a build drops beside it still is.
+bin/*
+!bin/colai-toolbar
+
 dist/
 node_modules/
 toolbar/src-tauri/target/
 
-# Where `clawhub package pack` puts the tarball it uploads. It is the build output
-# again, 5 MB of it, and committing one would put a stale copy of the plugin in the
-# repository people read to check what the plugin is.
+# Where `clawhub package pack` puts the tarball it uploads. It is the build output again,
+# 5 MB of it, and committing one would put a stale copy of the plugin in the repository
+# people read to check what the plugin is.
 .pack/
 
-
-# The Claude Code plugin ships the binary in `bin/`, built by `npm run build:release`.
-bin/colai-toolbar
+# The shipped toolbar, per machine.
+#
+# The archive is tracked and the binary is not, which looks backwards and is not: this is
+# what a `claude plugin install` receives, and Claude Code runs nothing at install time. If
+# the toolbar is not in the clone, it is nowhere — there is no later step that fetches it.
+# So the 5 MB archive travels, the 13 MB binary it unpacks to does not, and the digest
+# beside it is what says they are the same thing.
+platforms/*/bin/*
+!platforms/*/bin/colai-toolbar.gz
+!platforms/*/bin/colai-toolbar.sha256
+!platforms/*/bin/colai-toolbar.build.json

@@ -19,7 +19,12 @@ const root = join(here, "..");
 const crate = join(root, "toolbar", "src-tauri");
 const logFile = join(root, "toolbar", "src-tauri", "target", "build.log");
 const compiled = join(crate, "target", "release", "colai-toolbar");
-const staged = join(root, "bin", "colai-toolbar");
+// `.built`, not `colai-toolbar`, because that name is taken. `bin/colai-toolbar` is the
+// launcher the Claude Code plugin puts on PATH — a tracked shell script — and a local
+// build dropping a 13 MB binary on top of it would work here and be committed by mistake
+// there. The launcher prefers this file when it exists, so a local build is still the
+// thing that runs.
+const staged = join(root, "bin", "colai-toolbar.built");
 
 /** What building the toolbar needs, and the one command that provides it. */
 const NEEDS = [
@@ -129,9 +134,9 @@ try {
 // of the release image is now false. Removed rather than left to be believed: that note
 // is what `check-shippable.mjs` reads to decide whether a tarball may be published, and
 // a stale one would wave through a binary that runs on no Linux but this one.
-rmSync(join(root, "bin", "colai-toolbar.build.json"), { force: true });
+rmSync(`${staged}.build.json`, { force: true });
 
 const digest = createHash("sha256").update(readFileSync(staged)).digest("hex");
 writeFileSync(`${staged}.sha256`, `${digest}\n`);
-console.error(`colai: toolbar built in ${took}s and staged at bin/colai-toolbar.`);
+console.error(`colai: toolbar built in ${took}s and staged at bin/colai-toolbar.built.`);
 console.error(`colai: sha256 ${digest}\n`);

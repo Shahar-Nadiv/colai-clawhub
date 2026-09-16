@@ -1,0 +1,24 @@
+{
+  "name": "colai",
+  "owner": {
+    "name": "Shahar Nadiv",
+    "url": "https://github.com/Shahar-Nadiv"
+  },
+  "metadata": {
+    "description": "The colai toolbar: point at anything on your screen and hand it to Claude Code.",
+    "version": "0.3.0"
+  },
+  "plugins": [
+    {
+      "name": "colai",
+      "source": "./",
+      "description": "A toolbar that floats over every application. Box something, measure it, sample a colour off it, record a few seconds of it — then say what you want and send it to Claude Code with a picture of exactly what you meant.",
+      "version": "0.3.0",
+      "author": { "name": "Shahar Nadiv" },
+      "homepage": "https://github.com/Shahar-Nadiv/colai-clawhub",
+      "license": "MIT",
+      "category": "productivity",
+      "keywords": ["screenshot", "overlay", "desktop", "annotation", "screen-capture", "x11", "linux"]
+    }
+  ]
+}

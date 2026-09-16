@@ -1,5 +1,42 @@
 # Changelog
 
+Two products share this history, because they share a toolbar. Versions **0.2.0 and up** are
+the Claude Code plugin on this branch; **0.1.x** is the OpenClaw plugin on `main`.
+
+## 0.3.0 — 2026-09-16 (Claude Code)
+
+The plugin can be installed rather than pointed at.
+
+- **A marketplace.** `claude plugin marketplace add Shahar-Nadiv/colai-clawhub` and then
+  `claude plugin install colai@colai`. Until now the only way in was `--plugin-dir`, which
+  nobody discovers.
+- **`bin/colai-toolbar` is a launcher, not the binary.** Claude Code puts a plugin's `bin/`
+  on PATH and runs nothing at install time — there is no `postinstall` — so whatever the
+  clone contains is the whole of what you get. The 4 MB archive travels in the repository
+  and the 11 MB binary it unpacks to does not; the launcher unpacks it into `~/.cache/colai`
+  on first use and checks it against the digest beside it every time before running it.
+- **A machine with no build is told which machine it is**, rather than being handed an
+  x86-64 binary and shown `Exec format error`.
+- **`commands/README.md` was a command.** Every `.md` in `commands/` becomes one, so a note
+  meant for developers was a listable `/colai:README` in everyone's session. It has moved to
+  `docs/`, and `claude plugin validate --strict` now runs in the suite.
+- The README described installing an OpenClaw plugin and talking to a Gateway. It now
+  describes this one, including the part the Gateway version had no equivalent for: every
+  mark costs tokens on your own Claude account.
+
+## 0.2.0 — 2026-09-15 (Claude Code)
+
+The toolbar talks to Claude Code instead of an OpenClaw Gateway.
+
+- The Gateway client, its device identity and its credential bootstrap are gone — 4,903
+  lines — replaced by a `claude` process the toolbar owns and speaks stream-json to. It uses
+  the login you already have; there is no API key and no second account.
+- `/colai:show` puts the toolbar on screen, and it survives the session ending: the binary
+  puts itself into a process group of its own, because `setsid` is refused by Claude Code's
+  sandbox and an overlay that only survives one way of being started is fragile.
+- A snap-packaged terminal used to hand the toolbar its own library paths and kill it before
+  it drew. It now drops those entries and re-executes itself clean, whoever starts it.
+
 ## 0.1.3 — unreleased
 
 The binary moves out of the plugin and into a package per machine.

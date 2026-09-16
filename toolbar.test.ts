@@ -5085,7 +5085,12 @@ describe("what the plugin ships", () => {
     // A developer build must invalidate the note that says otherwise, or the gate waves
     // through a stale approval.
     const dev = readFileSync(new URL("scripts/build-toolbar.mjs", dir), "utf8");
-    expect(dev, "a local build clears the release note").toContain("colai-toolbar.build.json");
+    // Beside `staged`, not at a path spelled out again: the note that must die is the one
+    // sitting next to the binary this script just wrote, and a second spelling of that path
+    // is free to drift away from the first.
+    expect(dev, "a local build clears the release note").toMatch(
+      /rmSync\(`\$\{staged\}\.build\.json`/,
+    );
   });
 
   test("drawing happens on the thread allowed to draw", () => {

@@ -1,0 +1,135 @@
+#!/bin/sh
+# The toolbar, from wherever this copy of colai happens to keep it.
+#
+# Claude Code puts a plugin's `bin/` on PATH and runs nothing at install time — there is no
+# `postinstall`, by design. So this file is what `/colai:show` actually reaches, and it has
+# to find or produce a runnable toolbar on its own, on first use, with no network.
+#
+# It is a shell script rather than the binary itself for two reasons. The binary is 13 MB
+# and the archive is 5, and only one of those belongs in a repository people clone. And a
+# machine with no build for it needs to be told so in a sentence: an x86-64 binary handed
+# to an arm64 Mac says `Exec format error`, which sends somebody looking for a corrupt
+# download instead of telling them the truth.
+#
+# POSIX sh, and only tools already on every machine this runs on. A launcher that needs a
+# runtime installed first is not a launcher.
+
+set -eu
+
+# Where this script lives, following a symlink if something put one here.
+self=$0
+while [ -L "$self" ]; do
+  link=$(readlink "$self")
+  case $link in
+    /*) self=$link ;;
+    *) self=$(dirname "$self")/$link ;;
+  esac
+done
+here=$(CDPATH= cd -- "$(dirname -- "$self")" && pwd)
+plugin=$(CDPATH= cd -- "$here/.." && pwd)
+
+say() { printf '%s\n' "$*" >&2; }
+
+# ── an explicit one always wins ──────────────────────────────────────────────
+#
+# For working on the toolbar itself: point at any build and it is the one that runs, with
+# none of the machinery below consulted.
+if [ -n "${COLAI_TOOLBAR_BIN:-}" ]; then
+  exec "$COLAI_TOOLBAR_BIN" "$@"
+fi
+
+# ── which machine is this ────────────────────────────────────────────────────
+#
+# Named, and with the list beside it, so the answer is "your computer is not one colai has
+# been built for yet" rather than a loader error about a file format.
+case "$(uname -s)-$(uname -m)" in
+  Linux-x86_64) which=linux-x64 ;;
+  *)
+    say "The colai toolbar has no build for $(uname -s) $(uname -m). It runs on Linux on"
+    say "x86-64. The toolbar is a native desktop program, so each one has to be built and"
+    say "tested on the machine it is for."
+    exit 1
+    ;;
+esac
+
+# ── a build that is already lying around ─────────────────────────────────────
+#
+# In order: a local `npm run build:toolbar`, then a local `npm run build:release`. Both are
+# already unpacked and already this machine's, so neither needs the cache below. Somebody
+# working on the toolbar gets the one they just compiled, not a stale copy of the shipped
+# one.
+for built in "$here/colai-toolbar.built" "$plugin/platforms/$which/bin/colai-toolbar"; do
+  if [ -x "$built" ]; then
+    exec "$built" "$@"
+  fi
+done
+
+# ── otherwise, the one that shipped ──────────────────────────────────────────
+archive="$plugin/platforms/$which/bin/colai-toolbar.gz"
+promised="$plugin/platforms/$which/bin/colai-toolbar.sha256"
+if [ ! -f "$archive" ] || [ ! -f "$promised" ]; then
+  say "This copy of colai carries no toolbar for $which, and none is built here."
+  say "Expected $archive — build one with: npm run build:release"
+  exit 1
+fi
+expected=$(cut -d' ' -f1 <"$promised")
+
+# Whatever is on disk is hashed before it is run, every time, including a copy unpacked
+# minutes ago. This is not a signature and does not pretend to be: anybody who can replace
+# the archive can replace the digest beside it. It closes the case where only the unpacked
+# copy is tampered with — and that one lives in a cache directory for the life of the
+# install, which is a far longer window than the archive inside the plugin.
+digest_of() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | cut -d' ' -f1
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | cut -d' ' -f1
+  else
+    return 1
+  fi
+}
+
+if ! digest_of "$archive" >/dev/null 2>&1; then
+  say "colai needs sha256sum or shasum to check the toolbar before running it, and this"
+  say "machine has neither. Refusing to run a binary it cannot check."
+  exit 1
+fi
+
+# The digest is part of the path, so an update unpacks a new file rather than trusting an
+# old one that happens to have the right name, and two versions sit side by side instead of
+# fighting over one.
+#
+# In the directory name and not the filename, which is not a cosmetic choice: X11 takes a
+# window's `WM_CLASS` from the executable's basename, and a desktop keys its icon, its
+# taskbar grouping and any window rule the user has written off that string. Unpacked as
+# `colai-toolbar-3e18b97d6676` the overlay announces itself under a different name after
+# every release.
+cache="${XDG_CACHE_HOME:-$HOME/.cache}/colai/$(printf '%s' "$expected" | cut -c1-12)"
+binary="$cache/colai-toolbar"
+
+if [ ! -x "$binary" ] || [ "$(digest_of "$binary")" != "$expected" ]; then
+  mkdir -p "$cache"
+  # Written under a name nothing will run, checked, and only then moved into place. Two
+  # sessions can ask for the toolbar at once, and `mv` within a directory is atomic where
+  # writing 13 MB is not — without this the second can find a file that exists, has the
+  # right name, and is half written. The PID keeps the two temporaries apart.
+  partial="$binary.$$.partial"
+  trap 'rm -f "$partial"' EXIT INT TERM
+  if ! gzip -dc "$archive" >"$partial" 2>/dev/null; then
+    say "The colai toolbar could not be unpacked from $archive."
+    exit 1
+  fi
+  found=$(digest_of "$partial")
+  if [ "$found" != "$expected" ]; then
+    say "The colai toolbar in this install is not the one that was built."
+    say "  expected $expected"
+    say "  found    $found"
+    say "Refusing to run it. Reinstall the plugin."
+    exit 1
+  fi
+  chmod 755 "$partial"
+  mv -f "$partial" "$binary"
+  trap - EXIT INT TERM
+fi
+
+exec "$binary" "$@"
