@@ -1,0 +1,16 @@
+{
+  "description": "Say that colai is here, and which key brings it up.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/say-colai-is-here.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
