@@ -16,6 +16,7 @@ import {
   copyFileSync,
   cpSync,
   mkdirSync,
+  renameSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -119,7 +120,17 @@ try {
   const home = join(root, "platforms", WHICH, "bin");
   mkdirSync(home, { recursive: true });
   const staged = join(home, "colai-toolbar");
-  copyFileSync(join(work, "out", "colai-toolbar"), staged);
+  /*
+   * Written beside, then moved over. A plain copy fails with ETXTBSY when the toolbar
+   * staged here is the one currently running — which it very often is, because this is the
+   * path the launcher prefers, so the ordinary way to try a build is to leave it running
+   * and build again. `rename` replaces the directory entry and leaves the running process
+   * holding the old inode, which is exactly what is wanted: it keeps working, and the next
+   * start gets the new one.
+   */
+  const arriving = `${staged}.arriving`;
+  copyFileSync(join(work, "out", "colai-toolbar"), arriving);
+  renameSync(arriving, staged);
 
   const digest = createHash("sha256").update(readFileSync(staged)).digest("hex");
   writeFileSync(`${staged}.sha256`, `${digest}\n`);
