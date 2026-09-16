@@ -124,7 +124,146 @@ function askedShowing() {
   return asked;
 }
 
+/**
+ * "May I?" — the one thing on this rail that stops the world until it is answered.
+ *
+ * Drawn in the same place as the agent's questions because it is the same kind of moment,
+ * and drawn from `askedFor`, which turns the request into the change itself rather than a
+ * sentence about it.
+ *
+ * Returns true when it drew, so `drawAsk` knows to leave the panel alone: a permission
+ * request outranks a question, because Claude Code is blocked on this one.
+ */
+function drawApproval() {
+  const asking = state.asking;
+  if (!asking) return false;
+  const shown = askedFor(asking);
+  if (!shown) return false;
+
+  const bits = [];
+
+  const head = document.createElement("div");
+  head.className = "ask-head";
+  const who = document.createElement("span");
+  who.className = "ask-who";
+  who.textContent = shown.where ? `${shown.tool} · ${shown.where}` : shown.tool;
+  /*
+   * The mode, where it matters most.
+   *
+   * Being asked is exactly the moment somebody forms an opinion about how often they want
+   * to be asked, so the answer to that is here rather than in a settings panel they would
+   * have to go looking for. It cycles, because there are four and a menu for four things
+   * you press at most twice is more ceremony than the choice deserves.
+   *
+   * It applies to the NEXT tool, not this one — this one is already waiting on an answer,
+   * and quietly re-deciding the question in front of somebody would be a worse surprise
+   * than any it saves.
+   */
+  const mode = document.createElement("button");
+  mode.type = "button";
+  mode.className = "ask-mode";
+  mode.dataset.act = "true";
+  mode.textContent = MODE_SAID[state.allowing] || MODE_SAID.default;
+  mode.title = "What may happen without being asked, from the next one on";
+  mode.addEventListener("click", allowNext);
+  head.append(who, mode);
+  bits.push(head);
+
+  if (shown.said) {
+    const said = document.createElement("p");
+    said.className = "ask-said";
+    said.textContent = shown.said;
+    bits.push(said);
+  }
+
+  if (shown.lines.length > 0) {
+    const diff = document.createElement("div");
+    diff.className = "ask-diff";
+    for (const line of shown.lines) {
+      const row = document.createElement("div");
+      row.className = "ask-diff-row";
+      row.dataset.sign = line.sign;
+      const sign = document.createElement("span");
+      sign.className = "ask-diff-sign";
+      sign.textContent = line.sign;
+      const text = document.createElement("span");
+      text.className = "ask-diff-text";
+      // textContent throughout: this is the model's words and a file's contents, and the
+      // one surface in colai where being wrong about that ends in a write.
+      text.textContent = line.said;
+      row.append(sign, text);
+      diff.append(row);
+    }
+    bits.push(diff);
+    if (shown.whole) {
+      const more = document.createElement("p");
+      more.className = "ask-more";
+      more.textContent = "…more than shown here.";
+      bits.push(more);
+    }
+    if (shown.everywhere) {
+      const all = document.createElement("p");
+      all.className = "ask-more";
+      all.textContent = "Every occurrence in the file, not only this one.";
+      bits.push(all);
+    }
+  }
+
+  const row = document.createElement("div");
+  row.className = "ask-choices";
+  // Ordered so the safe answer is the easy one when Claude Code says it should be.
+  const choices = asking.defaultNo
+    ? [["Skip this", false], ["Approve", true]]
+    : [["Approve", true], ["Skip this", false]];
+  for (const [label, allow] of choices) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "ask-choice";
+    button.dataset.yes = String(allow);
+    button.textContent = label;
+    button.addEventListener("click", () => answerAsking(allow));
+    row.append(button);
+  }
+  bits.push(row);
+
+  el.flyAsk.hidden = false;
+  el.flyAsk.replaceChildren(...bits);
+  return true;
+}
+
+/** Move to the next mode along, and tell Claude Code so it holds for the next tool. */
+function allowNext() {
+  const order = Object.keys(MODES_ALLOWING);
+  const at = order.indexOf(state.allowing);
+  const next = order[(at + 1) % order.length];
+  state.allowing = next;
+  render();
+  void invoke("colai_allow_now", { mode: next }).catch((trouble) => {
+    // Put back what it actually is. A chip that says one thing while the session is in
+    // another is worse than no chip: it is a promise about what will happen next.
+    state.trouble = `That mode did not take — ${String(trouble)}`;
+    state.allowing = "default";
+    render();
+  });
+}
+
+/** Send the answer, and stop showing the question whatever happens to it. */
+function answerAsking(allow) {
+  const asking = state.asking;
+  if (!asking || !asking.id) return;
+  state.asking = null;
+  render();
+  void invoke("colai_answer", { id: asking.id, allow, message: allow ? "" : "You turned this down." })
+    .catch((trouble) => {
+      // The turn is stopped on the other end. Saying nothing here would leave somebody
+      // watching a conversation that never moves, with no idea they are the reason.
+      state.trouble = `That answer did not reach Claude Code — ${String(trouble)}`;
+      render();
+    });
+}
+
 function drawAsk() {
+  if (drawApproval()) return;
   const showing = askedShowing();
   el.flyAsk.hidden = showing === null;
   if (!showing) {

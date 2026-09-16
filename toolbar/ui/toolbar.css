@@ -2855,6 +2855,104 @@ body {
     0 24px 60px rgb(0 0 0 / 60%);
 }
 
+/*
+ * The approval card: what is about to happen, before it happens.
+ *
+ * Monospace for the diff because it is code, and because alignment is how a person sees at a
+ * glance that one line changed and not three. The two signs are coloured rather than only
+ * marked, since a row of "−" and "+" at small sizes is a row of dashes.
+ */
+.ask-mode {
+  font: inherit;
+  cursor: pointer;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.ask-mode:hover {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+.ask-said {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.ask-diff {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden auto;
+  /* Enough to judge a change by; a card taller than this is a file, and a card that grows
+     without bound pushes its own buttons off the bottom of the rail. */
+  max-height: 220px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.ask-diff-row {
+  display: flex;
+  gap: 8px;
+  padding: 1px 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ask-diff-row[data-sign="−"] {
+  background: color-mix(in srgb, var(--warn, #d13c3c) 12%, transparent);
+}
+.ask-diff-row[data-sign="+"] {
+  background: color-mix(in srgb, var(--good, #22c55e) 12%, transparent);
+}
+.ask-diff-sign {
+  flex: none;
+  width: 1ch;
+  opacity: 0.7;
+  user-select: none;
+}
+.ask-diff-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ask-more {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.ask-choices {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.ask-choice {
+  flex: 1 1 0;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ask-choice:hover {
+  border-color: var(--accent);
+}
+/* The approving one is the one that does something irreversible, so it is the one that
+   looks like a decision rather than a dismissal. */
+.ask-choice[data-yes="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent, #fff);
+  font-weight: 600;
+}
+
 .ask-head {
   display: flex;
   align-items: center;

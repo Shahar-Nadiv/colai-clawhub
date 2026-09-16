@@ -229,6 +229,16 @@ const state = {
   // Kept after the marks themselves are gone, because the point of an answer is that it
   // comes back to the place the question was asked about.
   answers: [],
+  /*
+   * The question Claude Code is blocked on, or null.
+   *
+   * Not a queue: it asks about one tool at a time and waits, so a second cannot arrive
+   * while one is standing. Holding it in state rather than drawing it straight means the
+   * rail can be brought back to it if somebody put the toolbar away mid-turn.
+   */
+  asking: null,
+  /** What may happen without being asked. Claude Code's own word for it. */
+  allowing: "default",
 };
 
 /* ── drawing the whole thing ─────────────────────────────────────────────── */
@@ -1214,12 +1224,28 @@ async function start() {
    * reply then arrives under a name the page has never heard, matches nothing, and is
    * dropped. So the send still waiting without an id is that conversation, and adopts it.
    */
+  /*
+   * Claude Code is asking whether it may do something, and is waiting.
+   *
+   * The rail summons itself. A question nobody can see is a conversation that hangs with no
+   * sign of why — the toolbar being put away is not consent, and it is not a refusal either.
+   */
+  void listen("colai:asks", (event) => {
+    const said = event && event.payload;
+    if (!said || !said.id) return;
+    state.asking = said;
+    state.doing = null;
+    void invoke("colai_summon").catch(() => {});
+    render();
+  }).catch(() => {});
+
   void listen("colai:session", (event) => {
     const said = event && event.payload;
     if (!said || !said.sessionKey) return;
+    // What the session is actually in, which is the only honest thing to put on the chip.
+    if (said.permissionMode) state.allowing = String(said.permissionMode);
     const nameless = (state.answers || []).find((answer) => !answer.sessionKey);
-    if (!nameless) return;
-    nameless.sessionKey = said.sessionKey;
+    if (nameless) nameless.sessionKey = said.sessionKey;
     render();
   }).catch(() => {});
 

@@ -1916,6 +1916,28 @@ const NEVER_RAN = {
  * Everything else falls back to the words Claude Code already supplies. A `Bash` command has
  * no before and after worth drawing; it has a command, and that is what it should say.
  */
+/**
+ * What may happen without being asked, in Claude Code's own vocabulary.
+ *
+ * Its names, not invented ones, so what the rail says and what the session is actually in
+ * cannot drift apart. `bypassPermissions` is deliberately absent: it needs a flag the
+ * toolbar never passes, so offering it would be offering something that cannot be done.
+ */
+const MODES_ALLOWING = {
+  default: "Ask me first",
+  acceptEdits: "Edit freely here",
+  auto: "Decide for me",
+  plan: "Plan only",
+};
+/** The short form, for the chip on a card where the words are already crowded. */
+const MODE_SAID = {
+  default: "Manual",
+  acceptEdits: "Accept edits",
+  auto: "Auto",
+  plan: "Plan",
+  dontAsk: "Don't ask",
+};
+
 const SHOWS_A_CHANGE = { Edit: true, Write: true, NotebookEdit: true };
 /** Enough to judge an edit by; past this it is a file, not a change. */
 const DIFF_MOST = 40;

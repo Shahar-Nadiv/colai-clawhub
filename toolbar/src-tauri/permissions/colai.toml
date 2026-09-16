@@ -28,6 +28,13 @@ commands.allow = [
   "colai_unwatch",
   "colai_watch",
   "colai_stop",
+  "colai_answer",
+  # Newly reachable from the page. A permission request has to be able to bring the rail
+  # back: a question nobody can see is a conversation that hangs with no sign of why, and
+  # the toolbar being put away is neither consent nor refusal.
+  "colai_summon",
+  "colai_allow_now",
+  "colai_undo",
   "colai_points",
   "colai_said",
   "colai_rewind",
