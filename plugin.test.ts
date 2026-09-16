@@ -60,6 +60,17 @@ describe("what a marketplace hands out", () => {
     }
   });
 
+  test("the README's install command names a marketplace that exists", () => {
+    // `marketplace add` clones the default branch, and the default branch here is the
+    // OpenClaw plugin, which carries no marketplace at all. A reader who copies the line
+    // without the branch gets "Marketplace file not found" and no reason for it.
+    const readme = read("README.md");
+    expect(readme).toContain("claude plugin marketplace add Shahar-Nadiv/colai-clawhub@");
+    expect(readme, "and the plugin id the marketplace actually offers").toContain(
+      "claude plugin install colai@colai",
+    );
+  });
+
   test("commands/ holds commands and nothing else", () => {
     /*
      * Every `.md` here becomes a listable, typeable command namespaced under the plugin.

@@ -23,9 +23,12 @@ extension, no SDK. If it is on the screen, you can point at it — a canvas game
 ## Install
 
 ```bash
-claude plugin marketplace add Shahar-Nadiv/colai-clawhub
+claude plugin marketplace add Shahar-Nadiv/colai-clawhub@colai-claud-plugin
 claude plugin install colai@colai
 ```
+
+The branch is named because `main` is the OpenClaw plugin — the same toolbar, talking to an
+OpenClaw Gateway instead. Drop the `@colai-claud-plugin` once this is the default branch.
 
 Then, in any Claude Code session:
 
