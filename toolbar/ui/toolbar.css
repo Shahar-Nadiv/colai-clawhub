@@ -763,24 +763,6 @@ body {
   display: none;
 }
 
-.flyout-send {
-  width: 320px;
-  padding: 0 0 6px;
-}
-.flyout-send .agents-title {
-  padding: 12px 14px 6px;
-}
-.flyout-send > .row,
-.flyout-send > .mode-row,
-.flyout-send > .file-add,
-.flyout-send > .popup-note,
-.flyout-send > .popup-foot,
-.flyout-send > .popup-warn,
-.flyout-send > .agent-empty {
-  margin-left: 8px;
-  margin-right: 8px;
-  width: calc(100% - 16px);
-}
 
 /* What the toolbar noticed is in front, offered rather than taken. */
 .suggest-row {
@@ -1059,10 +1041,6 @@ body {
   color: var(--muted);
   font-size: 11px;
   line-height: 1.45;
-}
-.flyout-send > .cron-summary,
-.flyout-send > .cron-line {
-  width: auto;
 }
 
 /* Four words where the mode chips have one each. Smaller and given room to breathe,
@@ -2543,8 +2521,7 @@ body {
  * rectangle drawn inside it would be a second, smaller promise about a boundary the
  * desktop has already decided.
  */
-.rail-wrap[data-catching="true"] .rail,
-.rail-wrap[data-catching="true"] .flyout-send {
+.rail-wrap[data-catching="true"] .rail {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }

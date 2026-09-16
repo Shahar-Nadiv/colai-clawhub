@@ -3646,6 +3646,50 @@ describe("slash means what it means everywhere else", () => {
   });
 });
 
+describe("every element the page reaches for is on the page", () => {
+  /*
+   * Written after shipping a toolbar that threw on every single render.
+   *
+   * Removing the scheduler took `el.flyAutomate` out of the lookup table and left it in the
+   * list of flyouts to position, so `placeFlyout` was handed `undefined` and died on
+   * `node.style.cssText` before anything else could draw. The whole rail was dead.
+   *
+   * Four hundred and forty-one tests passed while that was true, because all of them read
+   * source and none of them run `render`. This does not run it either — but a name in `el`
+   * with no element behind it is the shape of the bug, and that is checkable.
+   */
+  const html = readFileSync(new URL("./toolbar/ui/toolbar.html", import.meta.url), "utf8");
+  const page = readFileSync(new URL("./toolbar/ui/toolbar.js", import.meta.url), "utf8");
+  const ids = new Set([...html.matchAll(/id="([^"]+)"/g)].map((m) => m[1]));
+
+  test("el names an element that exists", () => {
+    // `el` is built as `name: document.getElementById("thing")`.
+    const pairs = [...page.matchAll(/^\s*(\w+): document\.getElementById\("([^"]+)"\),/gm)];
+    expect(pairs.length, "the lookup table should not be empty").toBeGreaterThan(10);
+    const absent = pairs.filter(([, , id]) => !ids.has(id)).map(([, name, id]) => `${name} → #${id}`);
+    expect(absent, "a lookup with nothing behind it is undefined at the first use").toEqual([]);
+  });
+
+  test("and nothing reaches for a name el does not have", () => {
+    /*
+     * The other direction, and the one that actually bit. `el.flyAutomate` survived in the
+     * flyout list after its entry in `el` was deleted — reading as `undefined`, then
+     * throwing the moment anything touched it.
+     */
+    const known = new Set(
+      [...page.matchAll(/^\s*(\w+): document\.getElementById\("[^"]+"\),/gm)].map((m) => m[1]),
+    );
+    const scripts = ["toolbar.js", "toolbar-answers.js", "toolbar-compose.js", "toolbar-rail.js",
+                     "toolbar-work.js", "toolbar-mark.js", "toolbar-live.js", "toolbar-toast.js",
+                     "toolbar-dock.js", "toolbar-send.js", "toolbar-library.js"]
+      .map((name) => readFileSync(new URL(`./toolbar/ui/${name}`, import.meta.url), "utf8"))
+      .join("\n");
+    const reached = new Set([...scripts.matchAll(/\bel\.(\w+)/g)].map((m) => m[1]));
+    const missing = [...reached].filter((name) => !known.has(name));
+    expect(missing, "el.X with no X in the lookup is undefined at the first use").toEqual([]);
+  });
+});
+
 describe("the stylesheet says each thing once", () => {
   /*
    * Written after the approval card was styled by somebody else's rules for a day.

@@ -569,8 +569,6 @@ function render() {
     [el.flyGit, buttons.git],
     [el.flyRecord, buttons.record],
     [el.flyDraw, buttons.draw],
-    [el.flyAutomate, buttons.send],
-
     [el.flyAgents, buttons.agents],
     // Out of the key that says who is talking, which is where the question came from.
     [el.flyAsk, buttons.agents],
