@@ -48,6 +48,9 @@ const FOLDED_EVENT: &str = "colai:folded";
 /// Claude Code is asking whether it may do something. The one frame that needs an answer
 /// rather than a listener: nothing happens until it gets one.
 const ASKS_EVENT: &str = "colai:asks";
+/// What putting the files back would change, or did. The only control response the page
+/// needs to see, because it is the only one whose answer it has to show somebody.
+const UNDO_EVENT: &str = "colai:undone";
 
 /// One conversation on this machine, for the rail to choose between.
 #[derive(Debug, Clone, Serialize)]
@@ -134,7 +137,7 @@ impl Session {
         message: String,
         images: Vec<String>,
         cwd: Option<String>,
-    ) -> Result<(), String> {
+    ) -> Result<String, String> {
         let mut content: Vec<Value> = images
             .into_iter()
             .map(|data| {
@@ -184,9 +187,11 @@ impl Session {
         writeln!(live.saying, "{frame}").map_err(|trouble| {
             format!("could not reach claude: {trouble}")
         })?;
-        live.saying
+        live
+            .saying
             .flush()
-            .map_err(|trouble| format!("could not reach claude: {trouble}"))
+            .map_err(|trouble| format!("could not reach claude: {trouble}"))?;
+        Ok(prompt)
     }
 
     /// Stop the turn by ending the process.
@@ -547,6 +552,31 @@ fn what_it_said(frame: &Value) -> Vec<(&'static str, Value)> {
                 }
             }
 
+            /* ── the answer to something we asked ────────────────────────────────────
+             *
+             * Only the rewind's. Everything else on this channel is bookkeeping between
+             * the toolbar and Claude Code; this one is a list of files somebody is about to
+             * be asked to agree to losing, or has just lost. */
+            "control_response"
+                if frame.pointer("/response/response/subtype").and_then(Value::as_str)
+                    == Some("rewind_files")
+                    || frame.pointer("/response/response/restored").is_some()
+                    || frame.pointer("/response/response/files").is_some() =>
+            {
+                let answer = frame.pointer("/response/response");
+                to!(
+                    UNDO_EVENT,
+                    json!({
+                        "id": frame.pointer("/response/request_id"),
+                        // Named both ways because the field has moved between versions and
+                        // an empty list is indistinguishable from the wrong key.
+                        "files": answer.and_then(|a| a.get("files").or_else(|| a.get("restored"))),
+                        "asked": answer.and_then(|a| a.get("dry_run")),
+                        "sessionKey": session,
+                    })
+                );
+            }
+
             /* ── may I? ──────────────────────────────────────────────────────────────
              *
              * The turn is stopped until this is answered, so it is the one frame that is a
@@ -602,6 +632,24 @@ fn what_it_said(frame: &Value) -> Vec<(&'static str, Value)> {
                         // More is coming without anybody sending anything.
                         "queued": frame.get("queued_turn_count"),
                     }),
+                );
+            }
+
+            // Something we asked for was refused. The page has to hear it, or a button
+            // that did nothing looks exactly like a button that worked.
+            "control_response"
+                if frame.pointer("/response/subtype").and_then(Value::as_str) == Some("error") =>
+            {
+                to!(
+                    "colai:trouble",
+                    json!({
+                        "said": briefly(
+                            frame
+                                .pointer("/response/error")
+                                .and_then(Value::as_str)
+                                .unwrap_or("Claude Code refused that")
+                        )
+                    })
                 );
             }
 

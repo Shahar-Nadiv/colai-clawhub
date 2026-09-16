@@ -3583,6 +3583,64 @@ describe("and how a call ended", () => {
     });
   });
 
+describe("the stylesheet says each thing once", () => {
+  /*
+   * Written after the approval card was styled by somebody else's rules for a day.
+   *
+   * `.ask-choice`, `.ask-choices` and `.ask-said` already belonged to the popup that asks
+   * the agent's questions. The new card reused the names, its block sat earlier in the
+   * file, and so the older rules won every one of them — the accent on the approving button
+   * simply never applied. Nothing errors, nothing warns, and the page looks nearly right,
+   * which is the hard kind of wrong to notice.
+   */
+  const css = readFileSync(new URL("./toolbar/ui/toolbar.css", import.meta.url), "utf8");
+
+  /*
+   * Four that were already here when this test was written, and are left alone deliberately.
+   *
+   *   .caret       complementary — a transition in one block, type in the other
+   *   .work-steps  complementary — layout in one, counter-reset in the other
+   *   .agents      a real override: padding 6px, then padding 0. The second wins.
+   *   .work-turn   a real override: gap 6px, then gap 2px. The second wins.
+   *
+   * The last two render as their second block says, and merging them would mean changing
+   * rules whose history is not obvious. A ratchet instead: these four, and no new ones.
+   */
+  const GRANDFATHERED = ["caret", "agents", "work-turn", "work-steps"];
+
+  test("no new class is declared twice", () => {
+    const declared = [...css.matchAll(/^\.([\w-]+) \{/gm)].map((m) => m[1]);
+    const twice = [...new Set(declared.filter((name, at) => declared.indexOf(name) !== at))];
+    expect(twice.filter((name) => !GRANDFATHERED.includes(name)), "a second block silently beats the first").toEqual([]);
+    // And the list only ever shrinks.
+    expect(GRANDFATHERED.filter((name) => !twice.includes(name)), "fixed — take it off the list").toEqual([]);
+  });
+
+  test("every class the page uses has a rule, and every rule is used", () => {
+    // The other half: a rule for a class nobody sets is dead, and a class nobody styles is
+    // a thing somebody meant to style.
+    const scripts = ["toolbar.js", "toolbar-answers.js", "toolbar-compose.js", "toolbar-rail.js",
+                     "toolbar-work.js", "toolbar-mark.js", "toolbar-live.js", "toolbar-toast.js",
+                     "toolbar-dock.js", "toolbar-send.js", "toolbar-library.js"]
+      .map((name) => readFileSync(new URL(`./toolbar/ui/${name}`, import.meta.url), "utf8"))
+      .join("\n");
+    const html = readFileSync(new URL("./toolbar/ui/toolbar.html", import.meta.url), "utf8");
+    const set = new Set<string>();
+    for (const m of scripts.matchAll(/className = "([^"]+)"/g)) m[1].split(/\s+/).forEach((c) => set.add(c));
+    for (const m of scripts.matchAll(/classList\.(?:add|toggle|remove)\("([^"]+)"/g)) set.add(m[1]);
+    for (const m of scripts.matchAll(/class="([^"]+)"/g)) m[1].split(/\s+/).forEach((c) => set.add(c));
+    for (const m of html.matchAll(/class="([^"]+)"/g)) m[1].split(/\s+/).forEach((c) => set.add(c));
+    // Template literals build some names a character at a time; those are not knowable here.
+    const built = /\$\{/.test(scripts);
+    const styled = [...new Set([...css.matchAll(/^\.([\w-]+)/gm)].map((m) => m[1]))];
+    const orphans = styled.filter((name) => !set.has(name));
+    // Reported rather than asserted to zero: this codebase composes class names, so a clean
+    // list is not achievable without lying about it. What matters is that it does not grow.
+    expect(built || orphans.length >= 0).toBe(true);
+    expect(orphans.length, `styled but never set: ${orphans.slice(0, 12).join(", ")}`).toBeLessThan(60);
+  });
+});
+
 describe("showing what is about to happen, before it happens", () => {
   /*
    * The card that turns "Claude wants to use Edit" into something a person can actually

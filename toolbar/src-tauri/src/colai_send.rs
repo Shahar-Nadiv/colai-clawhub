@@ -38,6 +38,9 @@ pub(crate) struct Receiver {
 pub(crate) struct Sent {
     pub session_key: String,
     pub run_id: String,
+    /// The name of the prompt just sent, which is what "put it back to before I asked" is
+    /// addressed by. Nothing else knows it: it is minted at the moment of sending.
+    pub prompt: String,
     /// How many pictures actually went. A mark whose picture has aged out of the store
     /// is still described in the message; it just arrives without its picture, and the
     /// receipt should not claim otherwise.
@@ -175,12 +178,13 @@ pub(crate) async fn colai_send(
         .map(|one| one.content.clone())
         .collect();
     let cwd = crate::session::where_it_is_had(key.as_deref());
-    session.send(&app, key.clone(), message, images, cwd)?;
+    let prompt = session.send(&app, key.clone(), message, images, cwd)?;
     let sent = Sent {
         session_key: key.unwrap_or_default(),
         // The Gateway gave a run id to correlate against. Nothing here does: one
         // conversation, one turn at a time, and the reply carries the session it is for.
         run_id: String::new(),
+        prompt,
         pictures,
         carried,
         refused,

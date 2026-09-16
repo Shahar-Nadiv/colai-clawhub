@@ -200,6 +200,15 @@ async function sendMarks(ids) {
         .filter((file) => file.carried)
         .map((file) => file.path),
     });
+    /*
+     * What this turn is called, so it can be put back.
+     *
+     * Minted in Rust at the moment of sending and known nowhere else; `rewind_files` is
+     * addressed by it, so without holding it here "undo everything since my prompt" has no
+     * prompt to name.
+     */
+    state.prompt = sent.prompt || null;
+
     // The message went; the settings on the conversation may not have. Said rather than
     // swallowed — the commonest reason is the ordinary one, a first send to an agent that
     // had no conversation yet to set them on, and the next send lands them. A setting

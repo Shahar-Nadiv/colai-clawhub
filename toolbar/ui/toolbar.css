@@ -2879,7 +2879,7 @@ body {
   border-color: var(--accent);
   color: var(--ink);
 }
-.ask-said {
+.appr-said {
   margin: 8px 0 0;
   font-size: 12px;
   line-height: 1.45;
@@ -2925,12 +2925,31 @@ body {
   font-size: 11px;
   color: var(--muted);
 }
-.ask-choices {
+/* Set apart from the two answers below it, because it answers a different question: not
+   "may this happen" but "take back everything that already has". */
+.ask-undo {
+  margin-top: 12px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px dashed color-mix(in srgb, var(--warn, #d13c3c) 55%, transparent);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ask-undo:hover {
+  border-style: solid;
+  color: var(--ink);
+}
+
+.appr-choices {
   display: flex;
   gap: 8px;
   margin-top: 12px;
 }
-.ask-choice {
+.appr-choice {
   flex: 1 1 0;
   padding: 9px 12px;
   border-radius: 8px;
@@ -2941,12 +2960,12 @@ body {
   font-size: 12px;
   cursor: pointer;
 }
-.ask-choice:hover {
+.appr-choice:hover {
   border-color: var(--accent);
 }
 /* The approving one is the one that does something irreversible, so it is the one that
    looks like a decision rather than a dismissal. */
-.ask-choice[data-yes="true"] {
+.appr-choice[data-yes="true"] {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--on-accent, #fff);

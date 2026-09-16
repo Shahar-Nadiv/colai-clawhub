@@ -235,6 +235,14 @@ const state = {
    * rail can be brought back to it if somebody put the toolbar away mid-turn.
    */
   asking: null,
+  /*
+   * The prompt the live turn came from, and the confirmation for putting its files back.
+   *
+   * `prompt` is minted when the message is sent and is the only handle a rewind can be
+   * addressed by. `undoing` holds the dry run's answer while somebody decides.
+   */
+  prompt: null,
+  undoing: null,
   /** What may happen without being asked. Claude Code's own word for it. */
   allowing: "default",
 };
@@ -1253,6 +1261,26 @@ async function start() {
    * and a toolbar that failed to start said nothing at all. Its stderr is the reason, and
    * it is now carried here.
    */
+  /*
+   * What a rewind would take back, or has.
+   *
+   * The dry run and the real thing come back the same way. A dry run fills the confirmation
+   * in front of somebody; a real one is finished, so it is said once and the card goes.
+   */
+  void listen("colai:undone", (event) => {
+    const said = event && event.payload;
+    if (!said) return;
+    const files = Array.isArray(said.files) ? said.files : [];
+    if (state.undoing) state.undoing = { asked: true, files };
+    else {
+      state.trouble =
+        files.length > 0
+          ? `Put ${files.length} file${files.length === 1 ? "" : "s"} back.`
+          : "Nothing needed putting back.";
+    }
+    render();
+  }).catch(() => {});
+
   void listen("colai:trouble", (event) => {
     const said = event && event.payload;
     if (!said || !said.said) return;

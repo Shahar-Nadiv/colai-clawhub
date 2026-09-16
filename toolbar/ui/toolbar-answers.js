@@ -135,6 +135,9 @@ function askedShowing() {
  * request outranks a question, because Claude Code is blocked on this one.
  */
 function drawApproval() {
+  // The confirmation takes the card over while it is up: it is a question about something
+  // irreversible, and leaving the approval visible behind it offers two answers at once.
+  if (state.undoing) return drawUndoAsk();
   const asking = state.asking;
   if (!asking) return false;
   const shown = askedFor(asking);
@@ -171,7 +174,7 @@ function drawApproval() {
 
   if (shown.said) {
     const said = document.createElement("p");
-    said.className = "ask-said";
+    said.className = "appr-said";
     said.textContent = shown.said;
     bits.push(said);
   }
@@ -209,8 +212,25 @@ function drawApproval() {
     }
   }
 
+  /*
+   * Undoing the whole prompt, which is a different thing from skipping one edit.
+   *
+   * Skipping refuses this call and lets the turn carry on, so anything already written
+   * earlier in the turn stays written. This stops the turn and puts every file back to how
+   * it was before the prompt — including anything a person edited by hand while the agent
+   * was working, which is why it asks first and names what it would touch.
+   */
+  if (state.prompt) {
+    const undo = document.createElement("button");
+    undo.type = "button";
+    undo.className = "ask-undo";
+    undo.textContent = "Undo everything since my prompt";
+    undo.addEventListener("click", askUndo);
+    bits.push(undo);
+  }
+
   const row = document.createElement("div");
-  row.className = "ask-choices";
+  row.className = "appr-choices";
   // Ordered so the safe answer is the easy one when Claude Code says it should be.
   const choices = asking.defaultNo
     ? [["Skip this", false], ["Approve", true]]
@@ -218,7 +238,7 @@ function drawApproval() {
   for (const [label, allow] of choices) {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "ask-choice";
+    button.className = "appr-choice";
     button.dataset.yes = String(allow);
     button.textContent = label;
     button.addEventListener("click", () => answerAsking(allow));
@@ -229,6 +249,107 @@ function drawApproval() {
   el.flyAsk.hidden = false;
   el.flyAsk.replaceChildren(...bits);
   return true;
+}
+
+/** What a rewind would take back, named before anything is taken. */
+function drawUndoAsk() {
+  const undoing = state.undoing;
+  const files = undoing.files;
+
+  const head = document.createElement("div");
+  head.className = "ask-head";
+  const who = document.createElement("span");
+  who.className = "ask-who";
+  who.textContent = "Put the files back";
+  head.append(who);
+
+  const said = document.createElement("p");
+  said.className = "appr-said";
+  said.textContent =
+    files === null
+      ? "Working out what would change…"
+      : files.length === 0
+        ? "Nothing has been written since your prompt, so there is nothing to put back."
+        : `${files.length} file${files.length === 1 ? "" : "s"} would go back to how they were before your prompt. Anything you edited yourself while this was working goes back too.`;
+
+  const bits = [head, said];
+
+  if (files && files.length > 0) {
+    const list = document.createElement("div");
+    list.className = "ask-diff";
+    for (const file of files.slice(0, 20)) {
+      const row = document.createElement("div");
+      row.className = "ask-diff-row";
+      row.textContent = withoutHome(String(file && file.path ? file.path : file));
+      list.append(row);
+    }
+    bits.push(list);
+  }
+
+  const row = document.createElement("div");
+  row.className = "appr-choices";
+  const back = document.createElement("button");
+  back.type = "button";
+  back.className = "appr-choice";
+  back.textContent = "Leave it";
+  back.addEventListener("click", () => {
+    state.undoing = null;
+    render();
+  });
+  row.append(back);
+  if (files && files.length > 0) {
+    const go = document.createElement("button");
+    go.type = "button";
+    go.className = "appr-choice";
+    go.dataset.yes = "true";
+    go.textContent = `Put ${files.length} back`;
+    go.addEventListener("click", doUndo);
+    row.append(go);
+  }
+  bits.push(row);
+
+  el.flyAsk.hidden = false;
+  el.flyAsk.replaceChildren(...bits);
+  return true;
+}
+
+/**
+ * Ask what putting the files back would change, without changing anything.
+ *
+ * The dry run is the whole reason this is two presses rather than one: a rewind reverts
+ * every file the agent touched during the turn, and cannot tell which of those somebody
+ * edited themselves while it worked. Naming them first is the difference between undoing a
+ * change and losing an afternoon.
+ */
+function askUndo() {
+  if (!state.prompt) return;
+  state.undoing = { asked: true, files: null };
+  render();
+  void invoke("colai_undo", { prompt: state.prompt, dryRun: true }).catch((trouble) => {
+    state.undoing = null;
+    state.trouble = `That could not be undone — ${String(trouble)}`;
+    render();
+  });
+}
+
+/** Stop the turn, then actually put them back. */
+function doUndo() {
+  if (!state.prompt) return;
+  var prompt = state.prompt;
+  state.undoing = null;
+  state.asking = null;
+  render();
+  // Stopped first. Rewinding under an agent that is still writing is a race with a
+  // filesystem, and the agent loses track of what it thinks it has done.
+  void invoke("colai_stop", { sessionKey: state.sessionKey || "" })
+    .catch(() => {})
+    .then(function () {
+      return invoke("colai_undo", { prompt: prompt, dryRun: false });
+    })
+    .catch(function (trouble) {
+      state.trouble = `That could not be undone — ${String(trouble)}`;
+      render();
+    });
 }
 
 /** Move to the next mode along, and tell Claude Code so it holds for the next tool. */
