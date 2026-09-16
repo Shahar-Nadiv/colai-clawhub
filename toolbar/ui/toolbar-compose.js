@@ -693,8 +693,8 @@ function askField(go) {
   text.placeholder = isCommitting(marks)
     ? "The commit message…"
     : marked
-      ? `Say what you want done with ${counted(marked, "mark")}… / for mode, @ for a file`
-      : "Say what you want done… / for mode, @ for a file";
+      ? `Say what you want done with ${counted(marked, "mark")}… / for a command, @ for a file`
+      : "Say what you want done… / for a command, @ for a file";
   text.value = state.text;
 
   const menu = document.createElement("div");
@@ -791,7 +791,15 @@ function askField(go) {
     asking.mark = token === slash ? "/" : "@";
 
     if (asking.mark === "/") {
-      asking.showing = modesMatching(token.word);
+      /*
+       * Claude Code's commands when they are known, colai's modes until then.
+       *
+       * The real list comes on the init frame at the start of every turn, so before a
+       * conversation has begun there is nothing to offer — and a `/` that answers with
+       * nothing is worse than one that answers with what this toolbar can still do.
+       */
+      const commands = commandsMatching(token.word, state.commands, state.terminalOnly);
+      asking.showing = commands.length > 0 ? commands : modesMatching(token.word);
       if (asking.showing.length === 0) return close();
       return draw();
     }

@@ -217,6 +217,12 @@ type ToolbarHelpers = {
     everywhere?: boolean;
   } | null;
   DIFF_MOST: number;
+  commandsMatching: (
+    word: string,
+    commands?: string[],
+    terminalOnly?: string[],
+  ) => { id: string; label: string; says: string }[];
+  COMMANDS_MOST: number;
   moodOf: (work: Work | null) => { mood: string; many: number } | null;
   moodSaid: (work: Work | null) => string;
   moodMark: (work: Work | null) => string | null;
@@ -398,7 +404,7 @@ function glyphsInTheRail(): Record<string, unknown> {
 
 const context: { helpers?: ToolbarHelpers } & Record<string, unknown> = {};
 vm.runInNewContext(
-  `${toolbarSource}\nthis.helpers = { TOOLS, DRAWS, dockFor, usable, boxOf, pathFor, gateFor, counted, spentSaid, MODES, summaryFor, screenAt, spanOf, detailOf, projectInFront, RECORD_LENGTHS, carrying, sizeOf, secondsLeft, recordFrame, RECORD_CLEAR, DESIGNS, DESIGN_FIRST, GITS, GIT_FIRST, gitKindOf, repoFor, isCommitting, MODE_FIRST, CLICK_MEANS, wholeDisplay, effortStops, effortAt, labelOf, homeOf, WHOLE_DISPLAY, scheduleOf, scheduleSays, nameFor, automationFor, AUTOMATION_FIRST, UNITS, REPEATS, FOLD_TIME, PENS, PEN_FIRST, PATHS, kindFor, ARROW_HEAD, ARROW_WIDE, ARROW_LEAST, ARROW_MOST, HIGHLIGHT_WIDE, placeOf, whereSaid, spotIn, spotSaid, samePlace, stillRunning, runsNow, runningSaid, RUN_QUIET, sheeted, asksSomething, choicesIn, questionIn, askedOf, CHOICE_MOST, agoSaid, briefly, KEEPS_MARKING, numberOf, MOODS, moodOf, moodSaid, moodMark, STATES, stateOf, needingYou, workCountSaid, handHue, tokenAt, modesMatching, withoutToken, SOURCES, TAKES_SOURCE, sourceOf, broughtIn, unchosen, centredIn, FOLLOWS_WINDOW, anchorOf, intoWindow, ontoScreen, showingNow, asDrawn, entrySaid, doingOf, doingSaid, DOING_FIRST, DOING_MOST, DOING_QUIET, DOING_TOOLS, troubleSaid, NEVER_RAN, askedFor, DIFF_MOST };`,
+  `${toolbarSource}\nthis.helpers = { TOOLS, DRAWS, dockFor, usable, boxOf, pathFor, gateFor, counted, spentSaid, MODES, summaryFor, screenAt, spanOf, detailOf, projectInFront, RECORD_LENGTHS, carrying, sizeOf, secondsLeft, recordFrame, RECORD_CLEAR, DESIGNS, DESIGN_FIRST, GITS, GIT_FIRST, gitKindOf, repoFor, isCommitting, MODE_FIRST, CLICK_MEANS, wholeDisplay, effortStops, effortAt, labelOf, homeOf, WHOLE_DISPLAY, scheduleOf, scheduleSays, nameFor, automationFor, AUTOMATION_FIRST, UNITS, REPEATS, FOLD_TIME, PENS, PEN_FIRST, PATHS, kindFor, ARROW_HEAD, ARROW_WIDE, ARROW_LEAST, ARROW_MOST, HIGHLIGHT_WIDE, placeOf, whereSaid, spotIn, spotSaid, samePlace, stillRunning, runsNow, runningSaid, RUN_QUIET, sheeted, asksSomething, choicesIn, questionIn, askedOf, CHOICE_MOST, agoSaid, briefly, KEEPS_MARKING, numberOf, MOODS, moodOf, moodSaid, moodMark, STATES, stateOf, needingYou, workCountSaid, handHue, tokenAt, modesMatching, withoutToken, SOURCES, TAKES_SOURCE, sourceOf, broughtIn, unchosen, centredIn, FOLLOWS_WINDOW, anchorOf, intoWindow, ontoScreen, showingNow, asDrawn, entrySaid, doingOf, doingSaid, DOING_FIRST, DOING_MOST, DOING_QUIET, DOING_TOOLS, troubleSaid, NEVER_RAN, askedFor, DIFF_MOST, commandsMatching, COMMANDS_MOST };`,
   context,
 );
 const {
@@ -509,6 +515,8 @@ const {
   NEVER_RAN,
   askedFor,
   DIFF_MOST,
+  commandsMatching,
+  COMMANDS_MOST,
 } = context.helpers as ToolbarHelpers;
 
 /*
@@ -3583,6 +3591,61 @@ describe("and how a call ended", () => {
     });
   });
 
+describe("slash means what it means everywhere else", () => {
+  /*
+   * `/` in a terminal is commands. Here it opened a four-item table of colai's own modes,
+   * so the one key everybody already knows the meaning of meant something else — which is
+   * worse than it not working, because it works and gives you the wrong thing.
+   */
+  const COMMANDS = ["review", "clear", "compact", "cost", "ide", "commit"];
+  const TERMINAL = ["clear", "ide"];
+
+  test("it offers Claude Code's commands", () => {
+    const shown = commandsMatching("", COMMANDS, TERMINAL).map((row) => row.label);
+    expect(shown).toContain("/review");
+    expect(shown).toContain("/commit");
+  });
+
+  test("and never the ones only a terminal can run", () => {
+    // Offering /clear from a rail is offering a key that does nothing.
+    const shown = commandsMatching("", COMMANDS, TERMINAL).map((row) => row.id);
+    expect(shown).not.toContain("clear");
+    expect(shown).not.toContain("ide");
+  });
+
+  test("typing narrows it, with or without the slash already typed", () => {
+    expect(commandsMatching("co", COMMANDS, TERMINAL).map((r) => r.id)).toEqual(["compact", "cost", "commit"]);
+    expect(commandsMatching("/co", COMMANDS, TERMINAL).map((r) => r.id)).toEqual(["compact", "cost", "commit"]);
+  });
+
+  test("a long list is cut to something readable", () => {
+    const many = Array.from({ length: 40 }, (_, i) => `cmd${i}`);
+    expect(commandsMatching("", many, []).length).toBe(COMMANDS_MOST);
+  });
+
+  test("before a conversation has begun there is nothing to offer", () => {
+    // Which is why the composer falls back to the modes rather than to an empty menu.
+    expect(commandsMatching("", [], [])).toEqual([]);
+    expect(commandsMatching("", undefined, undefined)).toEqual([]);
+  });
+
+  test("the composer asks for the real list first and the modes second", () => {
+    const compose = readFileSync(new URL("./toolbar/ui/toolbar-compose.js", import.meta.url), "utf8");
+    expect(compose).toMatch(/commandsMatching\(token\.word, state\.commands, state\.terminalOnly\)/);
+    expect(compose, "and only falls back when there is nothing").toMatch(
+      /commands\.length > 0 \? commands : modesMatching\(token\.word\)/,
+    );
+  });
+
+  test("the list comes off the init frame, which arrives every turn", () => {
+    const page = readFileSync(new URL("./toolbar/ui/toolbar.js", import.meta.url), "utf8");
+    expect(page).toMatch(/state\.commands = said\.slashCommands/);
+    expect(page, "and which of them a rail must not offer").toMatch(
+      /state\.terminalOnly = said\.terminalOnly/,
+    );
+  });
+});
+
 describe("the stylesheet says each thing once", () => {
   /*
    * Written after the approval card was styled by somebody else's rules for a day.
@@ -4372,7 +4435,7 @@ describe("one light for every agent at once", () => {
     const said = compose.matchAll(/text\.placeholder = ([\s\S]{0,240}?);\n/g);
     const shown = [...said].map((found) => found[1]!).join("\n");
     expect(shown, "the ask field must have a placeholder").not.toBe("");
-    expect(shown, "`/` chooses the mode").toContain("/ for mode");
+    expect(shown, "`/` runs a Claude Code command").toContain("/ for a command");
     expect(shown, "`@` names a file and is reachable no other way").toContain("@ for a file");
   });
 

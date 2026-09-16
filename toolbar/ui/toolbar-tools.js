@@ -1157,6 +1157,31 @@ function tokenAt(text, caret, mark) {
  * Prefix rather than fuzzy, on both the id and the label, because there are four of them
  * and a fuzzy match over four short words matches everything.
  */
+/**
+ * Claude Code's own slash commands, filtered to what has been typed.
+ *
+ * `/` in a terminal means commands, and here it meant a four-item table of colai's own
+ * modes — so the one key everybody already knows the meaning of meant something else. The
+ * real list arrives on the init frame at the start of every turn, which is why it is passed
+ * in rather than looked up: until a conversation has begun there is nothing to offer, and
+ * the modes are the honest fallback.
+ *
+ * `terminalOnly` is the subset Claude Code marks as belonging to a terminal — `/clear`,
+ * `/ide` and the like. Offering those from a rail would be offering a key that does nothing.
+ */
+function commandsMatching(word, commands, terminalOnly) {
+  const want = String(word ?? "").trim().toLowerCase().replace(/^\//, "");
+  const barred = new Set(terminalOnly || []);
+  return (commands || [])
+    .filter((name) => typeof name === "string" && !barred.has(name))
+    .filter((name) => !want || name.toLowerCase().startsWith(want))
+    .slice(0, COMMANDS_MOST)
+    .map((name) => ({ id: name, label: "/" + name, says: "Claude Code command" }));
+}
+
+/** Enough to choose from; past this it is a list nobody reads. */
+const COMMANDS_MOST = 8;
+
 function modesMatching(word) {
   const want = String(word ?? "")
     .trim()

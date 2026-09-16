@@ -241,6 +241,9 @@ const state = {
    * `prompt` is minted when the message is sent and is the only handle a rewind can be
    * addressed by. `undoing` holds the dry run's answer while somebody decides.
    */
+  /** Claude Code's slash commands, and the subset a rail must not offer. */
+  commands: [],
+  terminalOnly: [],
   prompt: null,
   undoing: null,
   /** What may happen without being asked. Claude Code's own word for it. */
@@ -1248,6 +1251,11 @@ async function start() {
     if (!said || !said.sessionKey) return;
     // What the session is actually in, which is the only honest thing to put on the chip.
     if (said.permissionMode) state.allowing = String(said.permissionMode);
+    // What `/` should offer, straight from Claude Code, along with the ones it marks as
+    // belonging to a terminal — which a rail must not offer, since pressing them does
+    // nothing here.
+    if (Array.isArray(said.slashCommands)) state.commands = said.slashCommands;
+    if (Array.isArray(said.terminalOnly)) state.terminalOnly = said.terminalOnly;
     const nameless = (state.answers || []).find((answer) => !answer.sessionKey);
     if (nameless) nameless.sessionKey = said.sessionKey;
     render();
