@@ -12,7 +12,7 @@
 
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, State, Manager};
 
 use crate::colai_capture::MarkShots;
 use crate::wire::{
@@ -65,6 +65,12 @@ pub(crate) struct Sent {
     /// a setting that appears to have applied and did not is how somebody spends an hour
     /// wondering why the answers look the same.
     pub settings_trouble: Option<String>,
+    /// The chat this was put straight into, when the relay reached it.
+    ///
+    /// `Some(name)` is the good case and the one worth saying plainly: the mark is in their
+    /// conversation now, with nothing for them to do. When this is `None` and `handed_to` is
+    /// not, the relay could not reach them and the mark is waiting for their next message.
+    pub sent_to: Option<String>,
     /// The chat this was left for, when it was left rather than sent.
     ///
     /// `None` is the ordinary case: the toolbar's own agent has it and the answer will
@@ -195,11 +201,44 @@ pub(crate) async fn colai_send(
      * it arrives there on their next message.
      */
     if let Some(held) = key.as_deref().and_then(crate::session::already_open_in_a_chat) {
-        // Where that conversation is being had, which is the only place its session may
-        // read from — so it is where the pictures have to land.
+        /*
+         * Somebody is sitting in this conversation, so it is handed over rather than taken
+         * over. Two ways to hand it over, and they are tried in that order:
+         *
+         *   1. `SendMessage`, through a small relay agent. It arrives in their chat straight
+         *      away, with nothing for them to do.
+         *   2. The outbox, which waits for their next message.
+         *
+         * The pictures are written to disk either way, because both routes carry a path
+         * rather than bytes — `SendMessage` takes text, and a hook's output is text. Under
+         * the conversation's own directory, which is the only place its session may read
+         * from without asking: measured, pictures left under `~/.config` came back "the read
+         * was denied", which is a mark delivered, described, and unopenable.
+         */
         let theirs = crate::session::where_it_is_had(Some(held.session_id.as_str()));
         let staged =
             crate::outbox::stage(held.session_id.as_str(), theirs.as_deref(), &message, &images)?;
+
+        let mut how = None;
+        let mut why_not = None;
+        if let Some(named) = crate::session::what_that_chat_is_called(&held.session_id) {
+            match app.try_state::<crate::relay::Relay>() {
+                Some(relay) => match relay.hand_over(&named, &staged.said) {
+                    Ok(()) => {
+                        // Delivered, so the copy left for the hook would arrive a second
+                        // time on their next message and be acted on twice.
+                        crate::outbox::forget(&staged.at);
+                        how = Some(named);
+                    }
+                    Err(trouble) => why_not = Some(trouble),
+                },
+                None => why_not = Some("there is no `claude` to relay through".to_string()),
+            }
+        }
+        if let Some(trouble) = &why_not {
+            eprintln!("[colai] could not put the mark in {}: {trouble}", held.session_id);
+        }
+
         return Ok(Sent {
             session_key: held.session_id,
             run_id: String::new(),
@@ -207,9 +246,12 @@ pub(crate) async fn colai_send(
             pictures: staged.pictures,
             carried,
             refused,
-            // Nothing to watch for: the answer will appear in their terminal, not here.
+            // Nothing to watch for either way: the answer appears where they are, not here.
             watching: false,
             settings_trouble,
+            // Which of the two happened, so the rail can promise the right thing. `sent_to`
+            // means it is there now; `handed_to` means it is waiting for a keystroke.
+            sent_to: how,
             handed_to: held.name,
         });
     }
@@ -229,6 +271,7 @@ pub(crate) async fn colai_send(
         watching: true,
         settings_trouble,
         // Answered here, by the toolbar's own agent, which is the ordinary case.
+        sent_to: None,
         handed_to: None,
     };
     // Only once it has landed. A failed send that had already forgotten its pictures

@@ -32,6 +32,7 @@ mod colai_marks;
 mod colai_receivers;
 mod colai_send;
 mod outbox;
+mod relay;
 #[cfg(target_os = "linux")]
 mod wrap;
 
@@ -284,6 +285,10 @@ fn main() {
             match session::Session::discover() {
                 Some(claude) => {
                     eprintln!("[colai] talking to {}", claude.display());
+                    // The relay shares the same `claude`, and is a different child with a
+                    // different job: one conversation the toolbar has, one small agent that
+                    // hands marks to conversations other people are in.
+                    app.manage(relay::Relay::new(claude.clone()));
                     app.manage(session::Session::new(claude));
                 }
                 None => {

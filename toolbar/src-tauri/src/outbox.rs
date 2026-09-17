@@ -30,6 +30,12 @@ use base64::Engine;
 pub(crate) struct Staged {
     pub at: PathBuf,
     pub pictures: usize,
+    /// The words the conversation will be given — the same text either route carries.
+    ///
+    /// Built once, here, because the two routes must not word it differently: a mark that
+    /// reads one way when it arrives instantly and another way when it waits for a keystroke
+    /// is two features wearing one name.
+    pub said: String,
 }
 
 /// Where marks wait for the session they belong to.
@@ -107,13 +113,14 @@ pub(crate) fn stage(
 
     // Rendered here rather than by the hook, so the hook is a `cat` and cannot get the
     // quoting wrong. Everything it needs to know is already known here.
-    fs::write(building.join(SAY), &handing_over(message, &wrote))
+    let said = handing_over(message, &wrote);
+    fs::write(building.join(SAY), &said)
         .map_err(|trouble| format!("could not write the message: {trouble}"))?;
 
     let at = waiting.join(named);
     fs::rename(&building, &at)
         .map_err(|trouble| format!("could not put the mark in place: {trouble}"))?;
-    Ok(Staged { at, pictures: wrote.len() })
+    Ok(Staged { at, pictures: wrote.len(), said })
 }
 
 /// The file the hook reads and prints.
@@ -337,4 +344,15 @@ mod leaving_a_mark {
         assert_eq!(waiting_for("a-chat"), 1);
         assert_eq!(waiting_for("another-chat"), 0);
     }
+}
+
+/// Take a staged mark back, because it arrived another way.
+///
+/// The relay and the hook are two routes to one conversation, and a mark left in the outbox
+/// after the relay delivered it would arrive a second time on the person's next message — and
+/// this is context a model acts on, so arriving twice means acting twice. The pictures stay:
+/// they live under the project, the message that went names their paths, and a conversation
+/// that has just been handed a screenshot may well want to look at it again.
+pub(crate) fn forget(at: &Path) {
+    let _ = fs::remove_dir_all(at);
 }

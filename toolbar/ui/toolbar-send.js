@@ -275,6 +275,17 @@ async function sendMarks(ids) {
     // place they were asking about has to be kept now or the reply has nowhere to land
     // — which was the whole trouble with this surface: you sent, and nothing ever came
     // back to the screen you were looking at.
+    /*
+     * Where the answer is going to appear, which is not always here.
+     *
+     * Three outcomes now. The toolbar's own agent has it and the reply comes back to this
+     * panel — the ordinary case, and the only one that gets a pin. Or the conversation is
+     * open in somebody's terminal and the mark went straight into it, which is the good
+     * case and needs no warning at all: the answer will be on their screen in a moment.
+     * Or the relay could not reach them and it is waiting for their next keystroke, which
+     * is the one that has to be said out loud, because "sent" and "will arrive when you
+     * next type there" are different promises.
+     */
     // Only when the answer can actually come back. A pin waiting on a reply that will
     // never arrive here looks exactly like an agent still thinking, which is the one
     // thing it must not look like.
@@ -329,11 +340,13 @@ async function sendMarks(ids) {
      * arrive when you next type", and reporting the second as the first is what makes
      * somebody sit watching a chat that is never going to say anything on its own.
      */
-    state.trouble = sent.handedTo
-      ? `Left for ${sent.handedTo} — it arrives there the next time you send a message in that chat. colai cannot type into a running conversation.`
-      : sent.watching
-        ? null
-        : `Sent, but the reply will only be in ${state.receiving.name || who.id} — colai could not listen for it here.`;
+    state.trouble = sent.sentTo
+      ? null
+      : sent.handedTo
+        ? `Left for ${sent.handedTo} — it arrives there the next time you send a message in that chat.`
+        : sent.watching
+          ? null
+          : `Sent, but the reply will only be in ${state.receiving.name || who.id} — colai could not listen for it here.`;
   } catch (error) {
     state.trouble = `Could not send — ${error && error.message ? error.message : String(error)}`;
   } finally {

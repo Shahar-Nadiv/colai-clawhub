@@ -1471,6 +1471,44 @@ mod which_conversation {
  * never the answer itself.
  */
 
+/// What Claude Code says is running, asked of Claude Code.
+///
+/// `claude agents --json` is a documented command and reports interactive sessions and
+/// background ones together, each with its pid, its conversation and the name it answers to.
+/// That name is the address `SendMessage` takes, which is the whole reason this is needed:
+/// a mark is addressed to a conversation and delivered to a name.
+///
+/// About 150ms, because it is a whole CLI starting up. Called when a mark is sent and not on
+/// a timer.
+pub(crate) fn as_claude_lists_them() -> Vec<Value> {
+    let Some(said) = std::process::Command::new("claude")
+        .args(["agents", "--json"])
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()
+    else {
+        return Vec::new();
+    };
+    serde_json::from_slice::<Value>(&said.stdout)
+        .ok()
+        .and_then(|listed| listed.as_array().cloned())
+        .unwrap_or_default()
+}
+
+/// The name a live conversation answers to, if it is live.
+///
+/// `None` covers both "no such conversation" and "not running", and the caller wants the same
+/// thing in either case: a mark cannot be handed to a chat nobody is in.
+pub(crate) fn what_that_chat_is_called(key: &str) -> Option<String> {
+    as_claude_lists_them().into_iter().find_map(|one| {
+        (one.get("sessionId").and_then(Value::as_str) == Some(key)
+            && one.get("kind").and_then(Value::as_str) == Some("interactive"))
+        .then(|| one.get("name").and_then(Value::as_str))
+        .flatten()
+        .map(str::to_string)
+    })
+}
+
 /// A Claude Code that is running right now.
 #[derive(Debug, Clone)]
 pub(crate) struct LiveSession {

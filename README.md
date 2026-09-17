@@ -46,6 +46,18 @@ It opens pointed at the conversation you ran `/colai:show` from, so the first th
 mark already has somewhere to go. Running `/colai:show` in a different chat later moves it
 to that one.
 
+**A mark you send goes into that chat.** Not into a second window and not into a copy of
+the conversation — into the session you are sitting in, while you are sitting in it. Claude
+Code has a `SendMessage` tool for one session to reach another, and colai passes the mark
+through a small agent that does nothing else, so it arrives with no keystroke from you. It
+shows up as a message from a teammate rather than as something you typed, because that is
+what it is: it was made in another window.
+
+That relay is a turn on your own account — about 2¢ a mark on top of the mark itself. If
+the chat cannot be reached, the mark waits on disk and arrives with your next message
+instead, and the toolbar says which of the two happened rather than saying "sent" either
+way.
+
 `/colai:show` and `/colai:quit` are commands rather than prompts: the line they run is a
 `!` line, which executes before anything reaches Claude. The toolbar starts whether or not
 the model is paying attention, and all Claude does afterwards is tell you it happened.
