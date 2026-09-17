@@ -331,6 +331,14 @@ function recall() {
  * Placement asks about the rail. What may be clicked is a different question, and
  * `boxAround(el.wrap)` is still the right answer to that one — the panel is clickable.
  */
+/**
+ * What to assume the rail is, when it cannot be measured.
+ *
+ * Only ever used to keep a remembered position reachable. Smaller than the real bar, so the
+ * guess errs towards leaving it on screen rather than pushing it off the other edge.
+ */
+const RAIL_AT_LEAST = 48;
+
 function railBox() {
   return el.rail.getBoundingClientRect();
 }
@@ -338,11 +346,31 @@ function railBox() {
 function clamp() {
   if (!state.at) return;
   const size = railBox();
-  if (!size.width) return;
-  const room = usable(screenAt(state.screens, state.at));
+  /*
+   * An unmeasurable rail must not mean "leave it wherever it was".
+   *
+   * This used to return here, and that is how a rail ends up off the side of the screen: a
+   * position remembered from a wider desk, restored onto a narrower one, and the one piece
+   * of code that would have pulled it back declining to run because the bar had not been
+   * laid out yet — or was folded to a sliver, which is the same zero.
+   *
+   * Being roughly right about the width is enough. The point of this is to keep the thing
+   * reachable, and a guess that is out by thirty pixels still does that; not running at all
+   * does not.
+   */
+  const wide = size.width || RAIL_AT_LEAST;
+  const tall = size.height || RAIL_AT_LEAST;
+  /*
+   * The room around where it thinks it is — or, if that is nowhere, the room there is.
+   *
+   * `screenAt` answers with the screen containing a point. A point on a monitor that has
+   * since been unplugged is on no screen at all, and the answer then has to be the desk
+   * that exists rather than the one that did.
+   */
+  const room = usable(screenAt(state.screens, state.at) || screenAt(state.screens, { x: 0, y: 0 }));
   state.at = {
-    x: Math.min(Math.max(state.at.x, room.left + EDGE), room.right - size.width - EDGE),
-    y: Math.min(Math.max(state.at.y, room.top + EDGE), room.bottom - size.height - EDGE),
+    x: Math.min(Math.max(state.at.x, room.left + EDGE), Math.max(room.left + EDGE, room.right - wide - EDGE)),
+    y: Math.min(Math.max(state.at.y, room.top + EDGE), Math.max(room.top + EDGE, room.bottom - tall - EDGE)),
   };
   place();
   // And tell the shell where the rail went.
