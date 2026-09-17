@@ -278,8 +278,12 @@ describe("the page, actually run", () => {
       await settle();
       const home = page.dom.document.querySelector(".home-key svg");
       expect(home, "the home key must carry a mark").toBeTruthy();
-      // Two masked fills: the tentacles and the dome. Both take the rail's own colour.
-      expect(home?.querySelectorAll('rect[fill="currentColor"]').length).toBe(2);
+      // Two masked fills: the tentacles and the dome.
+      // Both fills, and both in colai's red rather than the key's mood colour.
+      expect(home?.querySelectorAll("rect.colai-ink").length).toBe(2);
+      expect(home?.innerHTML, "the logo must not be repainted by the mood").not.toContain(
+        "currentColor",
+      );
       expect(home?.querySelectorAll("mask").length, "eyes are a mask, not paint").toBe(2);
       // The dome's mask paints the eyes black — that is what makes them holes.
       expect(home?.innerHTML).toContain('fill="#000"');

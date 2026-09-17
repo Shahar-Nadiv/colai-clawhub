@@ -4795,6 +4795,27 @@ describe("one light for every agent at once", () => {
     expect(page).toContain("const mood = moodMark(state.atWork);");
   });
 
+  test("the mark is painted, and painted in colai's red", () => {
+    /*
+     * Nearly shipped invisible. The fills were moved off `currentColor` onto a class, and
+     * the rule that gives the class a colour failed to apply — leaving an SVG with two
+     * masked rects and no paint, which renders as nothing at all. The page test could not
+     * see it: linkedom has no CSS engine, so the class was present and the test passed.
+     *
+     * So this is checked where it can be: the stylesheet has to actually give the mark a
+     * fill, and that fill has to be the brand token rather than a colour typed out again.
+     */
+    expect(css, "the mark needs a fill or it draws nothing").toMatch(
+      /\.colai-ink\s*\{[^}]*fill:\s*var\(--accent\)/,
+    );
+    // And the mood must not be able to repaint it — that is what made it white at rest.
+    const rail = readFileSync(new URL("./toolbar/ui/toolbar-rail.js", import.meta.url), "utf8");
+    const mark = rail.slice(rail.indexOf("function colaiMark"));
+    expect(mark.slice(0, mark.indexOf("\n}")), "the logo is not currentColor").not.toContain(
+      "currentColor",
+    );
+  });
+
   test("a desktop that asked for less movement gets none of it", () => {
     /*
      * The rule belongs to the animation, not to whatever is being animated. It was written

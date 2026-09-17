@@ -70,6 +70,12 @@ function icon(name, size) {
  * wordmark, when there was no such application to open. Now the jellyfish, which is the
  * logo colai actually has.
  *
+ * Always colai's red, rather than the colour of whatever key it sits on. It used to take
+ * `currentColor`, which meant the home key's mood tinted it — green while working, blue
+ * while waiting — and at rest it came out the rail's own near-white, which is the one thing
+ * a logo should never be. The mood is not lost by this: the key still carries it as a
+ * coloured ring that pulses, which says what is happening without repainting the brand.
+ *
  * Drawn from `media/brand/colai-jellyfish.svg` rather than traced by hand, so the mark on
  * the rail and the mark on the icon are the same drawing. Two masked fills rather than two
  * paths, and that is what lets the eyes be holes: a hole shows whatever is behind the rail,
@@ -82,11 +88,15 @@ function icon(name, size) {
  * spinner that happens to be green.
  *
  * The mask ids carry the size, because two of these can be on screen at once — the rail's
- * at seventeen pixels and the pin waiting on a reply at fourteen — and duplicate ids in one
- * document mean the second mark is masked by the first one's shape.
+ * and the pin waiting on a reply at fourteen — and duplicate ids in one document mean the
+ * second mark is masked by the first one's shape.
+ *
+ * Twenty-one pixels in a thirty-four pixel key. The C it replaced sat at seventeen, exactly
+ * half the key, and a jellyfish is a busier shape than an arc — the dome, two eyes and five
+ * tentacles have to survive being drawn that small, and at seventeen they only just did.
  */
 function colaiMark(size) {
-  const edge = size || 17;
+  const edge = size || 21;
   const tentacles = `colai-jelly-arms-${edge}`;
   const dome = `colai-jelly-dome-${edge}`;
   return `<svg width="${edge}" height="${edge}" viewBox="0 0 64 64" aria-hidden="true">
@@ -105,8 +115,8 @@ function colaiMark(size) {
       <circle fill="#fff" cx="22.6" cy="23.5" r="1.9" />
       <circle fill="#fff" cx="38.2" cy="23.5" r="1.9" />
     </mask>
-    <g class="colai-arms"><rect width="64" height="64" fill="currentColor" mask="url(#${tentacles})" /></g>
-    <rect width="64" height="64" fill="currentColor" mask="url(#${dome})" />
+    <g class="colai-arms"><rect class="colai-ink" width="64" height="64" mask="url(#${tentacles})" /></g>
+    <rect class="colai-ink" width="64" height="64" mask="url(#${dome})" />
   </svg>`;
 }
 

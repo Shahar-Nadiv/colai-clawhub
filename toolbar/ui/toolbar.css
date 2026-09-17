@@ -414,6 +414,18 @@ body {
  * more than one place now — the tray icon at seventeen pixels and the pin waiting on a
  * reply at fourteen. One trigger, so the second place did not have to restate the gait.
  */
+/*
+ * The mark is colai's red wherever it is drawn.
+ *
+ * Not `currentColor`. That let the home key's mood tint the logo — green while working,
+ * blue while waiting — and at rest gave it the rail's own near-white, which is a colour the
+ * brand does not have. The mood still reads: the key wears it as a ring that pulses around
+ * the mark rather than as the mark itself, so what is happening and whose logo it is are two
+ * separate signals instead of one doing both badly.
+ */
+.colai-ink {
+  fill: var(--accent);
+}
 .colai-arms {
   transform-box: fill-box;
   transform-origin: top center;
