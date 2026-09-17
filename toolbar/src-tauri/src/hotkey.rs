@@ -34,13 +34,11 @@ pub(crate) fn wanted() -> String {
     }
 }
 
-/// Bring the toolbar to the front and give it the keyboard, or put it away.
+/// Show the toolbar, or hide it.
 ///
-/// Three states rather than two, because "showing" and "listening" are different things
-/// here and the middle one is the common case. Pressed while the toolbar is on screen but
-/// not holding the keyboard — which is how it spends nearly all of its time, since it
-/// must not steal focus from the work it sits over — this hands it the keyboard so the
-/// letters work. Only a press while it is already listening puts it away.
+/// Away, so bring it up and hand it the keyboard — both, because the letters the rail
+/// advertises are only reachable once the overlay is listening, and somebody who pressed a
+/// key to summon a toolbar has already said where their attention is.
 fn summoned(app: &AppHandle) {
     let showing = crate::colai::toolbar_is_showing(app);
     if !showing {
@@ -52,16 +50,20 @@ fn summoned(app: &AppHandle) {
         return;
     }
 
-    let listening = app
-        .get_webview_window(crate::colai::OVERLAY_LABEL)
-        .and_then(|window| window.is_focused().ok())
-        .unwrap_or(false);
-
-    if listening {
-        let _ = crate::colai::colai_release(app.clone());
-    } else {
-        keep_asking_for_the_keyboard(app);
-    }
+    /*
+     * Showing, so put it away. One key, two states, and that is the whole contract.
+     *
+     * There were three states here: away, showing-but-not-listening, and listening — and a
+     * press meant something different in each, so that a toolbar sitting on screen without
+     * the keyboard would be handed it rather than hidden. Reasonable, and it did not work:
+     * the branch turned on `is_focused()` of the top-level window, while X gives the focus
+     * to the webview's child. It read false while the toolbar plainly had the keyboard, so
+     * every press took the same branch and nothing ever closed. Pressing it twice left it
+     * exactly where pressing it once did.
+     *
+     * A key called show-or-hide should show or hide.
+     */
+    let _ = crate::colai::colai_release(app.clone());
 }
 
 /// How long to go on asking for the keyboard after showing the window.
@@ -140,7 +142,7 @@ pub(crate) fn listen(app: &AppHandle) {
     });
 
     match asked {
-        Ok(()) => eprintln!("[colai] {said} opens the toolbar."),
+        Ok(()) => eprintln!("[colai] {said} shows the toolbar, and hides it again."),
         Err(trouble) => eprintln!(
             "[colai] {said} is already taken by something else, so there is no global shortcut ({trouble}). Set COLAI_HOTKEY to choose another."
         ),

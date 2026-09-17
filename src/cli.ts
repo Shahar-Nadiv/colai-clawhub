@@ -1,9 +1,9 @@
 // `openclaw colai` — show the toolbar, put it away, or say where it stands.
 //
-// `toggle` is the control surface for everything that is not the tray icon: a terminal,
-// a launcher, a keyboard shortcut, a script. It matters most where the tray is not there
-// to help — a GNOME session with no AppIndicator extension shows no icon at all, and then
-// this is the only way back after Escape.
+// `toggle` is the control surface for everything that is not the global shortcut: a
+// terminal, a launcher, a script. It matters most where that shortcut is not there to help
+// — another program on the desktop may already hold the chord, and then this is the only
+// way back after Escape.
 //
 // Reaching the running toolbar costs nothing here. It refuses to run twice, and a second
 // launch hands its arguments to the copy already on screen — so "tell the toolbar

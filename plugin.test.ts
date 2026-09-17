@@ -82,7 +82,7 @@ describe("what a marketplace hands out", () => {
      * "Did you mean /color?".
      */
     const files = readdirSync(join(root, "commands"));
-    expect(files).toEqual(["show.md"]);
+    expect(files).toEqual(["quit.md", "show.md"]);
   });
 
   test("/colai:show names the binary plainly and leaves detaching to it", () => {

@@ -28,10 +28,10 @@ if [ -r "$PIDFILE" ]; then
 fi
 
 if [ "$running" = yes ]; then
-  said="colai is running — press $KEY to bring the toolbar up."
+  said="colai is running — $KEY shows the toolbar, and hides it again."
 else
   # Saying a key works when nothing is listening for it is worse than saying nothing.
-  said="colai is installed — run /colai:show to start the toolbar, then $KEY brings it back."
+  said="colai is installed — run /colai:show to start the toolbar, then $KEY shows and hides it."
 fi
 
 # JSON by hand, because this must not need a runtime installed to say one sentence. The only

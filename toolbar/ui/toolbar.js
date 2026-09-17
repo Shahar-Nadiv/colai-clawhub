@@ -1085,10 +1085,21 @@ async function start() {
     })
     .catch(() => {});
 
-  // Asked for from the tray, which is the only surface reachable with the toolbar away.
-  void listen("colai:tips", () => {
-    showTips();
+  // Which conversation this toolbar belongs to. Asked once, then listened for — the same
+  // shape as the front window above, and for the same reason: a `/colai:show` run inside
+  // another chat while this page is already up arrives as an event, and the launch that
+  // started the page happened before there was a page to tell.
+  void invoke("colai_came_from")
+    .then((chat) => {
+      if (chat) heardWhichChat(chat);
+    })
+    .catch(() => {});
+
+  void listen("colai:came-from", (event) => {
+    const said = event && event.payload;
+    if (said && said.chat) heardWhichChat(said.chat);
   });
+
   void listen("colai:front", (event) => {
     state.front = (event && event.payload) || null;
     // Somebody clicked another window, which on a desktop is what "outside" means.

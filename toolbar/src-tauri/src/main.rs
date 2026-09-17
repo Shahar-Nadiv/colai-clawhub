@@ -12,11 +12,12 @@
 // What it does not need is most of that app — Quick Chat, the updater, the installer,
 // discovery, sleep handling. Fourteen thousand lines the toolbar never called.
 //
-// The tray it does keep. The toolbar can be put away from its own keyboard and has no
-// other window to bring it back, and it cannot add an entry to OpenClaw's — that menu is
-// compiled into OpenClaw's desktop app, with no seam for a plugin, and this plugin does
-// not change OpenClaw. So it carries an icon of its own, beside OpenClaw's, which is what
-// staying out of somebody else's source costs.
+// It had a tray icon too, for a while, and the reason was real: the toolbar can be put
+// away from its own keyboard and has no other window to bring it back. But a tray is a
+// poor place to learn a keyboard shortcut from — you have to already be looking for the
+// thing before the icon tells you how to reach it. The plugin says it at the top of every
+// session instead, and the key hides the toolbar as well as showing it, so the surface
+// that was only there to undo an Escape has nothing left to undo. `/colai:quit` stops it.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -34,10 +35,8 @@ mod session;
 mod wire;
 mod hotkey;
 mod screen;
-mod tray;
 mod whereabouts;
 
-use std::time::Duration;
 use tauri::Manager;
 
 /// How long to wait before asking for the Gateway again, and the cap it grows to.
@@ -229,10 +228,14 @@ fn main() {
         // the argument rather than a second window — which is why the toolbar needs no
         // socket, no port and nothing listening.
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            // Said, not swallowed. This is the only path `openclaw colai show|hide|toggle`
-            // and the tray take while a toolbar is up, and the caller has already exited
+            // Said, not swallowed. This is the only path `colai-toolbar show|hide|toggle|quit`
+            // takes while a toolbar is up, and the caller has already exited
             // 0 by the time it runs — so a failure here is a command that appeared to
             // work and did nothing, with this line the only trace it ever left.
+            // Which chat this one came from, before the window moves. A second
+            // `/colai:show` from another conversation is somebody saying "this one now",
+            // and the rail should be pointed there by the time it comes up.
+            colai::followed(app, &args);
             if let Err(trouble) = colai::asked_for(app, &args) {
                 eprintln!("[colai] could not do what was asked: {trouble}");
             }
@@ -256,20 +259,19 @@ fn main() {
                 }
             }
             app.manage(colai::ShapeState::default());
+            // The conversation this was started from, read once. Both re-execs above pass
+            // the environment and the arguments through untouched, so what Claude Code set
+            // is still here.
+            let from = session::CameFrom::default();
+            from.heard(session::came_from(&std::env::args().collect::<Vec<_>>()));
+            match from.read() {
+                Some(chat) => eprintln!("[colai] pointed at the conversation that opened it ({chat})."),
+                None => eprintln!("[colai] started outside a conversation, so the rail opens on a choice."),
+            }
+            app.manage(from);
             app.manage(colai_capture::MarkShots::default());
 
-            // The tray, before the overlay, so the first summon has something to tick.
-            // Not fatal: a desktop with no tray is still a desktop with a toolbar on it,
-            // and the only thing lost is the way back after Escape.
-            match tray::build(app) {
-                Ok(tray) => {
-                    app.manage(tray);
-                }
-                Err(trouble) => eprintln!("[colai] no tray: {trouble}"),
-            }
-
-            // The way in from anywhere. After the tray, so the two lines about how to
-            // reach the toolbar are printed together.
+            // The way in from anywhere, and now the only one.
             hotkey::listen(app.handle());
 
             // The overlay, straight away: this program is the toolbar, so there is
@@ -325,6 +327,7 @@ fn main() {
             colai_receivers::colai_at_work,
             colai_receivers::colai_models,
             colai_receivers::colai_sessions,
+            colai::colai_came_from,
             colai_receivers::colai_threads,
             colai_send::colai_automate,
             colai_send::colai_said,
@@ -341,8 +344,8 @@ fn main() {
         .expect("colai failed to start")
         .run(|app, event| {
             // Said we have gone, at the one moment that is true for every way of going —
-            // the tray's Quit, `openclaw colai quit`, and a signal from a supervisor all
-            // end the run loop here.
+            // `/colai:quit`, `colai-toolbar quit`, and a signal from a supervisor all end
+            // the run loop here.
             if matches!(event, tauri::RunEvent::Exit) {
                 if let Some(said) = whereabouts::asked_to_record(&std::env::args().collect::<Vec<_>>())
                 {

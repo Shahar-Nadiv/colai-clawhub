@@ -420,12 +420,6 @@ function rememberTipsSeen() {
   } catch {}
 }
 
-/** Show them again, from the tray, for somebody who dismissed them too fast. */
-function showTips() {
-  state.tips = true;
-  render();
-}
-
 function drawTips() {
   if (!el.tips) return;
   el.tips.hidden = !state.tips;

@@ -37,9 +37,14 @@ Then, in any Claude Code session:
 ```
 
 The toolbar comes up and stays up. It is a desktop overlay, not a subprocess of that
-conversation — closing the session leaves it on screen. Put it away and press
-<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Space</kbd> to bring it back, or use the tray icon. Set
-`COLAI_HOTKEY` to change the shortcut.
+conversation — closing the session leaves it on screen.
+<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Space</kbd> shows it and hides it again, from anywhere,
+including while you are typing in Claude Code. Set `COLAI_HOTKEY` to change the shortcut,
+and `/colai:quit` to stop it.
+
+It opens pointed at the conversation you ran `/colai:show` from, so the first thing you
+mark already has somewhere to go. Running `/colai:show` in a different chat later moves it
+to that one.
 
 It talks to the `claude` you are already signed in to. There is no API key to paste, no
 second account, and no service to run — it starts a Claude Code session of its own behind
@@ -150,8 +155,9 @@ library paths and restarts itself; the line saying so is expected.
 **Marks do not say which window they were made on.** `x11-utils` is not installed — the
 toolbar says so on startup, in the log.
 
-**No tray icon.** Some GNOME sessions ship no AppIndicator extension. Use the hotkey, or
-`/colai:show` again.
+**The hotkey does nothing.** Something else on the desktop holds it — the toolbar says so
+on startup, naming the chord. Set `COLAI_HOTKEY` to a free one and restart it. `/colai:show`
+always works regardless: a second launch hands its argument to the copy already on screen.
 
 ## Licence
 

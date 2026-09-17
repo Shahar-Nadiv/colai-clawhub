@@ -20,6 +20,7 @@ commands.allow = [
   "colai_allowed",
   "colai_agents",
   "colai_sessions",
+  "colai_came_from",
   "colai_threads",
   "colai_capture_mark",
   "colai_cut_recording",

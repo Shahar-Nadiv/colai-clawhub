@@ -5591,14 +5591,14 @@ describe("what the plugin ships", () => {
 
 describe("the way back when the toolbar is put away", () => {
   const dir = new URL("./toolbar/src-tauri/src/", import.meta.url);
-  const tray = readFileSync(new URL("tray.rs", dir), "utf8");
   const overlay = readFileSync(new URL("colai.rs", dir), "utf8");
   const main = readFileSync(new URL("main.rs", dir), "utf8");
+  const hotkey = readFileSync(new URL("hotkey.rs", dir), "utf8");
 
-  test("the way out is the tray, and there is no second one on the rail", () => {
+  test("the way out is the keyboard, and there is no second one on the rail", () => {
     /*
-     * There was an × here for an afternoon. It went: the toolbar is controlled from the
-     * tray, and a rail that also carries its own exit is two places to look for one
+     * There was an × here for an afternoon. It went: the toolbar is put away from its own
+     * keyboard, and a rail that also carries its own exit is two places to look for one
      * thing — with the more visible of them sitting beside the working tools, where it
      * reads as something to press by accident.
      */
@@ -5607,30 +5607,47 @@ describe("the way back when the toolbar is put away", () => {
     expect(rail).toContain("dividers[2].after(send, agents, stop, home)");
   });
 
-  test("the toolbar carries a tray icon of its own", () => {
+  test("there is no tray, and nothing still talks to one", () => {
     /*
-     * The toolbar is the only window this program has, and it can be put away — Escape,
-     * dragged off, or never summoned. Without a tray there would be nothing left on screen
-     * to press and no way back except killing the process.
+     * There was one, and the reason was real: the toolbar can be put away from its own
+     * keyboard and has no other window to bring it back. What made it go was that a tray
+     * is a poor place to learn a keyboard shortcut from — you have to already be hunting
+     * for the thing before the icon can tell you how to reach it. The session-start notice
+     * says it at the top of every conversation instead.
      *
-     * "Open OpenClaw" used to sit on this menu and is gone with the application it opened.
-     * Claude Code is the terminal the person already has in front of them; there is no
-     * second window to send them to.
+     * Checked as an absence because a half-removed tray is worse than either: a menu item
+     * whose tick nobody updates says the toolbar is showing when it is not.
      */
-    for (const label of ['"Toolbar"', '"Quit colai"']) {
-      expect(tray, `the tray menu must offer ${label}`).toContain(label);
+    expect(existsSync(new URL("tray.rs", dir))).toBe(false);
+    for (const [name, text] of [["main.rs", main], ["colai.rs", overlay]] as const) {
+      expect(text, `${name} must not reach for a tray that is gone`).not.toContain(
+        "tray_says_toolbar",
+      );
+      expect(text, `${name} must not build one`).not.toContain("tray::build");
     }
+    const page = readFileSync(new URL("./toolbar/ui/toolbar.js", import.meta.url), "utf8");
+    expect(page, "the page must not wait for an event nothing emits").not.toContain("colai:tips");
+  });
+
+  test("stopping it is a word, and the word has a command", () => {
+    /*
+     * Quit lived on the tray menu. With the tray gone it needs a home, and `quit` was
+     * already one of the words a second launch can hand to the copy on screen — so the
+     * command is four lines of markdown over machinery that was there all along.
+     */
+    const asked = overlay.slice(overlay.indexOf("pub(crate) fn asked_for"));
+    expect(asked.slice(0, asked.indexOf("\n}"))).toContain('"quit" | "--quit"');
+    const quit = readFileSync(new URL("./commands/quit.md", import.meta.url), "utf8");
+    expect(quit, "the command must reach the launcher on PATH").toContain("colai-toolbar quit");
+    expect(quit, "and must not kill it").not.toMatch(/\bkill\b|\bpkill\b|SIGTERM/);
   });
 
   test("three ways in, one decision", () => {
     /*
-     * The menu, `openclaw colai toggle`, and the toolbar's own keyboard all move the same
+     * The command line, a second launch, and the toolbar's own keyboard all move the same
      * window. `asked_for` is where each of them lands, so they cannot drift into three
      * different ideas of what toggle means.
      */
-    expect(tray, "the menu must go through the same decision").toContain(
-      'colai::asked_for(app, &["toggle".to_string()])',
-    );
     // A second launch hands its arguments to the copy already on screen: that is the
     // whole transport for the command line, with no socket and nothing listening.
     expect(main).toContain("colai::asked_for(app, &args)");
@@ -5652,28 +5669,30 @@ describe("the way back when the toolbar is put away", () => {
     expect(body).toContain("toolbar_is_showing(app)");
   });
 
-  test("the tick is told by both things that move the toolbar", () => {
-    // Escape reaches `colai_release` without the menu being involved, so a tray that
-    // learned only from its own clicks would be wrong the first time anybody pressed it.
-    const showing = overlay.slice(overlay.indexOf("pub(crate) fn colai_summon"));
-    expect(showing.slice(0, showing.indexOf("\n}"))).toContain("tray_says_toolbar(&app, true)");
-    const hiding = overlay.slice(overlay.indexOf("pub(crate) fn colai_release"));
-    expect(hiding.slice(0, hiding.indexOf("\n}"))).toContain("tray_says_toolbar(&app, false)");
-  });
-
-  test("the menu offers nothing that opens another application", () => {
+  test("the binding shows the toolbar and hides it again", () => {
     /*
-     * It had one item that did — "Open OpenClaw" — and it took most of a second on the
-     * menu's own thread, which is a tray sitting open staring at somebody. Both the item
-     * and the wait are gone: there is no second application on this host.
+     * It did not. There were three states — away, showing-but-not-listening, and
+     * listening — and the branch between the last two turned on `is_focused()` of the
+     * top-level window, while X hands the focus to the webview's child inside it. So it
+     * read false while the toolbar plainly had the keyboard, every press took the same
+     * branch, and nothing the key did could ever close it.
+     *
+     * Two states, asked of the same thing `toggle` asks: whether the window is on screen.
      */
-    expect(tray).not.toContain("colai_open_settings");
-    expect(tray).not.toContain("OPEN_ID");
-  });
-
-  test("no tray is not no toolbar", () => {
-    // A desktop without a tray still has a screen to draw on. Only the way back is lost.
-    expect(main).toContain('eprintln!("[colai] no tray: {trouble}")');
+    const body = hotkey.slice(hotkey.indexOf("fn summoned"));
+    // Without its comments, because the paragraph explaining why `is_focused` was wrong
+    // has to be allowed to say `is_focused`.
+    const summoned = body
+      .slice(0, body.indexOf("\n}"))
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    expect(summoned).toContain("toolbar_is_showing(app)");
+    expect(summoned, "showing means put it away").toContain("colai_release");
+    expect(summoned, "away means bring it up").toContain("colai_summon");
+    expect(
+      summoned,
+      "focus must not decide it: X gives the focus to a child of this window",
+    ).not.toContain("is_focused");
   });
 });
 
@@ -5695,16 +5714,22 @@ describe("the work panel is a view of OpenClaw's conversations", () => {
      */
     const hotkey = readFileSync(new URL("toolbar/src-tauri/src/hotkey.rs", dir2), "utf8");
     expect(hotkey, "a chord the desktop is unlikely to want").toContain("Ctrl+Alt+Space");
-    // Three states, not two: showing and listening are different here, and the middle
-    // one is where the toolbar spends nearly all its time.
-    expect(hotkey).toContain("is_focused");
     expect(hotkey, "and a binding somebody else holds is said, not swallowed").toContain(
       "already taken",
     );
-    // A shortcut nobody has been told about is a shortcut nobody uses, and the tray is
-    // the only surface reachable with the toolbar put away.
-    const tray = readFileSync(new URL("toolbar/src-tauri/src/tray.rs", dir2), "utf8");
-    expect(tray).toContain("opens it");
+    /*
+     * A shortcut nobody has been told about is a shortcut nobody uses — and for most of
+     * this toolbar's life nobody had been told. The tray carried the sentence, which meant
+     * you had to go looking for the icon before it could tell you where to look. The
+     * session-start hook says it at the top of every conversation instead, which is the
+     * one place somebody about to use Claude Code is certainly looking.
+     */
+    const notice = readFileSync(new URL("hooks/say-colai-is-here.sh", dir2), "utf8");
+    expect(notice, "the notice must name the key").toContain("COLAI_HOTKEY:-Ctrl+Alt+Space");
+    expect(notice, "and say it goes both ways").toMatch(/shows .*hides/);
+    // To the person, not to the model. stdout here would tell Claude about colai and show
+    // the user nothing.
+    expect(notice).toContain('"systemMessage"');
   });
 
   test("the binding is a setting, and changing it takes effect", () => {
@@ -5726,10 +5751,14 @@ describe("the work panel is a view of OpenClaw's conversations", () => {
     for (const said of ["Drag the grip", "fold key", "Type / in the box", "Type @ in the box"]) {
       expect(dock, `the card should name: ${said}`).toContain(said);
     }
-    // And reachable again, because once is not many for a card somebody can dismiss
-    // before reading it.
-    const tray = readFileSync(new URL("toolbar/src-tauri/src/tray.rs", dir2), "utf8");
-    expect(tray).toContain("Show the basics");
+    /*
+     * Shown once and not offered again. The tray used to carry a "Show the basics" item
+     * for somebody who dismissed the card before reading it, and that item went with the
+     * tray. Nothing replaced it, which is a real loss and a small one: the four things are
+     * `/`, `@`, the fold key and the grip, and three of the four are also written on the
+     * composer itself.
+     */
+    expect(dock, "nothing should offer to show them again").not.toContain("function showTips");
   });
 
   test("the two keystrokes inside the ask field have somewhere permanent to be said", () => {

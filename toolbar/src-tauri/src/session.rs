@@ -905,6 +905,75 @@ fn complain(app: AppHandle, trouble: std::process::ChildStderr) {
     }
 }
 
+/// The conversation the toolbar was started from, when it was started from one.
+///
+/// Claude Code puts `CLAUDE_CODE_SESSION_ID` into the environment of everything the Bash
+/// tool spawns, so a toolbar launched by `/colai:show` already knows which chat asked for
+/// it — and that is nearly always the chat the first mark is meant for. Before this, the
+/// rail opened on a picker and the most repeated act in using the toolbar was telling it
+/// what it could have read.
+///
+/// `--in <id>` is read first because `show.md` passes it explicitly: the environment is
+/// the reliable route and the flag is the visible one, and a file somebody can read is
+/// worth more than a variable they cannot see. Either may be absent — a toolbar started
+/// from a terminal belongs to no conversation, and says so by choosing none.
+pub(crate) struct CameFrom(Mutex<Option<String>>);
+
+impl CameFrom {
+    /// What the launch said, or nothing.
+    pub(crate) fn read(&self) -> Option<String> {
+        self.0.lock().ok().and_then(|held| held.clone())
+    }
+
+    /// A later launch said which conversation it came from.
+    ///
+    /// Kept, rather than only used at startup, because a second `/colai:show` from another
+    /// chat is somebody saying "this one now" — the same words, from a different room.
+    /// Returns whether it actually changed, so the caller can stay quiet when it did not.
+    pub(crate) fn heard(&self, said: Option<String>) -> bool {
+        let Ok(mut held) = self.0.lock() else {
+            return false;
+        };
+        if *held == said || said.is_none() {
+            return false;
+        }
+        *held = said;
+        true
+    }
+}
+
+impl Default for CameFrom {
+    fn default() -> Self {
+        Self(Mutex::new(None))
+    }
+}
+
+/// Read a launch's arguments and environment for the conversation it belongs to.
+pub(crate) fn came_from(args: &[String]) -> Option<String> {
+    let flagged = args
+        .iter()
+        .position(|word| word == "--in")
+        .and_then(|at| args.get(at + 1))
+        .map(String::as_str)
+        .or_else(|| {
+            args.iter()
+                .find_map(|word| word.strip_prefix("--in="))
+        });
+    let said = match flagged {
+        Some(said) => said.to_string(),
+        None => std::env::var("CLAUDE_CODE_SESSION_ID").ok()?,
+    };
+    let said = said.trim();
+    // A shell that substituted nothing leaves the literal text behind, and `show.md` is
+    // markdown before it is a command line — so an unsubstituted placeholder arrives here
+    // looking like an id. It is not one, and treating it as one would point the toolbar at
+    // a conversation that does not exist.
+    if said.is_empty() || said.starts_with('$') || said.starts_with('{') {
+        return None;
+    }
+    Some(said.to_string())
+}
+
 /// Every conversation Claude Code has on this machine, newest first.
 ///
 /// Read off disk rather than asked for, because there is nothing to ask: the transcripts
@@ -1275,5 +1344,85 @@ mod transcripts {
             let who = if *mine { "them" } else { "claude" };
             println!("  {who:>6}: {}", words.replace('\n', " ").chars().take(64).collect::<String>());
         }
+    }
+}
+
+#[cfg(test)]
+mod which_conversation {
+    use super::*;
+
+    /// The environment is shared by every test in the binary, so these run one at a time.
+    static ONE_AT_A_TIME: Mutex<()> = Mutex::new(());
+
+    fn asked(args: &[&str], env: Option<&str>) -> Option<String> {
+        let _held = ONE_AT_A_TIME.lock().unwrap_or_else(|held| held.into_inner());
+        match env {
+            Some(said) => std::env::set_var("CLAUDE_CODE_SESSION_ID", said),
+            None => std::env::remove_var("CLAUDE_CODE_SESSION_ID"),
+        }
+        let owned: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+        let found = came_from(&owned);
+        std::env::remove_var("CLAUDE_CODE_SESSION_ID");
+        found
+    }
+
+    #[test]
+    fn the_environment_is_enough() {
+        // What Claude Code actually sets, on everything the Bash tool spawns.
+        assert_eq!(asked(&["show"], Some("c94530b7-4075")), Some("c94530b7-4075".into()));
+    }
+
+    #[test]
+    fn a_flag_beats_the_environment() {
+        // `show.md` passes it explicitly, and a file somebody can read should win over a
+        // variable they cannot see.
+        assert_eq!(
+            asked(&["show", "--in", "from-the-flag"], Some("from-the-env")),
+            Some("from-the-flag".into())
+        );
+        assert_eq!(
+            asked(&["show", "--in=from-the-flag"], Some("from-the-env")),
+            Some("from-the-flag".into())
+        );
+    }
+
+    #[test]
+    fn a_terminal_belongs_to_no_conversation() {
+        // Somebody who typed the binary's name gets the picker, which is the honest answer.
+        assert_eq!(asked(&["show"], None), None);
+    }
+
+    #[test]
+    fn a_placeholder_that_was_never_substituted_is_not_an_id() {
+        /*
+         * `show.md` is markdown before it is a command line, and `${CLAUDE_SESSION_ID}` is
+         * substituted by Claude Code rather than by a shell. Anything that reaches the
+         * binary without that substitution having happened arrives looking like an id and
+         * is not one — pointing the toolbar at it would select a conversation that cannot
+         * exist, and the rail would sit on a receiver nothing can be sent to.
+         */
+        for never in ["${CLAUDE_SESSION_ID}", "$CLAUDE_SESSION_ID", "{{session}}", "", "   "] {
+            assert_eq!(asked(&["show", "--in", never], None), None, "{never}");
+        }
+    }
+
+    #[test]
+    fn a_flag_with_nothing_after_it_falls_back_rather_than_panicking() {
+        assert_eq!(asked(&["show", "--in"], Some("from-the-env")), Some("from-the-env".into()));
+        assert_eq!(asked(&["show", "--in"], None), None);
+    }
+
+    #[test]
+    fn hearing_the_same_conversation_twice_is_not_news() {
+        // The event it would emit retargets the rail over somebody's choice, so a repeat
+        // must be silent — `/colai:show` twice in one chat should not move anything.
+        let from = CameFrom::default();
+        assert!(from.heard(Some("one".into())));
+        assert!(!from.heard(Some("one".into())));
+        assert!(from.heard(Some("two".into())));
+        // And a launch from outside any conversation must not clear a chat already chosen:
+        // running the binary from a terminal is not a statement about where marks go.
+        assert!(!from.heard(None));
+        assert_eq!(from.read(), Some("two".into()));
     }
 }

@@ -632,11 +632,19 @@ async function loadWho() {
     state.agents = agents || [];
     state.sessions = sessions || [];
     state.projects = projects || [];
-    // The conversation about whatever is on the screen in front, when it is obvious
-    // which that is. Telling the toolbar what it can already see was the most repeated
-    // act in using it.
-    // Nobody picked yet, so the Gateway's own default stands in — the first thing
-    // somebody marks still has somewhere to go.
+    // The conversation the toolbar was opened from, when it was opened from one.
+    //
+    // `/colai:show` runs inside a chat, and Claude Code puts that chat's id in the
+    // environment of everything it spawns — so the toolbar already knows the answer to
+    // the question the picker was about to ask. Telling it what it could have read was
+    // the most repeated act in using it.
+    //
+    // Only while nobody has picked. Somebody who chose a receiver has said something
+    // more recent than the launch did, and a list that reloads every few seconds must
+    // not keep overruling them.
+    followTheChatWeCameFrom();
+    // Still nothing, so the Gateway's own default stands in — the first thing somebody
+    // marks still has somewhere to go.
     if (state.receiving.id === null) {
       const fallback = state.agents.find((agent) => agent.receiving);
       if (fallback) {
@@ -652,6 +660,83 @@ async function loadWho() {
     state.whoTrouble = null;
   } catch (error) {
     state.whoTrouble = error && error.message ? error.message : String(error);
+  }
+  render();
+}
+
+/** The chat id the toolbar was launched from, as last heard. Null until something says. */
+let cameFrom = null;
+
+/**
+ * A launch named a conversation and the rail is not on it yet.
+ *
+ * Needed because the two halves arrive in either order and neither can wait for the other:
+ * the id comes back from one command, the list of conversations from another, and a chat
+ * young enough to have launched the toolbar may not be in the list at all for a moment. So
+ * "we have been told, and have not managed it" is its own state rather than something
+ * inferred — inferring it is what broke this the first time, when following was recorded as
+ * a choice and the flag that recorded it then blocked the retry.
+ */
+let mustFollow = false;
+
+/**
+ * Point the receiver at the conversation the toolbar was opened from.
+ *
+ * Does nothing until that conversation is actually in the list. The transcript is written
+ * by Claude Code and a chat that has not said anything yet has no file on disk to be read
+ * back — so a brand new session can be the one that launched us and still be absent for a
+ * moment. Being quiet and trying again on the next reload is the right answer; inventing a
+ * row for it would put a receiver in the rail that cannot be sent to.
+ */
+function pointAtTheChatWeCameFrom() {
+  if (!cameFrom) return false;
+  if (state.receiving.kind === "session" && state.receiving.id === cameFrom) return true;
+  const chat = state.sessions.find((row) => row.key === cameFrom);
+  if (!chat) return false;
+  state.receiving = {
+    kind: "session",
+    id: chat.key,
+    name: chat.title,
+    emoji: null,
+    locator: null,
+  };
+  return true;
+}
+
+/**
+ * Point at the launching conversation if we should and if we can.
+ *
+ * Two guards, and they are different questions. `mustFollow` is a launch that has spoken
+ * and not yet been obeyed, and it overrules everything. `state.picked` is somebody having
+ * chosen a receiver by hand, which the list refreshing itself must never quietly undo.
+ */
+function followTheChatWeCameFrom() {
+  if (!mustFollow && state.picked) return;
+  if (!pointAtTheChatWeCameFrom()) return;
+  mustFollow = false;
+  // Recorded as a choice now that it is one, so the next reload leaves it alone.
+  state.picked = true;
+}
+
+/**
+ * A launch said which conversation the toolbar now belongs to.
+ *
+ * This overrules a choice, which a reload deliberately does not. The difference is who is
+ * speaking: a reload is a list refreshing itself, and this is somebody running
+ * `/colai:show` inside another chat, which is as clear a statement of where the next mark
+ * should go as picking from the menu is.
+ */
+function heardWhichChat(chat) {
+  cameFrom = chat || null;
+  if (!cameFrom) return;
+  mustFollow = true;
+  followTheChatWeCameFrom();
+  if (mustFollow) {
+    // Not in the list yet. Ask for the list again rather than leaving the rail on the chat
+    // before it — a `/colai:show` from a new conversation is exactly the case where the
+    // transcript is younger than the last reload.
+    void loadWho();
+    return;
   }
   render();
 }

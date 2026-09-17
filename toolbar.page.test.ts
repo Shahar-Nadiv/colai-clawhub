@@ -32,7 +32,14 @@ const ORDER = ["toolbar-tools.js","toolbar-rail.js","toolbar-mark.js","toolbar-l
   "toolbar-toast.js","toolbar-send.js","toolbar-dock.js","toolbar.js"];
 
 /** The page, loaded and started, with every command answering the way a missing one would. */
-function openTheToolbar(options: { remembered?: string; screen?: { width: number; height: number } } = {}) {
+function openTheToolbar(
+  options: {
+    remembered?: string;
+    screen?: { width: number; height: number };
+    /** Commands that answer with something, for the paths a silent `undefined` cannot reach. */
+    answers?: Record<string, unknown>;
+  } = {},
+) {
   const screen = options.screen ?? { width: 1920, height: 1080 };
   const dom = parseHTML(read("toolbar.html"));
   const sandbox: Record<string, unknown> = dom.window;
@@ -87,6 +94,7 @@ function openTheToolbar(options: { remembered?: string; screen?: { width: number
       // that starts in that state is testing the harness rather than the toolbar.
       invoke: async (name: string) => {
         asked.push(name);
+        if (options.answers && name in options.answers) return options.answers[name];
         return name === "colai_screens" ? desk : undefined;
       },
     },
@@ -183,5 +191,74 @@ describe("the page, actually run", () => {
     page.run("clamp()");
     expect(page.at().x).toBeLessThan(1920);
     expect(page.at().y).toBeLessThan(1080);
+  });
+
+  describe("the conversation the toolbar was opened from", () => {
+    const CHATS = [
+      { key: "the-one-that-opened-it", title: "Fixing the hotkey", preview: "colai-clawhub", at: 2 },
+      { key: "some-other-chat", title: "Something else", preview: "elsewhere", at: 1 },
+    ];
+
+    test("it opens pointed at that conversation rather than at a picker", async () => {
+      /*
+       * `/colai:show` runs inside a chat, and Claude Code puts that chat's id in the
+       * environment of everything it spawns — so the toolbar can read the answer to the
+       * question the picker was about to ask. Telling the toolbar which conversation you
+       * were just in was the most repeated act in using it.
+       */
+      const page = openTheToolbar({
+        answers: { colai_came_from: "the-one-that-opened-it", colai_sessions: CHATS },
+      });
+      await settle();
+      const receiving = JSON.parse(page.run("JSON.stringify(state.receiving)") as string);
+      expect(receiving.kind).toBe("session");
+      expect(receiving.id).toBe("the-one-that-opened-it");
+      expect(receiving.name, "and named, so the rail says which").toBe("Fixing the hotkey");
+    });
+
+    test("a toolbar started from a terminal belongs to no conversation", async () => {
+      // Which is the honest answer, and the picker is the right thing to show for it.
+      const page = openTheToolbar({ answers: { colai_sessions: CHATS } });
+      await settle();
+      const receiving = JSON.parse(page.run("JSON.stringify(state.receiving)") as string);
+      expect(receiving.kind).not.toBe("session");
+    });
+
+    test("a later /colai:show from another chat moves it", async () => {
+      /*
+       * The event, which is the only route once the page is already up: the second launch
+       * hands its arguments to the copy on screen and then exits, so nothing is left for
+       * the page to ask.
+       *
+       * This overrules a choice somebody made in the menu, deliberately. Running
+       * `/colai:show` inside a conversation is as clear a statement of where the next mark
+       * should go as picking from the list is, and it is the more recent of the two.
+       */
+      const page = openTheToolbar({
+        answers: { colai_came_from: "the-one-that-opened-it", colai_sessions: CHATS },
+      });
+      await settle();
+      page.run('heardWhichChat("some-other-chat")');
+      const receiving = JSON.parse(page.run("JSON.stringify(state.receiving)") as string);
+      expect(receiving.id).toBe("some-other-chat");
+      expect(receiving.name).toBe("Something else");
+    });
+
+    test("a conversation too new to have a transcript is waited for, not invented", async () => {
+      /*
+       * Claude Code writes the transcript, and the session list is read from those files —
+       * so a chat that has not said anything yet can be the one that launched the toolbar
+       * and still have nothing on disk. Putting a made-up row in the rail would offer a
+       * receiver that cannot be sent to; asking the list again is what actually helps.
+       */
+      const page = openTheToolbar({
+        answers: { colai_came_from: "not-on-disk-yet", colai_sessions: CHATS },
+      });
+      await settle();
+      const receiving = JSON.parse(page.run("JSON.stringify(state.receiving)") as string);
+      expect(receiving.id).not.toBe("not-on-disk-yet");
+      const { trouble } = page.said();
+      expect(trouble, "and it must not be an error").toBe(null);
+    });
   });
 });

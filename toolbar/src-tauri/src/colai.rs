@@ -2,7 +2,7 @@
 //!
 //! A sibling of Quick Chat. Both are small, always-on-top surfaces over the desktop
 //! rather than pages of the dashboard, both have their UI in `apps/linux/ui/`, and both
-//! are reached from the tray. What this one adds is the screen as a workspace: a toolbar
+//! are reached from a menu. What this one adds is the screen as a workspace: a toolbar
 //! over any window, regions marked on it, and a gate that refuses to change a surface no
 //! connector owns.
 //!
@@ -26,8 +26,9 @@
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tauri::{
-    AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow,
+    AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder,
 };
 
@@ -173,7 +174,7 @@ pub(crate) fn ensure_overlay(app: &AppHandle) -> Result<WebviewWindow, String> {
      * beside it was connected and fine.
      */
     // `try_state`, because the toolbar can be opened before the client is registered —
-    // from the tray during startup, or from the setup hook itself. A missing client means
+    // by the setup hook itself, before the managed state is in place. A missing client means
     // the connection is not ready to wake, not that anything is wrong.
     // Nothing to wake. The Gateway held a connection that had to be told the toolbar was
     // up; `claude` is started per conversation and needs no rousing.
@@ -835,6 +836,39 @@ pub(crate) fn colai_take_keyboard(app: AppHandle) -> Result<(), String> {
 /// this process started with, and through `tauri-plugin-single-instance` when a second
 /// copy is run while one is already up. `openclaw colai toggle` is the second case, and
 /// the first is what happens when nothing was running yet.
+/// A launch said which conversation it came from; point the rail there.
+///
+/// Told rather than asked, because the page cannot see a process that has already exited.
+/// The overlay may not exist yet — a `/colai:show` that starts the toolbar arrives before
+/// there is a window — and that case needs no event: the rail asks `colai_came_from` when
+/// it loads, and by then this has already been recorded.
+pub(crate) fn followed(app: &AppHandle, args: &[String]) {
+    let Some(from) = app.try_state::<crate::session::CameFrom>() else {
+        return;
+    };
+    if !from.heard(crate::session::came_from(args)) {
+        return;
+    }
+    let Some(chat) = from.read() else {
+        return;
+    };
+    // Not quiet. Marks already staged are still staged, and they are now aimed somewhere
+    // else — which is a reasonable thing to do and an unreasonable thing to do silently.
+    if let Err(trouble) = app.emit_to(OVERLAY_LABEL, CAME_FROM_EVENT, json!({ "chat": chat })) {
+        eprintln!("[colai] could not point the toolbar at {chat}: {trouble}");
+    }
+}
+
+/// What the page hears when the toolbar is pointed at a different conversation.
+pub(crate) const CAME_FROM_EVENT: &str = "colai:came-from";
+
+/// The conversation the toolbar belongs to right now, or none.
+#[tauri::command]
+pub(crate) fn colai_came_from(app: AppHandle) -> Option<String> {
+    app.try_state::<crate::session::CameFrom>()
+        .and_then(|from| from.read())
+}
+
 pub(crate) fn asked_for(app: &AppHandle, args: &[String]) -> Result<(), String> {
     let asked = args.iter().rev().find_map(|word| match word.as_str() {
         "show" | "--show" => Some("show"),
@@ -876,7 +910,6 @@ pub(crate) fn colai_summon(app: AppHandle) -> Result<(), String> {
     window
         .show()
         .map_err(|error| format!("Could not show the overlay: {error}"))?;
-    tray_says_toolbar(&app, true);
     /*
      * And try the Gateway again, if it had given up.
      *
@@ -892,21 +925,11 @@ pub(crate) fn colai_summon(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Tell the tray whether the toolbar is on screen.
-///
-/// Showing and hiding are the only two things that move it, and both report here —
-/// Escape reaches the second without the menu being involved, so a tray that learned only
-/// from its own clicks would be wrong the first time anybody pressed it.
-fn tray_says_toolbar(app: &AppHandle, showing: bool) {
-    if let Some(tray) = app.try_state::<crate::tray::Tray>() {
-        tray.says_toolbar(showing);
-    }
-}
-
 /// Whether the toolbar is on screen right now.
 ///
-/// Asked of the window, which is the only thing that knows. Anything else — a flag beside
-/// it, the tray's own tick — is a second answer to a question with one.
+/// Asked of the window, which is the only thing that knows. A flag kept beside it would be
+/// a second answer to a question with one, and the two would disagree the first time the
+/// toolbar was put away by a route that forgot to update it.
 pub(crate) fn toolbar_is_showing(app: &AppHandle) -> bool {
     app.get_webview_window(OVERLAY_LABEL)
         .and_then(|window| window.is_visible().ok())
@@ -939,7 +962,6 @@ pub(crate) fn colai_release(app: AppHandle) -> Result<(), String> {
             *held = None;
         }
     }
-    tray_says_toolbar(&app, false);
     Ok(())
 }
 
