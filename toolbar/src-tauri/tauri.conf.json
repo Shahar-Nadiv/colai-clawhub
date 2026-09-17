@@ -38,7 +38,12 @@
       "appimage"
     ],
     "category": "Utility",
-    "shortDescription": "Point at anything on screen and hand it to an agent.",
-    "longDescription": "colai draws a toolbar over the desktop. Point at, box or draw on anything on screen, say what you want done with it, and send it to an agent through OpenClaw."
+    "shortDescription": "Point at anything on screen and hand it to Claude Code.",
+    "longDescription": "colai draws a toolbar over the desktop. Point at, box or draw on anything on screen, say what you want done with it, and send it to the Claude Code conversation you are already in \u2014 with a picture of exactly what you meant.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/icon.png"
+    ]
   }
 }

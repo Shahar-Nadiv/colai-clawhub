@@ -1,8 +1,8 @@
-<img src="https://raw.githubusercontent.com/Shahar-Nadiv/colai-clawhub/main/media/colai.png" alt="" width="72" align="left">
+<img src="media/brand/colai-jellyfish-red.svg" alt="" width="72" align="left">
 
 # colai toolbar
 
-Point at anything on your screen and hand it to an agent.
+Point at anything on your screen and hand it to Claude Code.
 
 <img src="https://raw.githubusercontent.com/Shahar-Nadiv/colai-clawhub/main/media/toolbar.png" alt="The colai rail over a desktop, with the drawing tools open" width="620">
 

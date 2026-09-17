@@ -414,40 +414,53 @@ body {
  * more than one place now — the tray icon at seventeen pixels and the pin waiting on a
  * reply at fourteen. One trigger, so the second place did not have to restate the gait.
  */
-.colai-c {
+.colai-arms {
   transform-box: fill-box;
-  transform-origin: center;
+  transform-origin: top center;
 }
 /*
- * The mark turns while something is running.
+ * The tentacles drift while something is running.
  *
- * The crab that was here walked — legs, claws and a body leaning onto each stride. A C is
- * an arc, and an arc that is doing something turns; the same idea drawn in the shape this
- * mark actually has, and one property instead of five animations that had to stay in step.
+ * The crab that was here walked — legs, claws and a body leaning onto each stride. The C
+ * that replaced it spun. A jellyfish does neither: it hangs, and its tentacles trail. So
+ * this is a slow sway rather than a cycle with a beat, and it reads as alive rather than as
+ * progress, which is the honest thing for a mark that cannot know how far along anything is.
  *
- * Only the arc. The cursor holds still, so the mark stays legible as a mark rather than
- * becoming a spinner that happens to be green.
+ * Only the tentacles. The dome and its eyes hold still, so the mark stays legible as a mark
+ * at seventeen pixels instead of becoming a spinner that happens to be green — the same rule
+ * the turning C followed, for the same reason.
  *
- * Only while it is green, as before: a mark merrily spinning under a red light would be
- * the toolbar contradicting itself.
+ * `transform-origin: top center` because they are attached at the top. Swaying about their
+ * centre would slide the whole bundle sideways off the dome.
+ *
+ * Only while it is green, as before: a mark merrily drifting under a red light would be the
+ * toolbar contradicting itself.
  */
-[data-walking="true"] .colai-c {
-  animation: colai-turn 1.4s linear infinite;
+[data-walking="true"] .colai-arms {
+  animation: colai-drift 2.6s ease-in-out infinite;
 }
-@keyframes colai-turn {
-  to {
-    transform: rotate(360deg);
+@keyframes colai-drift {
+  0%,
+  100% {
+    transform: skewX(0deg) translateY(0);
+  }
+  25% {
+    transform: skewX(4deg) translateY(0.6px);
+  }
+  75% {
+    transform: skewX(-4deg) translateY(0.6px);
   }
 }
 /*
  * And a desktop that asked for less movement gets none of it.
  *
- * The crab this replaced had one of these and the replacement did not — the mark simply
- * spun on, for anyone who had said they did not want that. The rule is the animation's,
- * not the crab's, so it moves with it.
+ * The crab this descends from had one of these and the C that replaced it shipped without
+ * one — the mark simply spun on, for anyone who had said they did not want that, until a
+ * test caught it. The rule belongs to the animation rather than to whatever is being
+ * animated, so it travels with each replacement.
  */
 @media (prefers-reduced-motion: reduce) {
-  [data-walking="true"] .colai-c {
+  [data-walking="true"] .colai-arms {
     animation: none;
   }
 }

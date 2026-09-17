@@ -261,4 +261,51 @@ describe("the page, actually run", () => {
       expect(trouble, "and it must not be an error").toBe(null);
     });
   });
+
+  describe("colai's own mark", () => {
+    test("the jellyfish is on the rail, and its eyes are holes", async () => {
+      /*
+       * Three marks have stood on this key — OpenClaw's crab, a C from the old wordmark,
+       * and now the logo colai actually has. Checked by rendering rather than by reading
+       * the source, because what matters is that it reaches the DOM: the C shipped once
+       * with a stale element in the flyout list and threw on every render.
+       *
+       * The eyes are punched out of a masked fill rather than painted, so a hole shows
+       * whatever is behind the rail. Filled eyes in a fixed colour would be right on a dark
+       * desktop and invisible on a light one.
+       */
+      const page = openTheToolbar();
+      await settle();
+      const home = page.dom.document.querySelector(".home-key svg");
+      expect(home, "the home key must carry a mark").toBeTruthy();
+      // Two masked fills: the tentacles and the dome. Both take the rail's own colour.
+      expect(home?.querySelectorAll('rect[fill="currentColor"]').length).toBe(2);
+      expect(home?.querySelectorAll("mask").length, "eyes are a mask, not paint").toBe(2);
+      // The dome's mask paints the eyes black — that is what makes them holes.
+      expect(home?.innerHTML).toContain('fill="#000"');
+    });
+
+    test("only the tentacles move, and each mark masks itself", async () => {
+      const page = openTheToolbar();
+      await settle();
+      const home = page.dom.document.querySelector(".home-key svg");
+      // The dome holds still so the mark stays a mark at seventeen pixels rather than
+      // becoming a spinner that happens to be green.
+      expect(home?.querySelectorAll(".colai-arms").length).toBe(1);
+
+      /*
+       * Mask ids carry the size because two marks can be on screen at once — the rail's at
+       * seventeen pixels and the pin waiting on a reply at fourteen. Duplicate ids in one
+       * document mean the second mark is masked by the first one's shape, which is a mark
+       * with a jellyfish-shaped hole in it.
+       */
+      const ids = [...(home?.querySelectorAll("mask") ?? [])].map((one) =>
+        (one as unknown as { id: string }).id,
+      );
+      expect(new Set(ids).size, "the two masks must not share an id").toBe(2);
+      for (const id of ids) {
+        expect(id, `${id} must be scoped to its size`).toMatch(/-\d+$/);
+      }
+    });
+  });
 });

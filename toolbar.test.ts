@@ -4798,13 +4798,14 @@ describe("one light for every agent at once", () => {
   test("a desktop that asked for less movement gets none of it", () => {
     /*
      * The rule belongs to the animation, not to whatever is being animated. It was written
-     * for a walking crab and now guards a turning C — and the replacement shipped without
-     * one, spinning on for anybody who had asked it not to, until this caught it.
+     * for a walking crab, then guarded a turning C, and now guards the jellyfish's drifting
+     * tentacles — and the C shipped without one, spinning on for anybody who had asked it
+     * not to, until this caught it. It has to travel with every replacement.
      */
     const quiet = css.slice(
-      css.indexOf("@media (prefers-reduced-motion: reduce)", css.indexOf("colai-turn")),
+      css.indexOf("@media (prefers-reduced-motion: reduce)", css.indexOf("colai-drift")),
     );
-    expect(quiet.slice(0, 300)).toContain("colai-c");
+    expect(quiet.slice(0, 300)).toContain("colai-arms");
     expect(quiet.slice(0, 300)).toContain("animation: none");
   });
 });

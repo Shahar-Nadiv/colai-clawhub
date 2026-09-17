@@ -65,19 +65,48 @@ function icon(name, size) {
 /**
  * colai's own mark, for the key that says how things are going.
  *
- * This was OpenClaw's crab, because the toolbar was built inside OpenClaw's desktop app and
- * the key beside it opened that app. There is no such application here, so the face is
- * colai's: the C from the logo, open to the right, with the cursor for a tail.
+ * Three marks have stood here. OpenClaw's crab, because the toolbar was built inside
+ * OpenClaw's desktop app and the key beside it opened that app. Then a C from the old
+ * wordmark, when there was no such application to open. Now the jellyfish, which is the
+ * logo colai actually has.
  *
- * Two parts rather than one path, because the arc turns on its own when something is
- * running — see `data-walking` in the stylesheet. The crab walked; a C spins, which is the
- * same idea drawn in the shape this mark actually has.
+ * Drawn from `media/brand/colai-jellyfish.svg` rather than traced by hand, so the mark on
+ * the rail and the mark on the icon are the same drawing. Two masked fills rather than two
+ * paths, and that is what lets the eyes be holes: a hole shows whatever is behind the rail,
+ * so the face reads on a dark desktop and a light one without the mark knowing which it is
+ * on. Filled eyes in a fixed colour would be right on one and invisible on the other.
+ *
+ * Two parts, because one of them moves — see `data-walking` in the stylesheet. The crab
+ * walked, the C spun, and a jellyfish drifts: the tentacles trail while something is
+ * running and the dome holds still, so the mark stays a mark rather than becoming a
+ * spinner that happens to be green.
+ *
+ * The mask ids carry the size, because two of these can be on screen at once — the rail's
+ * at seventeen pixels and the pin waiting on a reply at fourteen — and duplicate ids in one
+ * document mean the second mark is masked by the first one's shape.
  */
 function colaiMark(size) {
   const edge = size || 17;
-  return `<svg width="${edge}" height="${edge}" viewBox="0 0 24 24" aria-hidden="true">
-    <path class="colai-c" d="M17.2 6.4A8.6 8.6 0 1 0 12.6 20.4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
-    <path class="colai-tip" d="M15.4 11.8 L23 19.6 L22 9.8 Z" fill="currentColor" />
+  const tentacles = `colai-jelly-arms-${edge}`;
+  const dome = `colai-jelly-dome-${edge}`;
+  return `<svg width="${edge}" height="${edge}" viewBox="0 0 64 64" aria-hidden="true">
+    <mask id="${tentacles}" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <g fill="none" stroke="#fff" stroke-width="3.8" stroke-linecap="round">
+        <path d="M17 35.5C14.5 42 19 46.5 16.5 52.5C15 56.5 17.5 58.5 17 61" />
+        <path d="M24.5 35.5C27 41.5 22.5 46 25 51.5C26.5 55 24 57 24.5 59.5" />
+        <path d="M32 35.5C29.5 42 34.5 47.5 32 53.5C30.5 57.5 33 59.5 32 62" />
+        <path d="M39.5 35.5C37 41.5 41.5 46 39 51.5C37.5 55 40 57 39.5 59.5" />
+        <path d="M47 35.5C49.5 42 45 46.5 47.5 52.5C49 56.5 46.5 58.5 47 61" />
+      </g>
+    </mask>
+    <mask id="${dome}" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <path fill="#fff" d="M8 29C8 14.5 18.5 5 32 5C45.5 5 56 14.5 56 29C56 33 53.5 36 49.5 36L14.5 36C10.5 36 8 33 8 29Z" />
+      <path fill="#000" d="M20.2 25a4 4.4 0 1 0 8 0a4 4.4 0 1 0-8 0Z M35.8 25a4 4.4 0 1 0 8 0a4 4.4 0 1 0-8 0Z" />
+      <circle fill="#fff" cx="22.6" cy="23.5" r="1.9" />
+      <circle fill="#fff" cx="38.2" cy="23.5" r="1.9" />
+    </mask>
+    <g class="colai-arms"><rect width="64" height="64" fill="currentColor" mask="url(#${tentacles})" /></g>
+    <rect width="64" height="64" fill="currentColor" mask="url(#${dome})" />
   </svg>`;
 }
 
