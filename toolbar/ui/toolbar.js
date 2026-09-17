@@ -1019,6 +1019,25 @@ window.addEventListener("unhandledrejection", (event) => {
   sayFailed(reason && reason.message ? reason.message : String(reason));
 });
 
+/**
+ * What Claude Code says `/` should offer.
+ *
+ * Named rather than inline so a test can hand it an answer: the listener itself cannot be
+ * driven from a harness, and this is the whole of what the page does with the list.
+ *
+ * An empty list is not an answer. A `claude` that could not start, or a frame whose field
+ * was renamed, gives nothing — and taking that as the answer would replace a short menu
+ * with no menu, so `/` would stop working rather than offer less than it could. The modes
+ * stay until something better arrives.
+ */
+function heardCommands(said) {
+  if (Array.isArray(said.slashCommands) && said.slashCommands.length > 0) {
+    state.commands = said.slashCommands;
+  }
+  if (Array.isArray(said.terminalOnly)) state.terminalOnly = said.terminalOnly;
+  render();
+}
+
 async function start() {
   buildRail();
   try {
@@ -1259,6 +1278,16 @@ async function start() {
     void invoke("colai_summon").catch(() => {});
     render();
   }).catch(() => {});
+
+  /*
+   * What `/` should offer, straight from Claude Code and before anybody presses it.
+   *
+   * It used to arrive only on `colai:session`, which is the preamble of a conversation the
+   * toolbar itself started — so a mark sent straight into a live chat never produced one and
+   * the menu offered colai's four modes on a machine with a hundred of Claude Code's. The
+   * toolbar asks at startup now; this is the answer.
+   */
+  void listen("colai:commands", (event) => heardCommands((event && event.payload) || {}));
 
   void listen("colai:session", (event) => {
     const said = event && event.payload;

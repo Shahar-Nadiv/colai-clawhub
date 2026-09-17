@@ -31,6 +31,7 @@ mod colai_library;
 mod colai_marks;
 mod colai_receivers;
 mod colai_send;
+mod commands;
 mod outbox;
 mod relay;
 #[cfg(target_os = "linux")]
@@ -289,6 +290,11 @@ fn main() {
                     // different job: one conversation the toolbar has, one small agent that
                     // hands marks to conversations other people are in.
                     app.manage(relay::Relay::new(claude.clone()));
+                    // What `/` should offer, asked now rather than waited for. The list used
+                    // to arrive only on the first send through the toolbar's own agent, and
+                    // marks that go straight to a live chat never start one — so `/` was
+                    // offering four modes on a machine with a hundred commands.
+                    commands::learn_what_slash_offers(app.handle(), claude.clone());
                     app.manage(session::Session::new(claude));
                 }
                 None => {

@@ -440,6 +440,56 @@ const ASKING = `
   render();
 `;
 
+describe("what `/` actually offers", () => {
+  test("Claude Code's own commands arrive without a conversation having happened", async () => {
+    /*
+     * Reported as "the / sign allows only 4 modes, where in claude chat there are a lot
+     * more options" — and it was exactly that: four, on a machine with a hundred and one.
+     *
+     * The list is filled from the `system/init` preamble of a `claude` the toolbar started,
+     * and that used to be the only source. It worked while every mark ran through the
+     * toolbar's own agent; it stopped the moment marks began going straight into live
+     * conversations, because then no such agent ever starts. So the menu fell back to
+     * colai's four modes and stayed there.
+     *
+     * The toolbar asks at startup now, on its own, and `colai:commands` is the answer.
+     * This is the guard that the page actually takes it: without the listener the modes
+     * come back, and nobody would notice until somebody counted.
+     */
+    const page = openTheToolbar();
+    await settle();
+
+    // Before the answer arrives there is nothing to offer but the modes — which is the
+    // right fallback, and is also the bug's signature.
+    expect(page.run("JSON.stringify(state.commands)")).toBe("[]");
+
+    page.run(`
+      heardCommands({
+        slashCommands: ["review", "commit", "compact", "model", "usage", "doctor"],
+        terminalOnly: ["doctor"],
+      });
+    `);
+    const known = JSON.parse(page.run("JSON.stringify(state.commands)") as string);
+    expect(known.length, "the page must keep what Claude Code named").toBe(6);
+    expect(JSON.parse(page.run("JSON.stringify(state.terminalOnly)") as string)).toEqual([
+      "doctor",
+    ]);
+  });
+
+  test("an empty answer leaves the modes in place rather than emptying the menu", async () => {
+    /*
+     * A `claude` that could not start, or a frame whose field was renamed, gives nothing.
+     * Taking that as the answer would replace a short menu with no menu — and `/` would
+     * stop working entirely rather than offering less than it could.
+     */
+    const page = openTheToolbar();
+    await settle();
+    page.run('heardCommands({ slashCommands: ["review"], terminalOnly: [] })');
+    page.run("heardCommands({ slashCommands: [], terminalOnly: [] })");
+    expect(JSON.parse(page.run("JSON.stringify(state.commands)") as string)).toEqual(["review"]);
+  });
+});
+
 describe("the same keystrokes in every box there is to type in", () => {
   test("the note on a mark answers `/` with Claude Code's own commands", async () => {
     /*
