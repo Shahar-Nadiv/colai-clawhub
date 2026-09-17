@@ -46,6 +46,10 @@ It opens pointed at the conversation you ran `/colai:show` from, so the first th
 mark already has somewhere to go. Running `/colai:show` in a different chat later moves it
 to that one.
 
+`/colai:show` and `/colai:quit` are commands rather than prompts: the line they run is a
+`!` line, which executes before anything reaches Claude. The toolbar starts whether or not
+the model is paying attention, and all Claude does afterwards is tell you it happened.
+
 It talks to the `claude` you are already signed in to. There is no API key to paste, no
 second account, and no service to run — it starts a Claude Code session of its own behind
 the rail and streams the replies back into the Work panel.

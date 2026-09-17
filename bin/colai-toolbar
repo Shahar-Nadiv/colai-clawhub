@@ -30,6 +30,23 @@ plugin=$(CDPATH= cd -- "$here/.." && pwd)
 
 say() { printf '%s\n' "$*" >&2; }
 
+# Where the toolbar writes its pid, unless the caller named a place.
+#
+# Derived here rather than passed in, and that is a change with a reason. A slash command's
+# `!` line is permission-checked before it runs, and the check refuses any `$` expansion —
+# it cannot read what a variable will become, so it will not approve it. So `/colai:show`
+# cannot say `--pidfile "$HOME/..."`, and the only place left that knows both the home
+# directory and the convention is this script.
+#
+# The same expression as `hooks/say-colai-is-here.sh`, which reads the file to decide
+# whether to tell somebody the toolbar is already up. Two places deriving one path is the
+# thing the old comment in `whereabouts.rs` warned about; they are kept identical, and a
+# test holds them that way.
+case " $* " in
+  *" --pidfile "*) ;;
+  *) set -- "$@" --pidfile "${XDG_CONFIG_HOME:-$HOME/.config}/ai.colai.toolbar/colai-toolbar.pid" ;;
+esac
+
 # ── an explicit one always wins ──────────────────────────────────────────────
 #
 # For working on the toolbar itself: point at any build and it is the one that runs, with

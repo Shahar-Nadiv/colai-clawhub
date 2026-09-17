@@ -85,17 +85,59 @@ describe("what a marketplace hands out", () => {
     expect(files).toEqual(["quit.md", "show.md"]);
   });
 
-  test("/colai:show names the binary plainly and leaves detaching to it", () => {
-    const show = read("commands", "show.md");
-    expect(show, "the command must reach the launcher on PATH").toContain("colai-toolbar show");
+  test("the commands run the toolbar rather than asking Claude to", () => {
+    /*
+     * This is the difference between a command and a prompt, and for a while these were
+     * prompts. The body said "run exactly this" over a fenced block, which makes the model
+     * read the instruction, decide to obey it, and call Bash — a model turn deciding
+     * something that was never in question, and free to decide otherwise.
+     *
+     * A `!` line is not that. It runs BEFORE anything reaches the model, always, and what
+     * the model receives is the output. `/colai:show` starts the toolbar whether or not
+     * Claude is paying attention.
+     */
+    for (const name of ["show.md", "quit.md"]) {
+      const body = read("commands", name);
+      const bang = body.match(/^!`([^`]+)`$/m);
+      expect(bang, `${name} must run the toolbar with a ! line, not ask for it`).not.toBe(null);
+      expect(bang?.[1], `${name} must reach the launcher on PATH`).toMatch(/^colai-toolbar /);
+      expect(body, `${name} must not tell the model to run anything`).not.toMatch(/[Rr]un exactly this/);
+    }
+  });
 
+  test("a ! line holds no variable, because the permission check refuses one", () => {
+    /*
+     * Found by running it. `/colai:show` did nothing at all and said nothing, and the
+     * transcript carried the reason:
+     *
+     *   Shell command permission check failed for pattern
+     *   "!`colai-toolbar show --pidfile "$HOME/..." --in "$CLAUDE_CODE_SESSION_ID"`":
+     *   Contains simple_expansion
+     *
+     * The check is run before the line is, and it will not approve what it cannot read —
+     * a variable's value is not knowable in advance, so any `$` is refused outright. The
+     * command is therefore bare, and everything that needs an environment reads it further
+     * down, in the launcher and in the binary, where there is no such check.
+     *
+     * This is silent when it goes wrong: no error surfaces to the person, the toolbar
+     * simply never starts. Which is why it is a test.
+     */
+    for (const name of ["show.md", "quit.md"]) {
+      const bang = read("commands", name).match(/^!`([^`]+)`$/m)?.[1] ?? "";
+      expect(bang, `${name}: a $ in a ! line is refused before it runs`).not.toContain("$");
+      expect(bang, "and backticks cannot nest").not.toContain("`");
+    }
+  });
+
+  test("the command leaves detaching to the binary", () => {
     /*
      * `setsid` is refused by Claude Code's sandbox — "cannot be statically analyzed" — and
      * `&` or `nohup` would be a second answer to a question the binary already answers for
      * itself, in `step_out_of_the_way`. A command that backgrounds a process that also
      * backgrounds itself is not twice as detached; it is a lost exit status.
      */
-    const asked = show.split("```")[1] ?? "";
+    const asked = read("commands", "show.md").match(/^!`([^`]+)`$/m)?.[1] ?? "";
+    expect(asked, "the ! line must be found, or this checks nothing").toContain("colai-toolbar");
     for (const trick of ["setsid", "nohup", "&"]) {
       expect(asked, `${trick} does not belong in the command`).not.toContain(trick);
     }
@@ -177,6 +219,83 @@ describe("the launcher that stands in for the binary", () => {
     const launcher = readFileSync(LAUNCHER, "utf8");
     expect(launcher).toContain("Linux-x86_64");
     expect(launcher).toContain("has no build for");
+  });
+
+  /** Run the launcher with a home of our own and read back what the toolbar was handed. */
+  function argvFrom(where: string, cache: string, args: string[], home: string) {
+    const said = execFileSync(join(where, "bin", "colai-toolbar"), args, {
+      env: {
+        ...process.env,
+        HOME: home,
+        XDG_CACHE_HOME: cache,
+        XDG_CONFIG_HOME: "",
+        COLAI_TOOLBAR_BIN: "",
+      },
+      encoding: "utf8",
+    });
+    return said.match(/argv: (.*)/)?.[1] ?? "";
+  }
+
+  test("it names the pidfile itself, because the command cannot", () => {
+    /*
+     * `/colai:show` is a `!` line, and a `!` line is permission-checked before it runs and
+     * refused if it contains a `$`. So the command cannot say `--pidfile "$HOME/..."`, and
+     * the launcher is the last place that knows both the home directory and the convention.
+     *
+     * It matters beyond tidiness: the pidfile is how `hooks/say-colai-is-here.sh` decides
+     * whether to tell somebody the toolbar is already running. Without it the notice says
+     * "colai is installed" to a person looking straight at a running toolbar.
+     */
+    const { where, cache } = installedWith(A_TOOLBAR);
+    const argv = argvFrom(where, cache, ["show"], "/home/somebody");
+    expect(argv).toBe("show --pidfile /home/somebody/.config/ai.colai.toolbar/colai-toolbar.pid");
+  });
+
+  test("and the hook looks in that exact place", () => {
+    // Two files deriving one path, which is the thing `whereabouts.rs` warned about when it
+    // said the path is given rather than derived. They are allowed to be two only while
+    // they cannot drift.
+    const notice = readFileSync(new URL("./hooks/say-colai-is-here.sh", import.meta.url), "utf8");
+    const launcher = readFileSync(LAUNCHER, "utf8");
+    const WHERE = '"${XDG_CONFIG_HOME:-$HOME/.config}/ai.colai.toolbar/colai-toolbar.pid"';
+    expect(notice, "the notice must derive it this way").toContain(WHERE);
+    expect(launcher, "and the launcher the same way").toContain(WHERE);
+  });
+
+  test("a caller who named one is not overruled", () => {
+    // The plugin's own TypeScript passes `--pidfile` explicitly and picks the path itself.
+    const { where, cache } = installedWith(A_TOOLBAR);
+    const argv = argvFrom(where, cache, ["show", "--pidfile", "/tmp/chosen"], "/home/somebody");
+    expect(argv).toBe("show --pidfile /tmp/chosen");
+  });
+
+  test("every way out of the launcher carries it", () => {
+    /*
+     * There are three `exec`s here — an explicit `COLAI_TOOLBAR_BIN`, a build already lying
+     * around from `npm run build:toolbar` or `build:release`, and the shipped archive — and
+     * the default was first written above only the last of them. Which is the path a
+     * shipped install takes and not the one a working checkout does, so it was added in the
+     * one place it could not be observed, and the pidfile went on not being written.
+     */
+    const { where, cache } = installedWith(A_TOOLBAR);
+
+    // The explicit one.
+    const built = join(where, "colai-toolbar.fake");
+    writeFileSync(built, A_TOOLBAR);
+    chmodSync(built, 0o755);
+    const explicit = execFileSync(join(where, "bin", "colai-toolbar"), ["show"], {
+      env: { ...process.env, HOME: "/home/somebody", XDG_CONFIG_HOME: "", COLAI_TOOLBAR_BIN: built },
+      encoding: "utf8",
+    });
+    expect(explicit, "COLAI_TOOLBAR_BIN").toContain("--pidfile /home/somebody/.config/");
+
+    // One already lying around beside the launcher.
+    const beside = join(where, "bin", "colai-toolbar.built");
+    writeFileSync(beside, A_TOOLBAR);
+    chmodSync(beside, 0o755);
+    expect(argvFrom(where, cache, ["show"], "/home/somebody"), "a local build").toContain(
+      "--pidfile /home/somebody/.config/",
+    );
   });
 });
 
