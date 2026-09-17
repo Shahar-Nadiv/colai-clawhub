@@ -65,6 +65,14 @@ pub(crate) struct Sent {
     /// a setting that appears to have applied and did not is how somebody spends an hour
     /// wondering why the answers look the same.
     pub settings_trouble: Option<String>,
+    /// The chat this was left for, when it was left rather than sent.
+    ///
+    /// `None` is the ordinary case: the toolbar's own agent has it and the answer will
+    /// come back to the Work panel. `Some(name)` means the conversation is open in a
+    /// terminal, so the mark is waiting for that session's next message — and the rail has
+    /// to say so, because "sent" and "will arrive when you next type there" are different
+    /// promises and only one of them is true.
+    pub handed_to: Option<String>,
 }
 
 /// Send the marked work to whoever was chosen.
@@ -177,6 +185,35 @@ pub(crate) async fn colai_send(
         .filter(|one| one.mime_type.starts_with("image/"))
         .map(|one| one.content.clone())
         .collect();
+    /*
+     * A conversation somebody is sitting in is handed over, not taken over.
+     *
+     * `session.send` starts a `claude --resume` of its own, and on a live chat that is a
+     * second process on one transcript — answering in the Work panel while the window the
+     * person is actually looking at says nothing. So when the receiver is a chat that is
+     * open in a terminal, the mark is left where that session's own hook will find it, and
+     * it arrives there on their next message.
+     */
+    if let Some(held) = key.as_deref().and_then(crate::session::already_open_in_a_chat) {
+        // Where that conversation is being had, which is the only place its session may
+        // read from — so it is where the pictures have to land.
+        let theirs = crate::session::where_it_is_had(Some(held.session_id.as_str()));
+        let staged =
+            crate::outbox::stage(held.session_id.as_str(), theirs.as_deref(), &message, &images)?;
+        return Ok(Sent {
+            session_key: held.session_id,
+            run_id: String::new(),
+            prompt: String::new(),
+            pictures: staged.pictures,
+            carried,
+            refused,
+            // Nothing to watch for: the answer will appear in their terminal, not here.
+            watching: false,
+            settings_trouble,
+            handed_to: held.name,
+        });
+    }
+
     let cwd = crate::session::where_it_is_had(key.as_deref());
     let prompt = session.send(&app, key.clone(), message, images, cwd)?;
     let sent = Sent {
@@ -191,6 +228,8 @@ pub(crate) async fn colai_send(
         // See the note below: there is no second channel to miss.
         watching: true,
         settings_trouble,
+        // Answered here, by the toolbar's own agent, which is the ordinary case.
+        handed_to: None,
     };
     // Only once it has landed. A failed send that had already forgotten its pictures
     // would leave the marks in the tray with nothing behind them.

@@ -31,6 +31,22 @@ mod colai_library;
 mod colai_marks;
 mod colai_receivers;
 mod colai_send;
+mod outbox;
+
+/// One lock for every test that changes the environment.
+///
+/// `HOME` and the rest are process-wide, and tests run in threads. Three modules here each
+/// had a mutex of their own to serialise their own env fiddling, which serialised each
+/// module against itself and nothing against the others — so a test that set `HOME` for its
+/// own temporary directory had it changed underneath by a test in another file, and failed
+/// only in a full run. Everything that touches the environment takes this one.
+#[cfg(test)]
+pub(crate) static THE_ENVIRONMENT: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[cfg(test)]
+pub(crate) fn hold_the_environment() -> std::sync::MutexGuard<'static, ()> {
+    THE_ENVIRONMENT.lock().unwrap_or_else(|held| held.into_inner())
+}
 mod session;
 mod wire;
 mod hotkey;

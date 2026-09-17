@@ -317,9 +317,23 @@ async function sendMarks(ids) {
     rememberWork();
     // And brought into view, once the panel has been drawn with it in.
     showLatestWork(sent.sessionKey);
-    state.trouble = sent.watching
-      ? null
-      : `Sent, but the reply will only be in ${state.receiving.name || who.id} — colai could not listen for it here.`;
+    /*
+     * What actually happened, in the words that are true of it.
+     *
+     * Three outcomes, not two. The toolbar's own agent has it and the answer comes back
+     * here. Or it went somewhere colai cannot hear — the old case. Or, new: the receiver is
+     * a chat open in a terminal, which colai cannot speak into, so the mark is waiting
+     * there for the person's next message.
+     *
+     * That last one has to say so plainly. It is the difference between "sent" and "will
+     * arrive when you next type", and reporting the second as the first is what makes
+     * somebody sit watching a chat that is never going to say anything on its own.
+     */
+    state.trouble = sent.handedTo
+      ? `Left for ${sent.handedTo} — it arrives there the next time you send a message in that chat. colai cannot type into a running conversation.`
+      : sent.watching
+        ? null
+        : `Sent, but the reply will only be in ${state.receiving.name || who.id} — colai could not listen for it here.`;
   } catch (error) {
     state.trouble = `Could not send — ${error && error.message ? error.message : String(error)}`;
   } finally {

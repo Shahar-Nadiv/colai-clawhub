@@ -351,3 +351,64 @@ describe("what actually travels in a clone", () => {
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(promised);
   });
 });
+
+describe("a mark left for a chat somebody is sitting in", () => {
+  const hook = readFileSync(new URL("./hooks/take-what-colai-staged.sh", import.meta.url), "utf8");
+  const wiring = JSON.parse(
+    readFileSync(new URL("./hooks/hooks.json", import.meta.url), "utf8"),
+  ) as { hooks: Record<string, { hooks: { command: string; timeout?: number }[] }[]> };
+
+  test("it runs on the person's next message, not at session start", () => {
+    /*
+     * `SessionStart` would be wrong and tempting. A mark is usually made long after the
+     * session began — the toolbar is open beside a chat that has been running an hour —
+     * and a hook that only fires at the start would hold it until the next restart.
+     */
+    const on = wiring.hooks.UserPromptSubmit?.[0]?.hooks?.[0];
+    expect(on, "UserPromptSubmit must be wired").toBeTruthy();
+    expect(on?.command).toContain("take-what-colai-staged.sh");
+    expect(on?.timeout, "and must not hang somebody's prompt").toBeGreaterThan(0);
+  });
+
+  test("it hands over on stdout, which is the channel the model reads", () => {
+    /*
+     * The two channels are not interchangeable and this file wants the opposite one from
+     * `say-colai-is-here.sh`: stdout reaches the MODEL, `systemMessage` reaches the person.
+     * A mark is context arriving, so it goes to the model — printing it as a systemMessage
+     * would show the person their own question back and tell Claude nothing.
+     */
+    expect(hook).toContain('cat "$at/say.txt"');
+    // Without its comments, because the paragraph explaining which channel this is NOT has
+    // to be allowed to name the other one.
+    const code = hook.replace(/^\s*#.*$/gm, "");
+    expect(code, "a mark is not a notice").not.toContain("systemMessage");
+  });
+
+  test("it takes only marks addressed to this conversation", () => {
+    expect(hook).toContain("CLAUDE_CODE_SESSION_ID");
+    // No id, no marks. Guessing which conversation a mark belongs to would deliver
+    // somebody's screenshot into the wrong chat.
+    expect(hook).toMatch(/\[ -n "\$\{CLAUDE_CODE_SESSION_ID:-\}" \] \|\| exit 0/);
+  });
+
+  test("a half-written mark is skipped, and a handed-over one does not come again", () => {
+    // The hook can run at any instant, including between the picture being written and the
+    // question being written.
+    expect(hook).toContain("*.part) continue");
+    // And context the model acts on must not be re-delivered, or it acts on it twice.
+    expect(hook).toContain('rm -rf "$at"');
+  });
+
+  test("nothing waiting says nothing at all", () => {
+    // This runs in front of every message the person sends. A hook that announced its own
+    // emptiness would put a line of noise before every turn of every conversation.
+    expect(hook).toMatch(/\[ -d "\$WAITING" \] \|\| exit 0/);
+  });
+
+  test("the outbox is where the launcher and the notice already look", () => {
+    // Four files now derive paths under this directory. They are allowed to be four only
+    // while they cannot drift.
+    const WHERE = '"${XDG_CONFIG_HOME:-$HOME/.config}/ai.colai.toolbar';
+    expect(hook).toContain(WHERE);
+  });
+});

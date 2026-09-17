@@ -1,5 +1,5 @@
 {
-  "description": "Say that colai is here, and which key brings it up.",
+  "description": "Say that colai is here, and hand over anything it left for this conversation.",
   "hooks": {
     "SessionStart": [
       {
@@ -8,6 +8,17 @@
             "type": "command",
             "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/say-colai-is-here.sh\"",
             "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/take-what-colai-staged.sh\"",
+            "timeout": 10
           }
         ]
       }

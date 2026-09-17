@@ -256,6 +256,33 @@ impl Session {
             },
         ]);
         if let Some(key) = &key {
+            /*
+             * Not into a conversation somebody is sitting in.
+             *
+             * `--resume` here starts a second Claude Code on one transcript. Both read it,
+             * both append to it, and nothing arbitrates between them — and the symptom is
+             * not a crash but a silence: the mark is answered by this child, in the Work
+             * panel, while the chat the person is looking at never hears about it. That is
+             * the bug this guard exists for, and it was reported as "nothing was sent".
+             *
+             * Refusing is the honest answer while the toolbar has no way to reach a running
+             * session. Saying so beats resuming anyway and beats quietly starting a fresh
+             * conversation under the same name, which would answer in a Work panel the
+             * person is not reading either.
+             */
+            if let Some(held) = already_open_in_a_chat(key) {
+                let whose = held
+                    .name
+                    .as_deref()
+                    .map(|name| format!(" ({name})"))
+                    .unwrap_or_default();
+                return Err(format!(
+                    "That conversation is open in Claude Code right now{whose}, and the \
+                     toolbar cannot send into a running chat yet — it would start a second \
+                     agent on the same transcript and answer where you are not looking. \
+                     Pick another conversation, or close that one first."
+                ));
+            }
             run.args(["--resume", key]);
         }
         if let Some(cwd) = cwd.as_deref().filter(|cwd| Path::new(cwd).is_dir()) {
@@ -1351,11 +1378,8 @@ mod transcripts {
 mod which_conversation {
     use super::*;
 
-    /// The environment is shared by every test in the binary, so these run one at a time.
-    static ONE_AT_A_TIME: Mutex<()> = Mutex::new(());
-
     fn asked(args: &[&str], env: Option<&str>) -> Option<String> {
-        let _held = ONE_AT_A_TIME.lock().unwrap_or_else(|held| held.into_inner());
+        let _held = crate::hold_the_environment();
         match env {
             Some(said) => std::env::set_var("CLAUDE_CODE_SESSION_ID", said),
             None => std::env::remove_var("CLAUDE_CODE_SESSION_ID"),
@@ -1424,5 +1448,280 @@ mod which_conversation {
         // running the binary from a terminal is not a statement about where marks go.
         assert!(!from.heard(None));
         assert_eq!(from.read(), Some("two".into()));
+    }
+}
+
+/*
+ * Who else is holding this conversation.
+ *
+ * Claude Code writes a small record per running session to `~/.claude/sessions/<pid>.json`
+ * — the conversation it has open, how it was started, and where to reach it. That registry
+ * is how a session lists its peers, and it is the only way to answer the question this
+ * file has to ask before it resumes anything: is somebody already in this conversation?
+ *
+ * It matters because the toolbar does not talk to a running session. It starts its own
+ * `claude --resume <id>`, which on the same id as a live chat is a second process reading
+ * and appending to one transcript. Both write. Nothing arbitrates. And the visible symptom
+ * is not corruption but confusion: a mark sent to "this conversation" is answered by the
+ * other process, in the toolbar's Work panel, while the chat the person is actually looking
+ * at says nothing at all. Which is exactly what happened, and what this exists to stop.
+ *
+ * The registry is a private format with no promise attached, so everything here is optional
+ * and nothing throws: a record that has changed shape costs one session from the answer,
+ * never the answer itself.
+ */
+
+/// A Claude Code that is running right now.
+#[derive(Debug, Clone)]
+pub(crate) struct LiveSession {
+    pub pid: i32,
+    pub session_id: String,
+    /// What started it. `cli` is a person at a terminal; `sdk-cli` is one the toolbar ran.
+    pub entrypoint: String,
+    /// What it calls itself, for saying which chat is in the way.
+    pub name: Option<String>,
+}
+
+impl LiveSession {
+    /// Whether this is somebody's own session rather than one the toolbar started.
+    ///
+    /// The distinction is `entrypoint`, not `kind` — both say `interactive`, which is what
+    /// made this confusing to read the first time. A toolbar child is `sdk-cli`; a person's
+    /// terminal is `cli`. Resuming a `cli` session is the collision. Resuming one of our own
+    /// is not, because it is ours and we are the only one sending to it.
+    pub fn is_somebodys_own(&self) -> bool {
+        self.entrypoint == "cli"
+    }
+}
+
+/// Every session the registry currently claims is running.
+pub(crate) fn live_sessions() -> Vec<LiveSession> {
+    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+        return Vec::new();
+    };
+    let Ok(entries) = fs::read_dir(home.join(".claude").join("sessions")) else {
+        return Vec::new();
+    };
+    let mut found = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        // The `.key` files beside these hold a credential. Nothing here reads one: the
+        // question is who is running, and the answer is entirely in the `.json`.
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        let Ok(said) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(said): Result<Value, _> = serde_json::from_str(&said) else {
+            continue;
+        };
+        let (Some(pid), Some(session_id)) = (
+            said.get("pid").and_then(Value::as_i64),
+            said.get("sessionId").and_then(Value::as_str),
+        ) else {
+            continue;
+        };
+        /*
+         * A record outlives a crash, so the pid is checked rather than believed — the same
+         * reason the plugin checks the toolbar's own pidfile instead of trusting it.
+         *
+         * Existence only, not identity. The record carries `procStart` for exactly the
+         * reuse case, and comparing it would be stricter. It is not done here because the
+         * two answers differ only when the system has handed this pid to something else
+         * since, and then this says "a chat is open" when none is — which costs a refusal
+         * and a sentence, where being wrong the other way costs two agents on one
+         * transcript. The cheap mistake is the one to make.
+         */
+        if !still_running(pid as i32) {
+            continue;
+        }
+        found.push(LiveSession {
+            pid: pid as i32,
+            session_id: session_id.to_string(),
+            entrypoint: said
+                .get("entrypoint")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            name: said
+                .get("name")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+        });
+    }
+    found
+}
+
+/// Whether a pid is a process that exists.
+fn still_running(pid: i32) -> bool {
+    if pid <= 0 {
+        return false;
+    }
+    Path::new(&format!("/proc/{pid}")).exists()
+}
+
+/// Somebody's own Claude Code holding this conversation, if there is one.
+///
+/// Our own pid is excluded nowhere because it cannot appear: the toolbar is not a Claude
+/// Code session and writes no record. Children we started are excluded by `entrypoint`.
+pub(crate) fn already_open_in_a_chat(key: &str) -> Option<LiveSession> {
+    live_sessions()
+        .into_iter()
+        .find(|one| one.session_id == key && one.is_somebodys_own())
+}
+
+#[cfg(test)]
+mod who_else_is_in_here {
+    use super::*;
+
+    /// A registry of our own, since the real one is whatever this machine is doing.
+    fn registry(records: &[(&str, i32, &str, &str)]) -> tempdir::Held {
+        let home = tempdir::make();
+        let dir = home.path().join(".claude").join("sessions");
+        fs::create_dir_all(&dir).expect("a sessions directory");
+        for (id, pid, entrypoint, name) in records {
+            let said = json!({
+                "pid": pid, "sessionId": id, "kind": "interactive",
+                "entrypoint": entrypoint, "name": name,
+            });
+            fs::write(dir.join(format!("{pid}.json")), said.to_string()).expect("a record");
+        }
+        home
+    }
+
+    /// This process, which is certainly running, so a record naming it is a live one.
+    fn us() -> i32 {
+        std::process::id() as i32
+    }
+
+    #[test]
+    fn a_chat_somebody_is_sitting_in_is_found() {
+        let _home = registry(&[("abc", us(), "cli", "the-one-they-are-typing-in")]);
+        let held = already_open_in_a_chat("abc").expect("the live chat");
+        assert_eq!(held.name.as_deref(), Some("the-one-they-are-typing-in"));
+    }
+
+    #[test]
+    fn a_child_the_toolbar_started_is_not_in_the_way() {
+        /*
+         * The distinction that made this hard to read: both kinds say `kind: interactive`,
+         * and only `entrypoint` separates them. A toolbar child is `sdk-cli`. Treating one
+         * of those as a collision would make the toolbar refuse to talk to its own agent,
+         * which is the only thing it can talk to.
+         */
+        let _home = registry(&[("abc", us(), "sdk-cli", "colai-a7")]);
+        assert!(already_open_in_a_chat("abc").is_none());
+    }
+
+    #[test]
+    fn a_record_left_behind_by_a_crash_is_not_a_running_chat() {
+        /*
+         * A pid above the kernel's ceiling, because it is the only one that can be written
+         * down here and be certain to name nothing. The first attempt used 1 — which is
+         * init, exists on every Linux, and made the test fail for the right reason.
+         */
+        let _home = registry(&[("abc", beyond_any_pid(), "cli", "long-gone")]);
+        assert!(already_open_in_a_chat("abc").is_none());
+    }
+
+    fn beyond_any_pid() -> i32 {
+        fs::read_to_string("/proc/sys/kernel/pid_max")
+            .ok()
+            .and_then(|said| said.trim().parse::<i32>().ok())
+            .and_then(|most| most.checked_add(1))
+            .unwrap_or(i32::MAX)
+    }
+
+    #[test]
+    fn another_conversation_is_not_this_one() {
+        let _home = registry(&[("other", us(), "cli", "elsewhere")]);
+        assert!(already_open_in_a_chat("abc").is_none());
+    }
+
+    #[test]
+    fn no_registry_at_all_is_no_collision() {
+        let _home = tempdir::make();
+        assert!(already_open_in_a_chat("abc").is_none());
+    }
+
+    /// A home directory of our own, put back on the way out.
+    ///
+    /// `HOME` is process-wide, so these run one at a time and each restores what it found.
+    mod tempdir {
+        use std::path::{Path, PathBuf};
+        use std::sync::{Mutex, MutexGuard};
+
+        pub struct Held {
+            at: PathBuf,
+            was: Option<std::ffi::OsString>,
+            _held: MutexGuard<'static, ()>,
+        }
+
+        impl Held {
+            pub fn path(&self) -> &Path {
+                &self.at
+            }
+        }
+
+        impl Drop for Held {
+            fn drop(&mut self) {
+                match &self.was {
+                    Some(was) => std::env::set_var("HOME", was),
+                    None => std::env::remove_var("HOME"),
+                }
+                let _ = std::fs::remove_dir_all(&self.at);
+            }
+        }
+
+        pub fn make() -> Held {
+            let held = crate::hold_the_environment();
+            let at = std::env::temp_dir().join(format!("colai-who-{}", uniquely()));
+            std::fs::create_dir_all(&at).expect("a home");
+            let was = std::env::var_os("HOME");
+            std::env::set_var("HOME", &at);
+            Held { at, was, _held: held }
+        }
+
+        fn uniquely() -> u128 {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|since| since.as_nanos())
+                .unwrap_or(0)
+        }
+    }
+}
+
+#[cfg(test)]
+mod against_this_machine {
+    use super::*;
+
+    /// What the registry on this machine actually says, run by hand.
+    ///
+    /// Ignored by default for the same reason `transcripts` is: it reads the real
+    /// `~/.claude/sessions`, so what it finds depends on what is running. Run it when
+    /// changing the reader — a registry whose shape has moved reads as "nothing is live",
+    /// which is silently the dangerous answer, since the guard then permits every resume.
+    ///
+    ///     cargo test -- --ignored who_is_running_right_now --nocapture
+    #[test]
+    #[ignore = "reads ~/.claude/sessions on this machine"]
+    fn who_is_running_right_now() {
+        let live = live_sessions();
+        for one in &live {
+            println!(
+                "pid {:>7}  {:<8}  {:<34}  {}  {}",
+                one.pid,
+                one.entrypoint,
+                one.name.as_deref().unwrap_or("-"),
+                &one.session_id[..8],
+                if one.is_somebodys_own() { "← a chat somebody is in" } else { "(ours)" },
+            );
+        }
+        assert!(
+            !live.is_empty(),
+            "no live session found at all — this test is itself running inside one, so the \
+             reader has stopped understanding the registry"
+        );
     }
 }
