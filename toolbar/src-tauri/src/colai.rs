@@ -215,6 +215,73 @@ fn cover_everything(window: &WebviewWindow) -> Result<(), String> {
     Ok(())
 }
 
+/// Keep the overlay over the desk, for as long as there is one.
+///
+/// Its own thread and its own job, beside `watch_the_front` rather than inside it: what is in
+/// front changes every few seconds, and what shape the desk is changes a handful of times a
+/// day. Asking the display server about its monitors at the rate of the first to learn the
+/// answer to the second would be the most expensive thing either loop did.
+pub(crate) fn watch_the_desk(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || loop {
+        std::thread::sleep(HOW_OFTEN_THE_DESK_MIGHT_MOVE);
+        let asking = app.clone();
+        // Moving a window is the main thread's to do.
+        let _ = app.run_on_main_thread(move || {
+            if let Some(window) = asking.get_webview_window(OVERLAY_LABEL) {
+                recover_if_the_desk_moved(&window);
+            }
+        });
+    });
+}
+
+/// How often to ask whether the monitors have changed.
+///
+/// Slow on purpose. The cost of being two seconds late to a monitor being unplugged is two
+/// seconds of an overlay in the wrong place; the cost of asking constantly is paid always.
+const HOW_OFTEN_THE_DESK_MIGHT_MOVE: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Put the overlay back over the desk, if the desk has moved out from under it.
+///
+/// `cover_everything` is right and always was; what was wrong was *when* it ran. It fired
+/// when the overlay was made, when somebody summoned it, and when the page asked for the
+/// screens — which is to say only ever in answer to a person. Unplug a display while the
+/// toolbar is up and idle and none of those happen: the window manager shoves the now
+/// oversized overlay sideways to fit what is left, and it stays there with half of it past
+/// the edge of the only screen. Every tool still works. Half the desk is simply unreachable,
+/// which reads as a broken toolbar rather than a misplaced one.
+///
+/// Compared before it is set, because this runs on a timer and a `set_position` every two
+/// seconds is a fight with the window manager that nobody asked for.
+fn recover_if_the_desk_moved(window: &WebviewWindow) {
+    let Ok(monitors) = window.available_monitors() else {
+        return;
+    };
+    let screens: Vec<Span> = monitors
+        .iter()
+        .map(|monitor| {
+            let at = *monitor.position();
+            let size = *monitor.size();
+            Span { x: at.x, y: at.y, width: size.width, height: size.height }
+        })
+        .collect();
+    let Some(all) = spanning(&screens) else {
+        return;
+    };
+    let placed = window
+        .outer_position()
+        .is_ok_and(|at| at.x == all.x && at.y == all.y);
+    let sized = window
+        .outer_size()
+        .is_ok_and(|size| size.width == all.width && size.height == all.height);
+    if placed && sized {
+        return;
+    }
+    if let Err(trouble) = cover_everything(window) {
+        eprintln!("[colai] the desk moved and the overlay could not follow: {trouble}");
+    }
+}
+
 /// A rectangle of the desktop, in physical pixels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Span {
@@ -1133,6 +1200,41 @@ mod where_tests {
 
 #[cfg(test)]
 mod tests {
+
+    /// The union the overlay is supposed to be, given what is plugged in.
+    ///
+    /// The bug this stands against did not live in `spanning` — it lived in nothing ever
+    /// calling it again. A display went away, the window manager moved the oversized overlay
+    /// to fit what was left, and it sat at x = -952 across a 1920-wide screen: every tool
+    /// working, half the desk unreachable.
+    #[test]
+    fn the_desk_is_the_union_of_what_is_plugged_in() {
+        let one = Span { x: 0, y: 0, width: 1920, height: 1080 };
+        assert_eq!(spanning(&[one]), Some(one), "one screen is its own union");
+
+        // Two side by side, which is what this desk was when the overlay was last placed.
+        let right = Span { x: 1920, y: 0, width: 1920, height: 1080 };
+        assert_eq!(
+            spanning(&[one, right]),
+            Some(Span { x: 0, y: 0, width: 3840, height: 1080 }),
+        );
+
+        // And a second screen to the LEFT, where the origin is negative — the case that
+        // makes "just use 0,0" wrong, and the shape the overlay was left stranded in.
+        let left = Span { x: -1920, y: 0, width: 1920, height: 1080 };
+        assert_eq!(
+            spanning(&[one, left]),
+            Some(Span { x: -1920, y: 0, width: 3840, height: 1080 }),
+        );
+    }
+
+    #[test]
+    fn nothing_plugged_in_is_not_a_desk_of_size_zero() {
+        // Better to leave the overlay where it is than to move it to a rectangle that is
+        // not anywhere. `recover_if_the_desk_moved` returns early on this.
+        assert_eq!(spanning(&[]), None);
+    }
+
     use super::*;
 
     #[test]

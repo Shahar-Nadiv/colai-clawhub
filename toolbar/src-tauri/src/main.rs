@@ -290,6 +290,9 @@ fn main() {
             // Which window somebody is looking at, so a mark is drawn on the application
             // it was made on and nowhere else.
             colai_attach::watch_the_front(app.handle());
+            // And whether the desk is still the shape the overlay is covering. Its own
+            // thread: monitors change a few times a day, the front window every few seconds.
+            colai::watch_the_desk(app.handle());
 
             // Nothing to connect to, and nothing to discover at startup beyond the
             // `claude` found above. The Gateway had to be located through the OpenClaw
