@@ -64,6 +64,11 @@ pub(crate) fn stage(
     images: &[String],
 ) -> Result<Staged, String> {
     let outbox = outbox().ok_or("no home directory to write to")?;
+    // Before anything is added: this is the one moment the code is already in the outbox
+    // doing housekeeping (see `prune`, just below), and the only timer this toolbar has for
+    // marks nobody ever comes back to claim. See `sweep`'s own comment for why they are
+    // swept at all.
+    sweep(&outbox, KEEP_UNCLAIMED_MARKS_FOR);
     let waiting = outbox.join(session_key);
     let named = format!("{}-{}", now_ms(), std::process::id());
     let building = waiting.join(format!("{named}.part"));
@@ -117,6 +122,17 @@ pub(crate) fn stage(
     fs::write(building.join(SAY), &said)
         .map_err(|trouble| format!("could not write the message: {trouble}"))?;
 
+    // Where the pictures actually are, when that is not beside the message — the ordinary
+    // case, under the project. `sweep` cannot infer this from the outbox tree alone (a
+    // session's pictures could be under any project on disk), and without it a session that
+    // never comes back keeps its screenshots forever even once its mark is swept.
+    if pictures_at != building && !wrote.is_empty() {
+        let _ = fs::write(
+            building.join(WHERE_THE_PICTURES_ARE),
+            pictures_at.to_string_lossy().as_bytes(),
+        );
+    }
+
     let at = waiting.join(named);
     fs::rename(&building, &at)
         .map_err(|trouble| format!("could not put the mark in place: {trouble}"))?;
@@ -125,6 +141,10 @@ pub(crate) fn stage(
 
 /// The file the hook reads and prints.
 pub(crate) const SAY: &str = "say.txt";
+
+/// Where a mark's pictures actually are, when `sweep` cannot see that from the outbox tree
+/// alone — see the write site, in `stage`, for why this exists at all.
+const WHERE_THE_PICTURES_ARE: &str = "pictures.dir";
 
 /// What the session is told, in the words the model will see.
 ///
@@ -206,6 +226,69 @@ fn prune(marks: &Path) {
             .is_some_and(|since| since > KEEP_PICTURES_FOR);
         if old {
             let _ = fs::remove_dir_all(entry.path());
+        }
+    }
+}
+
+/// How long an unclaimed mark waits in the outbox before it is swept away.
+///
+/// A week, not a day. `KEEP_PICTURES_FOR` is about a live conversation that has already
+/// been handed a screenshot wanting to look at it again — a day of that is plenty. This is
+/// about whether the mark still deserves to exist at all, and it is somebody's unanswered
+/// question: deleting it a moment too soon reads as "colai lost what I asked", which is far
+/// worse than a week of a few kilobytes of text and a handful of PNGs sitting unread. Chosen
+/// generously on purpose, per the standing instruction to err that way here.
+///
+/// Not shortened for a session id that has dropped out of `claude agents --json`: that list
+/// is a snapshot of who is running right now, not a verdict on whether anybody is coming
+/// back, and querying it costs a whole `claude` starting up (see `as_claude_lists_them`,
+/// ~150ms) on every `stage` call rather than only the ones that need it. A closed terminal
+/// reopens, a session gets renamed and relisted — either looks identical to "gone for good"
+/// on the one call that would need to make that judgement, and time is the signal that
+/// cannot be fooled by a listing that is merely late or momentarily empty.
+const KEEP_UNCLAIMED_MARKS_FOR: std::time::Duration = std::time::Duration::from_secs(7 * 24 * 60 * 60);
+
+/// Remove marks nobody ever came back to claim.
+///
+/// `forget` runs only when a mark is delivered — the hook consuming it, or the relay
+/// succeeding — and until this existed nothing ran for the marks that never are: a
+/// terminal that closes, or a chat that simply never gets another message, left its mark
+/// (and its pictures, via the file `stage` leaves beside it when they live under a
+/// project) on disk forever. This is the sweep for that, run from `stage` because that is
+/// the only moment this module is already doing housekeeping — there is no timer or
+/// background task in this toolbar to hang it off instead.
+///
+/// A `.part` directory this old is not an unclaimed mark, it is one `stage` was
+/// interrupted while writing — a crash, a killed toolbar — never renamed into place,
+/// never counted by `waiting_for`, and never going to be. Swept the same way, by the same
+/// age check, since a `.part` this old is exactly as abandoned as a finished mark nobody
+/// claimed.
+///
+/// `older_than` is a parameter rather than always `KEEP_UNCLAIMED_MARKS_FOR` so a test can
+/// ask what a moment's age counts as "old" without waiting a week for the real one to pass.
+fn sweep(outbox: &Path, older_than: std::time::Duration) {
+    let Ok(sessions) = fs::read_dir(outbox) else {
+        return;
+    };
+    for session in sessions.flatten() {
+        let Ok(marks) = fs::read_dir(session.path()) else {
+            continue;
+        };
+        for mark in marks.flatten() {
+            let old = mark
+                .metadata()
+                .and_then(|meta| meta.modified())
+                .ok()
+                .and_then(|at| at.elapsed().ok())
+                .is_some_and(|since| since > older_than);
+            if !old {
+                continue;
+            }
+            let path = mark.path();
+            if let Ok(elsewhere) = fs::read_to_string(path.join(WHERE_THE_PICTURES_ARE)) {
+                let _ = fs::remove_dir_all(elsewhere.trim());
+            }
+            let _ = fs::remove_dir_all(&path);
         }
     }
 }
@@ -343,6 +426,67 @@ mod leaving_a_mark {
         stage("a-chat", Some(&project), "what is this", &[]).expect("a mark");
         assert_eq!(waiting_for("a-chat"), 1);
         assert_eq!(waiting_for("another-chat"), 0);
+    }
+
+    #[test]
+    fn an_unclaimed_mark_past_its_age_is_swept() {
+        // The bug this is about: nothing ever removed a mark for a session that never
+        // came back. `sweep` is what does now, and a zero cutoff makes every mark on disk
+        // count as "old enough" without waiting on a real clock.
+        let _bench = bench();
+        stage("a-chat", None, "what is this", &[]).expect("a mark");
+        assert_eq!(waiting_for("a-chat"), 1);
+
+        sweep(&outbox().expect("an outbox"), std::time::Duration::ZERO);
+        assert_eq!(waiting_for("a-chat"), 0, "an unclaimed mark should have been swept");
+    }
+
+    #[test]
+    fn a_fresh_mark_survives_a_sweep() {
+        let _bench = bench();
+        stage("a-chat", None, "what is this", &[]).expect("a mark");
+
+        sweep(&outbox().expect("an outbox"), std::time::Duration::from_secs(999_999));
+        assert_eq!(waiting_for("a-chat"), 1, "not old enough to go yet");
+    }
+
+    #[test]
+    fn a_stuck_part_directory_is_swept_too() {
+        // Not a delivered mark and never going to be one — `stage` was interrupted before
+        // it could rename this into place. Old enough, it is exactly as abandoned as a
+        // finished mark nobody claimed.
+        let _bench = bench();
+        let stuck = outbox().expect("an outbox").join("a-chat").join("1-1.part");
+        fs::create_dir_all(&stuck).expect("a half-written mark");
+        fs::write(stuck.join(SAY), "half").expect("a message");
+
+        sweep(&outbox().expect("an outbox"), std::time::Duration::ZERO);
+        assert!(!stuck.exists(), "a stuck .part should have been swept too");
+    }
+
+    #[test]
+    fn a_marks_pictures_under_a_project_are_swept_with_it() {
+        // The other half of the confirmed bug: not just the mark but the pictures beside
+        // it, living under the project rather than the outbox, must go too — otherwise a
+        // session that never returns keeps its screenshots forever even once its mark is
+        // gone.
+        let bench = bench();
+        let project = bench.project.to_string_lossy().to_string();
+        let staged =
+            stage("a-chat", Some(&project), "what is this", &[a_picture()]).expect("a mark");
+        // `stage` records where the pictures actually are beside the message, when that
+        // is not `staged.at` itself — read it back the way `sweep` does.
+        let picture_dir = fs::read_to_string(staged.at.join(WHERE_THE_PICTURES_ARE))
+            .expect("a recorded picture location");
+        let picture_dir = Path::new(picture_dir.trim());
+        assert!(picture_dir.is_dir(), "the pictures should exist before the sweep");
+
+        sweep(&outbox().expect("an outbox"), std::time::Duration::ZERO);
+        assert_eq!(waiting_for("a-chat"), 0);
+        assert!(
+            !picture_dir.exists(),
+            "the pictures should have been swept along with the mark"
+        );
     }
 }
 

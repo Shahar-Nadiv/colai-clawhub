@@ -2946,11 +2946,18 @@ describe("a mark goes somewhere rather than vanishing", () => {
   const page = readFileSync(new URL("toolbar.js", dir), "utf8");
 
   test("it flies on the way out and not on the way back in", () => {
-    // Picking a tool up puts the marks back on the screen. A flight then would be
-    // describing the opposite of what just happened.
+    /*
+     * Picking a tool up puts the marks back on the screen. A flight then would be
+     * describing the opposite of what just happened.
+     *
+     * Read off the tool that was settled on rather than the one that was named. `S` asks for
+     * "shape", which is a key carrying two tools rather than a tool, so `use` resolves what
+     * was meant before anything else reads it — and a comparison against the name would be a
+     * comparison against a word that is not a tool.
+     */
     const use = rail.slice(rail.indexOf("function use(tool)"));
-    expect(use).toContain('tool === "pointer" && state.tool !== "pointer"');
-    expect(use.slice(0, 400)).toContain("flyToWork(state.marks)");
+    expect(use).toContain('asked === "pointer" && state.tool !== "pointer"');
+    expect(use.slice(0, 900)).toContain("flyToWork(state.marks)");
   });
 
   test("a desktop that asked for stillness is not told in motion", () => {
@@ -5770,17 +5777,30 @@ describe("the work panel is a view of OpenClaw's conversations", () => {
     const dock = readFileSync(new URL("toolbar/ui/toolbar-dock.js", dir2), "utf8");
     expect(dock).toContain("const TIPS");
     expect(dock, "shown once, and remembered").toContain("colai.tips.seen");
-    for (const said of ["Drag the grip", "fold key", "Type / in the box", "Type @ in the box"]) {
+    // "any box", because that is where the two keystrokes work now. They were the
+    // composer's alone when this card was written, and naming one box taught the keystroke
+    // while hiding three of the four places it answers in.
+    for (const said of ["Drag the grip", "fold key", "Type / in any box", "Type @ in any box"]) {
       expect(dock, `the card should name: ${said}`).toContain(said);
     }
     /*
-     * Shown once and not offered again. The tray used to carry a "Show the basics" item
-     * for somebody who dismissed the card before reading it, and that item went with the
-     * tray. Nothing replaced it, which is a real loss and a small one: the four things are
-     * `/`, `@`, the fold key and the grip, and three of the four are also written on the
-     * composer itself.
+     * And there is a way back to it.
+     *
+     * The tray used to carry a "Show the basics" item for somebody who dismissed the card
+     * before reading it, and that item went with the tray. Nothing replaced it for a while,
+     * which meant one press of "Got it" threw away the only account of four things this
+     * toolbar cannot be used without. It is colai's own key on the rail now — always on
+     * screen, named after the application, and it had nothing behind it before this.
      */
-    expect(dock, "nothing should offer to show them again").not.toContain("function showTips");
+    const rail = readFileSync(new URL("toolbar/ui/toolbar-rail.js", dir2), "utf8");
+    const home = rail.slice(rail.indexOf('home.className = "key home-key"'));
+    expect(home.slice(0, home.indexOf("buttons.settings")), "the mark opens the card").toContain(
+      "state.tips = !state.tips",
+    );
+    const html = readFileSync(new URL("toolbar/ui/toolbar.html", dir2), "utf8");
+    expect(html, "and the markup no longer promises a tray that is gone").not.toContain(
+      "again from the tray",
+    );
   });
 
   test("the two keystrokes inside the ask field have somewhere permanent to be said", () => {

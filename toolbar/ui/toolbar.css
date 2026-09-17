@@ -530,11 +530,25 @@ body {
   padding: 0 10px 0 8px;
   text-align: left;
 }
+/* Who is receiving, on the rail. Capped and shortened for the same reason the popup's row
+   is: the name comes from a conversation title, which is as long as whatever somebody
+   happened to say first, and the rail is furniture a person has positioned. An uncapped
+   name stretched the key — and with it the whole pill — under the pointer, moving every
+   other key on it. The picker's rows already shorten this way; these two did not, and the
+   two must not drift apart. */
 .agents-name {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   line-height: 1.1;
+  min-width: 0;
+  max-width: 150px;
+}
+.agents-who {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .rail-wrap[data-vertical="true"] .agents-name {
   display: none;
@@ -543,6 +557,12 @@ body {
   font-size: 9.5px;
   opacity: 0.6;
   font-family: var(--font-mono);
+  /* Shortened like the name above it: this line carries the Gateway's own words when an ask
+     fails, and a sentence in here would stretch the key the same way a long title did. */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /*
  * Who is receiving, as a face.
@@ -1230,11 +1250,28 @@ body {
 }
 
 /* The field, and the menu that opens inside it. Anchored to the field rather than the
-   page so it follows the composer wherever the composer is drawn. */
+   page so it follows the composer wherever the composer is drawn — and there are four of
+   these now: the composer, a mark's popup, and both reply boxes. Each carries its own box
+   and its own menu, because a menu shared between two fields would open against whichever
+   of them was drawn last. */
 .ask-box {
   position: relative;
   display: flex;
   flex-direction: column;
+}
+/* In the question popup the box stands where the field used to, beside Reply — so it takes
+   the field's place in that row rather than the field taking it inside the box. */
+.ask-own > .ask-box {
+  flex: 1;
+  min-width: 0;
+}
+/* And in the Work panel the field's own top margin would sit inside the box, where it
+   cannot separate the box from the answer above it. */
+.work-answer > .ask-box {
+  margin-top: 8px;
+}
+.work-answer > .ask-box > .answer-say {
+  margin-top: 0;
 }
 .ask-menu {
   position: absolute;
@@ -1252,6 +1289,16 @@ body {
   box-shadow: 0 12px 28px rgb(0 0 0 / 55%);
   max-height: 190px;
   overflow-y: auto;
+}
+/* Downward, when there is not enough room above the field to open into.
+   Upward is right for the composer, whose field is the last thing in a tall panel. It is
+   wrong for a mark's popup, whose note is near the top of a card that can be anywhere on
+   the screen, and wrong again for a reply inside the Work panel's list, where anything
+   drawn past the top of the list is clipped by it. `completes` measures the room and sets
+   this; 190px is the height above, which is what it measures against. */
+.ask-menu[data-under="true"] {
+  top: calc(100% + 4px);
+  bottom: auto;
 }
 .ask-menu-row {
   all: unset;
@@ -2092,10 +2139,25 @@ body {
 .popup-to:focus-visible {
   outline: 2px solid var(--accent);
 }
+/* The name, and the four properties that let it be shortened. `min-width` is the one that
+   is easy to leave out and the one that matters: without it a flex item stops shrinking at
+   the width of its longest word, and a conversation named `claude-code-plugin-integration`
+   is one word — which is how this row grew past a 290px card and carried Send out through
+   the edge of it. The ellipsis needs the name to be an element of its own; as the button's
+   own text node it could not be given one. */
 .popup-to-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* And in a mark's popup the receiver is the only thing in that row able to give way, so it
+   gives way completely. A shrink factor below one takes only that fraction of the overflow
+   off — 0.4 of it here — which is right in the composer, where the model name shrinks
+   alongside it and should go first, and leaves the popup's row wider than the card it is
+   in. */
+.popup > .popup-foot > .popup-to {
+  flex-shrink: 1;
 }
 .popup-to-lit {
   flex-shrink: 0;

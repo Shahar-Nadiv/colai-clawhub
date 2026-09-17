@@ -87,6 +87,22 @@ impl Relay {
     ///
     /// Blocking, because the answer matters: the rail says "sent" or says why not, and a
     /// receipt that guesses is how somebody sits watching a chat nothing is coming to.
+    ///
+    /// This does hold `talking` for as long as a send can take, up to `UNTIL_WE_GIVE_UP` —
+    /// so a second mark to a *different* held chat, arriving while the first is stuck
+    /// waiting out that minute, queues behind it rather than failing fast. Considered and
+    /// left rather than fixed: a `try_lock` that refused outright would turn the ordinary
+    /// case — two marks sent a few seconds apart, the second arriving while the relay is
+    /// mid-turn on the first, done in a second or two — into a spurious failure, since
+    /// contention that short is the common case and a full minute is the rare one this
+    /// timeout exists for in the first place. There is also only one relay process, so a
+    /// "second send while the first is in flight" is contention on the one thing doing
+    /// the work, not merely on this lock — a second relay child would trade a wait for
+    /// double the running cost per mark (see the module doc) to shorten a queue that is
+    /// usually a second long. If this ever needs fixing for real, the shape is a
+    /// short-lived "busy" flag checked before the blocking lock, so a *stuck* relay (the
+    /// tail of the 60s, not the ordinary middle of it) is what gets reported quickly —
+    /// not a general `try_lock`, which would fail the ordinary case too.
     pub(crate) fn hand_over(&self, to: &str, text: &str) -> Result<(), String> {
         let mut held = self
             .talking
@@ -135,7 +151,10 @@ impl Relay {
         talking.passed += 1;
 
         // Read to the end of the turn. `result` is the frame that says how it went, and
-        // anything before it is the relay thinking out loud.
+        // everything before it is the relay thinking out loud — except the two frames that
+        // say whether `SendMessage` actually ran, which is watched for on the way past
+        // rather than trusted to the model's own word in `result`. See `read_the_outcome`.
+        let mut sent = SendMessageCall::default();
         let began = std::time::Instant::now();
         loop {
             if began.elapsed() > UNTIL_WE_GIVE_UP {
@@ -158,10 +177,12 @@ impl Relay {
             let Ok(frame): Result<Value, _> = serde_json::from_str(&line) else {
                 continue;
             };
-            if frame.get("type").and_then(Value::as_str) != Some("result") {
-                continue;
+            match frame.get("type").and_then(Value::as_str) {
+                Some("assistant") => sent.saw_the_call(&frame),
+                Some("user") => sent.saw_the_result(&frame),
+                Some("result") => return read_the_outcome(&frame, &sent),
+                _ => {}
             }
-            return read_the_outcome(&frame);
         }
     }
 
@@ -205,12 +226,67 @@ fn still_there(child: &Child) -> bool {
     std::path::Path::new(&format!("/proc/{}", child.id())).exists()
 }
 
+/// Whether the one tool call the whole relay exists to make actually happened, and how.
+///
+/// Built up as the turn's frames go past — an `assistant` frame carries the `tool_use` that
+/// starts the call, and a `user` frame carries the `tool_result` that ends it — because the
+/// `result` frame at the end of the turn is only the model's own summary of what it did.
+/// That summary is not enough: a relay can say "ok" without ever calling `SendMessage` (it
+/// answered too soon, or misread its own instructions), or the tool can be called and fail
+/// for a reason that is not a permission denial — the target session exited between being
+/// listed and being sent to, or the name no longer resolves to anything — and a model that
+/// still says "ok" afterwards is indistinguishable, on the `result` frame alone, from one
+/// that actually delivered. This is what tells those apart.
+#[derive(Default)]
+struct SendMessageCall {
+    /// The `id` of the `SendMessage` tool_use, once one has been seen. Kept so the matching
+    /// `tool_result` — which names its call by this id, not by tool name — can be told apart
+    /// from the result of some other tool the relay should never be calling but might.
+    id: Option<String>,
+    /// Set once a `tool_result` matching `id` comes back reporting `is_error: true`.
+    failed: Option<String>,
+}
+
+impl SendMessageCall {
+    /// Notice a `SendMessage` starting, from an `assistant` frame.
+    fn saw_the_call(&mut self, frame: &Value) {
+        let Some(content) = frame.pointer("/message/content").and_then(Value::as_array) else {
+            return;
+        };
+        for block in content {
+            if block.get("type").and_then(Value::as_str) == Some("tool_use")
+                && block.get("name").and_then(Value::as_str) == Some("SendMessage")
+            {
+                self.id = block.get("id").and_then(Value::as_str).map(str::to_string);
+            }
+        }
+    }
+
+    /// Notice how it ended, from a `user` frame carrying the matching `tool_result`.
+    fn saw_the_result(&mut self, frame: &Value) {
+        let Some(id) = self.id.as_deref() else { return };
+        let Some(content) = frame.pointer("/message/content").and_then(Value::as_array) else {
+            return;
+        };
+        for block in content {
+            if block.get("type").and_then(Value::as_str) != Some("tool_result")
+                || block.get("tool_use_id").and_then(Value::as_str) != Some(id)
+            {
+                continue;
+            }
+            if block.get("is_error").and_then(Value::as_bool) == Some(true) {
+                self.failed = Some(crate::session::said_in(block.get("content")));
+            }
+        }
+    }
+}
+
 /// Did the mark go, and if not, what should somebody be told.
 ///
 /// Separate and public to the crate's tests, because this is where a silent failure would
 /// live: a relay that answered without calling the tool looks exactly like one that
 /// delivered, and the rail would say "sent" about a message nobody received.
-pub(crate) fn read_the_outcome(frame: &Value) -> Result<(), String> {
+pub(crate) fn read_the_outcome(frame: &Value, sent: &SendMessageCall) -> Result<(), String> {
     if frame.get("is_error").and_then(Value::as_bool) == Some(true) {
         return Err(said_briefly(frame).unwrap_or_else(|| "the relay failed".to_string()));
     }
@@ -233,6 +309,25 @@ pub(crate) fn read_the_outcome(frame: &Value) -> Result<(), String> {
             return Err("the relay was not allowed to send the message".to_string());
         }
     }
+
+    /*
+     * And the tool has to have actually succeeded — not just been allowed to run.
+     *
+     * `permission_denials` only catches a call that was refused before it ran. A call that
+     * was allowed and then failed on its own terms — the target exited between being listed
+     * and being sent to, or the session name it was given no longer resolves to anything —
+     * ends its turn exactly as tidily, and the model still says "ok" because as far as it
+     * is concerned the tool ran and returned. Trusting that word is the bug this exists to
+     * close: it was reported as a mark that vanished, because the receipt said "sent".
+     */
+    match (&sent.id, &sent.failed) {
+        (None, _) => {
+            return Err("the relay said it sent the mark but never called SendMessage".to_string())
+        }
+        (Some(_), Some(why)) => return Err(format!("SendMessage failed: {why}")),
+        (Some(_), None) => {}
+    }
+
     let said = frame
         .get("result")
         .and_then(Value::as_str)
@@ -268,12 +363,32 @@ mod whether_the_mark_went {
         serde_json::from_str(said).expect("json")
     }
 
+    /// A `SendMessageCall` that saw the tool called, by `call_1`, and succeed — the state
+    /// every test unrelated to bug 1 wants, so its own failure mode is the only thing on
+    /// trial.
+    fn called_and_delivered() -> SendMessageCall {
+        let mut sent = SendMessageCall::default();
+        sent.saw_the_call(&result(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[
+                {"type":"tool_use","id":"call_1","name":"SendMessage","input":{}}]}}"#,
+        ));
+        sent.saw_the_result(&result(
+            r#"{"type":"user","message":{"role":"user","content":[
+                {"type":"tool_result","tool_use_id":"call_1","is_error":false,
+                 "content":"ok"}]}}"#,
+        ));
+        sent
+    }
+
     #[test]
     fn ok_is_a_delivery() {
-        assert!(read_the_outcome(&result(
-            r#"{"type":"result","subtype":"success","is_error":false,"result":"ok",
-                "permission_denials":[]}"#
-        ))
+        assert!(read_the_outcome(
+            &result(
+                r#"{"type":"result","subtype":"success","is_error":false,"result":"ok",
+                    "permission_denials":[]}"#
+            ),
+            &called_and_delivered(),
+        )
         .is_ok());
     }
 
@@ -285,36 +400,46 @@ mod whether_the_mark_went {
          * would say "sent" about a message nobody received — and somebody would go and
          * watch a chat that is never going to mention it.
          */
-        let said = read_the_outcome(&result(
-            r#"{"type":"result","subtype":"success","is_error":false,"result":"ok",
-                "permission_denials":[{"tool_name":"SendMessage"}]}"#,
-        ));
+        let said = read_the_outcome(
+            &result(
+                r#"{"type":"result","subtype":"success","is_error":false,"result":"ok",
+                    "permission_denials":[{"tool_name":"SendMessage"}]}"#,
+            ),
+            &called_and_delivered(),
+        );
         assert_eq!(said, Err("the relay was not allowed to send the message".into()));
     }
 
     #[test]
     fn the_relay_saying_it_failed_is_believed() {
-        let said = read_the_outcome(&result(
-            r#"{"type":"result","subtype":"success","is_error":false,
-                "result":"failed no session by that name","permission_denials":[]}"#,
-        ));
+        let said = read_the_outcome(
+            &result(
+                r#"{"type":"result","subtype":"success","is_error":false,
+                    "result":"failed no session by that name","permission_denials":[]}"#,
+            ),
+            &called_and_delivered(),
+        );
         assert_eq!(said, Err("failed no session by that name".into()));
     }
 
     #[test]
     fn an_errored_turn_carries_its_reason() {
-        let said = read_the_outcome(&result(
-            r#"{"type":"result","subtype":"error_during_execution","is_error":true,
-                "result":"the model could not be reached"}"#,
-        ));
+        let said = read_the_outcome(
+            &result(
+                r#"{"type":"result","subtype":"error_during_execution","is_error":true,
+                    "result":"the model could not be reached"}"#,
+            ),
+            &SendMessageCall::default(),
+        );
         assert_eq!(said, Err("the model could not be reached".into()));
     }
 
     #[test]
     fn running_out_of_turns_is_a_failure_not_a_send() {
-        let said = read_the_outcome(&result(
-            r#"{"type":"result","subtype":"error_max_turns","is_error":false}"#,
-        ));
+        let said = read_the_outcome(
+            &result(r#"{"type":"result","subtype":"error_max_turns","is_error":false}"#),
+            &SendMessageCall::default(),
+        );
         assert_eq!(said, Err("the relay ended as error_max_turns".into()));
     }
 
@@ -322,11 +447,77 @@ mod whether_the_mark_went {
     fn a_chatty_relay_still_counts_as_delivered() {
         // It was told to say `ok` and said something else. The tool may well have been
         // called; refusing the send over the wording would fail a mark that arrived.
-        assert!(read_the_outcome(&result(
-            r#"{"type":"result","subtype":"success","is_error":false,
-                "result":"Sent it along!","permission_denials":[]}"#
-        ))
+        assert!(read_the_outcome(
+            &result(
+                r#"{"type":"result","subtype":"success","is_error":false,
+                    "result":"Sent it along!","permission_denials":[]}"#
+            ),
+            &called_and_delivered(),
+        )
         .is_ok());
+    }
+
+    /*
+     * The three cases bug 1 is about: `read_the_outcome` used to trust the model's own
+     * word — `is_error`, `permission_denials`, and whether `result` said "ok" — and never
+     * looked at whether `SendMessage` itself had actually been called and had succeeded.
+     * A relay that answered "ok" without calling the tool, or whose call was allowed to
+     * run and then failed on its own terms (the target exited between being listed and
+     * being sent to, say), ended its turn exactly as tidily as one that delivered.
+     */
+
+    #[test]
+    fn a_call_that_ran_and_succeeded_is_a_delivery() {
+        assert!(read_the_outcome(
+            &result(
+                r#"{"type":"result","subtype":"success","is_error":false,"result":"ok",
+                    "permission_denials":[]}"#
+            ),
+            &called_and_delivered(),
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn a_call_that_ran_and_errored_is_not_a_delivery() {
+        let mut sent = SendMessageCall::default();
+        sent.saw_the_call(&result(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[
+                {"type":"tool_use","id":"call_2","name":"SendMessage","input":{}}]}}"#,
+        ));
+        sent.saw_the_result(&result(
+            r#"{"type":"user","message":{"role":"user","content":[
+                {"type":"tool_result","tool_use_id":"call_2","is_error":true,
+                 "content":"no session by that name"}]}}"#,
+        ));
+        // The model still says `ok` — it saw the tool run and return, and was told to say
+        // `ok` once it had. That word must not be believed over what the tool actually did.
+        let said = read_the_outcome(
+            &result(
+                r#"{"type":"result","subtype":"success","is_error":false,"result":"ok",
+                    "permission_denials":[]}"#,
+            ),
+            &sent,
+        );
+        assert_eq!(said, Err("SendMessage failed: no session by that name".into()));
+    }
+
+    #[test]
+    fn ok_with_no_tool_call_at_all_is_not_a_delivery() {
+        // No `assistant` frame ever carried a `SendMessage` tool_use — the relay simply
+        // said the word it was told to say for success. This is the case that used to
+        // reach somebody as "sent" with nothing behind it.
+        let said = read_the_outcome(
+            &result(
+                r#"{"type":"result","subtype":"success","is_error":false,"result":"ok",
+                    "permission_denials":[]}"#,
+            ),
+            &SendMessageCall::default(),
+        );
+        assert_eq!(
+            said,
+            Err("the relay said it sent the mark but never called SendMessage".into())
+        );
     }
 }
 

@@ -243,6 +243,23 @@ function buildRail() {
   home.title = "colai";
   home.setAttribute("aria-label", "colai");
   home.innerHTML = colaiMark();
+  /*
+   * And the way back to the four things worth knowing.
+   *
+   * They are shown once on a first run and there was no second way to them: somebody who
+   * dismissed the card before reading it lost the grip, the fold key, `/` and `@` for the
+   * life of the install — four things the toolbar cannot be worked out without, and none of
+   * them discoverable by looking at it. The tray used to carry the way back and the tray is
+   * gone, so it lands on the one key that is always on the rail, is named after the
+   * application, and had nothing behind it. Pressing the mark asks colai about itself, which
+   * is what a mark on a rail reads as anyway.
+   *
+   * A toggle, so the same press that opened it puts it away again.
+   */
+  home.addEventListener("click", () => {
+    state.tips = !state.tips;
+    render();
+  });
   buttons.settings = home;
 
   // Only ever on the rail while something is running, and beside the key that says so.
@@ -459,11 +476,18 @@ function row(into, tool, label, glyph, press) {
  * apologised for.
  */
 function use(tool) {
+  /*
+   * "shape" is a key rather than a tool. It carries Box and Circle, so asking for the pair
+   * means the neighbour of whichever is in hand — Box from anything else, Circle from Box,
+   * and back to Box from Circle. Resolved here rather than at the keyboard, so that `S` and
+   * any other way of asking for "the shape tool" cannot come to different answers.
+   */
+  const asked = tool === "shape" ? SHAPES[(SHAPES.indexOf(state.tool) + 1) % SHAPES.length] : tool;
   // Putting the tool away takes the marks off the screen, so they are shown going where
   // they went. Only on the way out: picking a tool up puts them back, and a flight then
   // would be describing the opposite of what happened.
-  const away = tool === "pointer" && state.tool !== "pointer";
-  state.tool = tool;
+  const away = asked === "pointer" && state.tool !== "pointer";
+  state.tool = asked;
   state.open = null;
   if (away) flyToWork(state.marks);
   render();
@@ -650,27 +674,60 @@ async function watchEverything() {
 
 async function loadWho() {
   const pick = (kind) => (state.receiving.kind === kind ? state.receiving.id : null);
+  /*
+   * Asked together, because the menu shows them together: two answers a second apart would
+   * let the rail claim a receiver that the list below it does not offer.
+   *
+   * Settled rather than all, though. Five commands went out under one `Promise.all` and one
+   * `catch`, so any single rejection threw away the four answers that had arrived — and one
+   * of the five is `colai_libraries`, which has nothing whatever to do with choosing who
+   * receives. A host with no catalogue to read therefore replaced the whole conversation
+   * list with "Could not reach the Gateway" while the Gateway was answering perfectly well
+   * about conversations. `allSettled` keeps every answer that came back, and each ask is
+   * then read on its own terms.
+   */
+  const [agents, sessions, projects, allowed, libraries] = await Promise.allSettled([
+    invoke("colai_agents", { receiving: pick("agent") }),
+    invoke("colai_sessions", { receiving: pick("session") }),
+    invoke("colai_threads", { receiving: pick("thread") }),
+    // What this connection may do, asked with the rest rather than once at startup.
+    // The Gateway connects a moment after the app does — which is why the ask below
+    // is retried — so a single question at load is answered before there is anything
+    // to answer it, and a menu would spend the session saying it was not allowed.
+    invoke("colai_allowed"),
+    // Which catalogues this build can read, so the library window can name one rather
+    // than telling somebody to go and find out.
+    invoke("colai_libraries"),
+  ]);
+  /*
+   * A refusal leaves what was already known alone.
+   *
+   * "Nobody there" and "could not ask" are different facts, and emptying a list is how the
+   * second one gets told as the first. On the very first load there is nothing to keep, so
+   * an ask that fails degrades to the empty list it started as — which is the honest answer
+   * before anything has been heard.
+   */
+  const heard = (answer, was) => (answer.status === "fulfilled" ? answer.value || [] : was);
+  state.allowed = heard(allowed, state.allowed);
+  state.libraries = heard(libraries, state.libraries);
+  state.agents = heard(agents, state.agents);
+  state.sessions = heard(sessions, state.sessions);
+  state.projects = heard(projects, state.projects);
+  /*
+   * And what the rail says went wrong, from the three asks the picker is actually made of.
+   *
+   * Only these three. The picker is a list of agents and conversations, so failing to read
+   * one of them is the thing that banner is about — and it replaces the list, which is a
+   * fair trade for news about the list itself. What this connection may do and which
+   * catalogues it can read are settings the picker never shows; either of them putting
+   * "Could not reach the Gateway" over a set of perfectly good conversations is how a
+   * receiver became unpickable because a library was missing. Both are retried on the
+   * ticker regardless, which is where an ask that quietly failed gets another go.
+   */
+  const refused = [agents, sessions, projects].find((answer) => answer.status === "rejected");
+  const why = refused && refused.reason;
+  state.whoTrouble = refused ? (why && why.message ? why.message : String(why)) : null;
   try {
-    // Asked together, because the menu shows them together: two answers a second apart
-    // would let the rail claim a receiver that the list below it does not offer.
-    const [agents, sessions, projects, allowed, libraries] = await Promise.all([
-      invoke("colai_agents", { receiving: pick("agent") }),
-      invoke("colai_sessions", { receiving: pick("session") }),
-      invoke("colai_threads", { receiving: pick("thread") }),
-      // What this connection may do, asked with the rest rather than once at startup.
-      // The Gateway connects a moment after the app does — which is why the ask below
-      // is retried — so a single question at load is answered before there is anything
-      // to answer it, and a menu would spend the session saying it was not allowed.
-      invoke("colai_allowed"),
-      // Which catalogues this build can read, so the library window can name one rather
-      // than telling somebody to go and find out.
-      invoke("colai_libraries"),
-    ]);
-    state.allowed = allowed || [];
-    state.libraries = libraries || [];
-    state.agents = agents || [];
-    state.sessions = sessions || [];
-    state.projects = projects || [];
     // The conversation the toolbar was opened from, when it was opened from one.
     //
     // `/colai:show` runs inside a chat, and Claude Code puts that chat's id in the
@@ -696,8 +753,10 @@ async function loadWho() {
         };
       }
     }
-    state.whoTrouble = null;
   } catch (error) {
+    // Reachable only on an answer shaped like nothing this expects — a list that came back
+    // as something other than a list. Said rather than swallowed: a rail that cannot work
+    // out who receives has to say so, and this is the line that says it.
     state.whoTrouble = error && error.message ? error.message : String(error);
   }
   render();

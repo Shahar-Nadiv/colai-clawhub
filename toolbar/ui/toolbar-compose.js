@@ -120,12 +120,38 @@ function drawPopup() {
   // cursor restored into the wrong one of the two is its own bug.
   note.dataset.field = `popup-note:${mark.id}`;
   note.rows = 2;
-  note.placeholder = "What about it?";
+  /*
+   * And it says so, because this is where somebody is standing when they first want them.
+   *
+   * This box is the one that opens by itself, on the thing they just pointed at, and it is
+   * the first field most people ever type into — so a placeholder that named neither
+   * keystroke left `/` and `@` to be discovered in a panel they had not opened yet.
+   */
+  note.placeholder = "What about it? / for a command, @ for a file";
   note.value = mark.note || "";
   note.addEventListener("input", () => {
     mark.note = note.value;
   });
-  rows.push(note);
+  /*
+   * The same `/` and `@` as the composer, on the popup's own field.
+   *
+   * They were the composer's alone, which made the toolbar's own headline act — point at
+   * something, say what you want — the one place the keystrokes did not work. A mark's
+   * popup and the composer are the same conversation at two sizes and already share the
+   * mode and the files; the menu is the third thing they should never have disagreed about.
+   *
+   * Wrapped in its own `.ask-box` rather than reaching for a menu somewhere else on the
+   * page: the box is what the menu is positioned against, so each field carries the one it
+   * opens and two of them cannot end up drawing into the same element.
+   */
+  const noteBox = document.createElement("div");
+  noteBox.className = "ask-box";
+  const noteMenu = document.createElement("div");
+  noteMenu.className = "ask-menu";
+  noteMenu.hidden = true;
+  noteBox.append(note, noteMenu);
+  completes(note, noteMenu, composing(askingOn(mark), (said) => (mark.note = said)));
+  rows.push(noteBox);
 
   if (mark.tool === "design") {
     // Which of the three this is. Chips rather than a menu: they are three ways of
@@ -240,7 +266,21 @@ function drawPopup() {
   const to = document.createElement("button");
   to.type = "button";
   to.className = "popup-to";
-  to.textContent = state.receiving.name || "Choose who receives";
+  /*
+   * The name in a span of its own, which is what lets it be shortened.
+   *
+   * It was the button's own text, and a conversation is named after whatever somebody first
+   * said in it — so a receiver called `claude-code-plugin-integration` is one unbreakable
+   * word. A flex item will not shrink below the width of its longest word however small its
+   * `min-width` is, and text that is not in an element of its own cannot be given an
+   * ellipsis, so this row grew past the card and pushed Send out through the right-hand
+   * edge of the popup. The name is the only part of the row that can afford to lose
+   * characters; the two buttons are the point of the row.
+   */
+  const whom = document.createElement("span");
+  whom.className = "popup-to-name";
+  whom.textContent = state.receiving.name || "Choose who receives";
+  to.append(whom);
   to.title = "Change who receives this";
   to.addEventListener("click", () => {
     state.popup = null;
@@ -669,8 +709,12 @@ function canSend(going) {
 /**
  * The ask, and the menu that opens inside it.
  *
- * `/` at the start of a word offers the modes. Picking one sets it and takes the word
- * back out, because the mode is how the ask should be read and not part of the ask.
+ * `/` at the start of a word offers Claude Code's commands, and colai's own modes until
+ * there are any. Picking a mode sets it and takes the word back out, because the mode is
+ * how the ask should be read and not part of the ask; picking a command leaves it where it
+ * was typed, because a command is the agent's to read. `completes` holds all of that — this
+ * field is one of four with the same menu in it — and what is left here is the two things
+ * only the composer does: the words are `state.text`, and Ctrl+Enter sends them.
  */
 function askField(go) {
   const box = document.createElement("div");
@@ -711,11 +755,152 @@ function askField(go) {
    * itself, mid-choice, because something unrelated happened somewhere else. Reading a
    * list of files from disk and then throwing it away before the person could pick one
    * is the same class of bug as the caret this field already lost once.
-   *
+   */
+  const asking = state.ask;
+
+  text.addEventListener("input", () => {
+    state.text = text.value;
+    // Typing does not redraw the composer — a render on every keystroke would rebuild
+    // the field and take the caret with it — so the button draw produced would still be
+    // refusing after the first word. With nothing marked, that button is the only way
+    // out of the composer, and it was dead: a whole sentence typed, and nothing to
+    // press. The words are the composer's own subject; marks are extra.
+    go.disabled = !canSend(chosenMarks());
+  });
+  /*
+   * Attached before `completes`, so that on Enter this listener is the one that runs first
+   * and can see the menu still open. The other way round, the menu would have taken the
+   * highlighted row and closed itself, and this would then read a hidden menu and send the
+   * message — one keystroke doing both jobs.
+   */
+  text.addEventListener("keydown", (event) => {
+    // Send from the keyboard, unless the `/` or `@` menu is open — there Enter is
+    // already answering a question, and stealing it would send whatever half-typed
+    // word the menu was offering to complete.
+    if (menu.hidden && event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      const going = chosenMarks();
+      if (canSend(going)) void sendMarks(going.map((one) => one.id));
+    }
+  });
+  completes(text, menu, composing(asking, (said) => (state.text = said)));
+
+  box.append(text, menu);
+  return box;
+}
+
+/* ── `/` and `@`, in every box there is to type in ────────────────────────────
+ *
+ * Four fields on this page ask somebody for words: the composer, the note on a mark's
+ * popup, the reply to an agent's question, and the reply beside an answer in the Work
+ * panel. The menu was built inside the first of them, so the two keystrokes anybody who
+ * uses Claude Code already knows worked in one box and did nothing in the other three —
+ * which is worse than not having them at all. A keystroke is learned about the toolbar,
+ * not about one panel of it, and one that silently does nothing reads as broken rather
+ * than absent. Marking something on screen and saying what you want about it is the
+ * whole of what colai is for, and that box was the one without the menu.
+ *
+ * So the machinery lives here once and is handed a field, a menu to draw into, and `how`
+ * — which is the only part that differs. What differs is never how the menu behaves but
+ * what a chosen row *means*, and that is a fact about the surface: the composer and a
+ * mark's popup are assembling a message colai composes, so a mode is a mode and a file is
+ * an attachment; the two reply boxes hand their words to a conversation exactly as typed,
+ * so the only thing that can carry a command out of them is the words themselves.
+ */
+
+/**
+ * What picking a row does where colai is composing the message — the composer, and the
+ * popup on a mark.
+ *
+ * Those two share a receiver, a mode and the files coming along (see the top of this
+ * file), so a mode chosen in either sets it for both and a file named in either travels
+ * with the send. `keep` is where that field's words live, which is the one thing even
+ * these two do not share: one is `state.text` and the other is the note on a mark.
+ */
+function composing(asking, keep) {
+  return {
+    asking,
+    keep,
+    took: (mark, chosen) => {
+      if (mark === "@") {
+        // Described rather than assumed. Whether a file travels with the message or is
+        // only named depends on how big it is, and a size invented here as zero would
+        // make everything look small enough to carry. `bringFiles` is the one door every
+        // file comes through, so a path chosen with `@` lands the same way a dropped one
+        // does.
+        void invoke("colai_describe_files", { paths: [chosen.path] })
+          .then((described) => bringFiles(described))
+          .catch(() => {});
+        return null;
+      }
+      /*
+       * A Claude Code command is not colai's to set, so it stays in the words.
+       *
+       * It used to be written into `state.mode`, which holds one of four modes — so
+       * picking `/review` left the mode unreadable, `summaryFor` read it back as Plan,
+       * and the command somebody had deliberately chosen was never sent at all. The words
+       * are the part of the message the agent reads as its own, which is where a command
+       * belongs.
+       */
+      if (chosen.command) return chosen.label;
+      state.mode = chosen.id;
+      return null;
+    },
+  };
+}
+
+/**
+ * And what it does where the words *are* the message — the two reply boxes.
+ *
+ * A reply goes to the conversation exactly as typed (see `verdict`), so Claude Code is the
+ * thing that reads it: `/review` has to still be in the box when it arrives, and so does
+ * `@src/thing.ts`. Nothing here sets a mode, because a reply is not a message colai
+ * composes — and when there is no command list yet and the modes stand in, the mode's own
+ * sentence is what goes in, since saying it is the only way to ask for it from here.
+ */
+function replying(asking, keep) {
+  return {
+    asking,
+    keep,
+    took: (mark, chosen) =>
+      mark === "@" ? chosen.path : chosen.command ? chosen.label : chosen.says,
+  };
+}
+
+/** One field's menu state, kept on the thing that field is about and made on first use. */
+function askingOn(holder) {
+  /*
+   * On the mark or the answer rather than in one place keyed by name, because that is the
+   * thing which outlives the field: every one of these boxes is rebuilt by its panel's
+   * next render, and a mark and an answer both survive that. One holder each, so two boxes
+   * open at once — a popup over the Work panel — cannot share a highlighted row, which
+   * would be a choice landing in whichever of them was not being looked at.
+   */
+  if (!holder.asking) holder.asking = { mark: null, showing: [], picked: 0 };
+  return holder.asking;
+}
+
+/**
+ * How tall the menu can get, which is the stylesheet's `max-height` restated.
+ *
+ * Only used to decide which way it opens, so being a few pixels out costs nothing — but
+ * the two numbers mean the same thing and are worth keeping side by side.
+ */
+const ASK_MENU_TALL = 190;
+
+/**
+ * Give one field the `/` and `@` menu, drawn into one menu element beside it.
+ *
+ * `how` is the surface's three answers: `asking`, the state this menu keeps between
+ * renders; `keep`, where this field's words are held; and `took`, what picking a row means
+ * — see `composing` and `replying`, which are the only two answers there are.
+ */
+function completes(field, menu, how) {
+  const asking = how.asking;
+  /*
    * `asked` stays local: it is a sequence number for in-flight lookups, and a rebuilt
    * field has no in-flight lookups of its own to disambiguate.
    */
-  const asking = state.ask;
   let asked = 0;
 
   const close = () => {
@@ -727,28 +912,22 @@ function askField(go) {
   };
 
   const take = (chosen) => {
-    const token = tokenAt(text.value, text.selectionStart, asking.mark);
+    if (!chosen) return close();
+    const token = tokenAt(field.value, field.selectionStart, asking.mark);
     if (!token) return close();
-    const left = withoutToken(text.value, token);
-    if (asking.mark === "/") {
-      state.mode = chosen.id;
-    } else {
-      // Described rather than assumed. Whether a file travels with the message or is
-      // only named depends on how big it is, and a size invented here as zero would
-      // make everything look small enough to carry. `bringFiles` is the one door every
-      // file comes through, so a path chosen with `@` lands the same way a dropped one
-      // does.
-      void invoke("colai_describe_files", { paths: [chosen.path] })
-        .then((described) => bringFiles(described))
-        .catch(() => {});
-    }
-    state.text = left.text;
-    text.value = left.text;
+    // What this surface does with the row, and what it leaves behind in the box: `took`
+    // answers with the words to complete the token into, or null when the choice was not
+    // words at all — a mode colai will read, or a file it will carry.
+    const typed = how.took(asking.mark, chosen);
+    const left =
+      typed === null ? withoutToken(field.value, token) : insteadOf(field.value, token, typed);
+    how.keep(left.text);
+    field.value = left.text;
     // Set here rather than after the redraw, because the redraw is what reads it: the
     // caret is noted off whatever holds it, and this box holds it until `render` runs.
     // It used to be followed by a `text.focus()`, which by then was addressed to a box
     // that had already been replaced and so put the cursor precisely nowhere.
-    text.setSelectionRange(left.caret, left.caret);
+    field.setSelectionRange(left.caret, left.caret);
     close();
     render();
   };
@@ -756,6 +935,21 @@ function askField(go) {
   const draw = () => {
     asking.picked = Math.min(asking.picked, Math.max(0, asking.showing.length - 1));
     menu.hidden = asking.showing.length === 0;
+    /*
+     * Which way it opens, measured rather than assumed.
+     *
+     * The menu hangs off the field it belongs to, and the four fields sit in four
+     * different places: the composer's is at the bottom of a panel with the whole panel
+     * above it, a mark's popup can open anywhere on the screen with its note near the
+     * top of a short card, and a reply in the Work panel lives inside a list that
+     * scrolls — where anything drawn past the top of the list is clipped by it. Upward is
+     * right for the first and wrong for the others, so the room above is measured: within
+     * the scrolling box when there is one, and within the window when there is not.
+     */
+    const above = field.getBoundingClientRect().top;
+    const holder = field.closest(".scrolls");
+    const ceiling = holder ? holder.getBoundingClientRect().top : 0;
+    menu.dataset.under = String(above - ceiling < ASK_MENU_TALL);
     menu.replaceChildren(
       /*
        * `asking.showing`, not a bare `showing`.
@@ -791,8 +985,8 @@ function askField(go) {
   };
 
   const look = () => {
-    const slash = tokenAt(text.value, text.selectionStart, "/");
-    const at = tokenAt(text.value, text.selectionStart, "@");
+    const slash = tokenAt(field.value, field.selectionStart, "/");
+    const at = tokenAt(field.value, field.selectionStart, "@");
     // Whichever was typed later is the one being typed now.
     const token = !slash ? at : !at ? slash : slash.from > at.from ? slash : at;
     if (!token) return close();
@@ -826,35 +1020,17 @@ function askField(go) {
       .catch(() => close());
   };
 
-  text.addEventListener("input", () => {
-    state.text = text.value;
-    // Typing does not redraw the composer — a render on every keystroke would rebuild
-    // the field and take the caret with it — so the button draw produced would still be
-    // refusing after the first word. With nothing marked, that button is the only way
-    // out of the composer, and it was dead: a whole sentence typed, and nothing to
-    // press. The words are the composer's own subject; marks are extra.
-    go.disabled = !canSend(chosenMarks());
-    look();
-  });
-  text.addEventListener("click", look);
-  text.addEventListener("blur", close);
-  text.addEventListener("keydown", (event) => {
-    // Send from the keyboard, unless the `/` or `@` menu is open — there Enter is
-    // already answering a question, and stealing it would send whatever half-typed
-    // word the menu was offering to complete.
-    if (menu.hidden && event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-      event.preventDefault();
-      const going = chosenMarks();
-      if (canSend(going)) void sendMarks(going.map((one) => one.id));
-      return;
-    }
+  field.addEventListener("input", look);
+  field.addEventListener("click", look);
+  field.addEventListener("blur", close);
+  field.addEventListener("keydown", (event) => {
     if (menu.hidden) return;
     if (event.key === "Escape") {
       event.preventDefault();
       // And no further. This listener is on the field, so the event goes on to reach the
-      // window — where Escape now closes the work panel this composer lives in. Shutting
-      // a suggestion list would have shut the whole panel around it and thrown away what
-      // was being typed.
+      // window — where Escape closes the work panel a composer lives in, and throws away
+      // the mark a popup is about. Shutting a suggestion list would have shut the whole
+      // panel around it and taken what was being typed with it.
       event.stopPropagation();
       return close();
     }
@@ -873,12 +1049,10 @@ function askField(go) {
     }
   });
 
-  box.append(text, menu);
   // Put back on screen, not merely remembered. The state above survives the rebuild; the
   // element does not, so a list that was open has to be drawn again or hoisting it would
   // only have moved where the disappearance happens.
   if (asking.showing.length > 0) draw();
-  return box;
 }
 
 function fileRows() {

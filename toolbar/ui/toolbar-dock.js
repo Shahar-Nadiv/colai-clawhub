@@ -389,8 +389,14 @@ function clamp() {
  *
  * There was no teaching surface at all. `/` and `@` were named in a placeholder that
  * disappears on the first keystroke, and the other two were named nowhere. So this is one
- * pass, shown once, over the things somebody would otherwise never find — not a tour, and
+ * pass over the things somebody would otherwise never find — shown once, not a tour, and
  * not a thing that comes back on its own.
+ *
+ * It does come back when asked, though, which it did not. Shown once and dismissed once was
+ * the whole of it, so anybody who pressed "Got it" to clear a card off the screen before
+ * reading it had thrown away the only account of four things this toolbar cannot be used
+ * without — for the life of the install. The way back is colai's own key on the rail, which
+ * is on screen for as long as the toolbar is: see `buildRail`.
  */
 
 /** Where the answer to "have they seen this" is kept. */
@@ -400,8 +406,11 @@ const TIPS_SEEN = "colai.tips.seen";
 const TIPS = [
   ["Move it", "Drag the grip. Double-click it to put the toolbar away."],
   ["Fold it", "The fold key tucks the exact tools out of the way."],
-  ["Say how", "Type / in the box to choose how a message is read."],
-  ["Bring a file", "Type @ in the box to name a file to send with it."],
+  // "Any box", because that is now true: the composer, the note on a mark and both reply
+  // boxes all answer to these two. It said "the box" while only one of the four did, which
+  // taught the keystroke and left somebody to find out for themselves where it worked.
+  ["Say how", "Type / in any box for a command, or to say how the ask is read."],
+  ["Bring a file", "Type @ in any box to name a file to send with it."],
 ];
 
 function tipsWereSeen() {

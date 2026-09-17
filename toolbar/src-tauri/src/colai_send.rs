@@ -219,25 +219,35 @@ pub(crate) async fn colai_send(
         let staged =
             crate::outbox::stage(held.session_id.as_str(), theirs.as_deref(), &message, &images)?;
 
-        let mut how = None;
-        let mut why_not = None;
-        if let Some(named) = crate::session::what_that_chat_is_called(&held.session_id) {
-            match app.try_state::<crate::relay::Relay>() {
-                Some(relay) => match relay.hand_over(&named, &staged.said) {
-                    Ok(()) => {
-                        // Delivered, so the copy left for the hook would arrive a second
-                        // time on their next message and be acted on twice.
-                        crate::outbox::forget(&staged.at);
-                        how = Some(named);
-                    }
-                    Err(trouble) => why_not = Some(trouble),
-                },
-                None => why_not = Some("there is no `claude` to relay through".to_string()),
-            }
+        // `what_that_chat_is_called` asks `claude agents --json` for the name the relay
+        // has to send to; `attempt` is `None` only when that came back empty, which is the
+        // one case that used to fall through with no diagnostic and no name at all — see
+        // `describe_the_handoff`.
+        let attempt = crate::session::what_that_chat_is_called(&held.session_id).map(|named| {
+            let outcome = match app.try_state::<crate::relay::Relay>() {
+                Some(relay) => relay.hand_over(&named, &staged.said),
+                None => Err("there is no `claude` to relay through".to_string()),
+            };
+            (named, outcome)
+        });
+        let (how, called, why_not) =
+            describe_the_handoff(&held.session_id, held.name.as_deref(), attempt);
+        if how.is_some() {
+            // Delivered, so the copy left for the hook would arrive a second time on
+            // their next message and be acted on twice.
+            crate::outbox::forget(&staged.at);
         }
         if let Some(trouble) = &why_not {
             eprintln!("[colai] could not put the mark in {}: {trouble}", held.session_id);
         }
+
+        // Same release the direct-send path does below, at the end of `colai_send`. This
+        // used to be skipped here: an early return out of this branch meant a mark sent
+        // while somebody's terminal chat was open held its picture bytes in `MarkShots`
+        // until the store's own eviction caught up, rather than being let go the moment
+        // they were no longer needed — the pictures are on disk by now regardless of
+        // whether the relay reached the chat or the mark is waiting in the outbox.
+        release_pictures(&shots, &mark_ids);
 
         return Ok(Sent {
             session_key: held.session_id,
@@ -250,9 +260,11 @@ pub(crate) async fn colai_send(
             watching: false,
             settings_trouble,
             // Which of the two happened, so the rail can promise the right thing. `sent_to`
-            // means it is there now; `handed_to` means it is waiting for a keystroke.
+            // means it is there now; `handed_to` means it is waiting for a keystroke — and
+            // is always something true to say, never a silent `None` that could be misread
+            // by `toolbar-send.js` as "there is an answer coming back here instead".
             sent_to: how,
-            handed_to: held.name,
+            handed_to: Some(called),
         });
     }
 
@@ -280,9 +292,7 @@ pub(crate) async fn colai_send(
     // And its failure is not the send's. The message is delivered by this point, so
     // returning an error here would tell somebody their send failed and invite them to
     // send it twice.
-    if let Err(why) = shots.forget(&mark_ids) {
-        eprintln!("[colai] the pictures could not be released after sending: {why}");
-    }
+    release_pictures(&shots, &mark_ids);
     /*
      * Nothing to subscribe to.
      *
@@ -292,6 +302,156 @@ pub(crate) async fn colai_send(
      * miss, so `watching` is true whenever anything was sent at all.
      */
     Ok(sent)
+}
+
+/// Let go of the pictures a send no longer needs, once it has landed one way or another.
+///
+/// Shared by both routes out of `colai_send` — a conversation the toolbar's own agent is
+/// answering, and one handed over to a chat somebody has open — because both have the same
+/// answer to "is it safe yet": the mark is on its way (to the model directly, or to disk
+/// for the relay or the hook to point at), so nothing still needs these bytes in memory.
+/// Bug: the live-chat route used to return before reaching this, which cost nothing
+/// anybody could see (the store is bounded and evicts on its own, and the page clears its
+/// own marks regardless) but held picture bytes in `MarkShots` for longer than the send
+/// that used them.
+fn release_pictures(shots: &MarkShots, mark_ids: &[String]) {
+    if let Err(why) = shots.forget(mark_ids) {
+        eprintln!("[colai] the pictures could not be released after sending: {why}");
+    }
+}
+
+#[cfg(test)]
+mod letting_go_of_a_sent_picture {
+    use super::*;
+    use crate::colai_capture::Shot;
+
+    #[test]
+    fn a_sent_picture_is_no_longer_held() {
+        let shots = MarkShots::default();
+        shots
+            .keep(Shot { id: "mark-1".to_string(), frames: vec![vec![0u8]], width: 1, height: 1 })
+            .expect("a picture kept");
+        assert_eq!(shots.pick(&["mark-1".to_string()]).expect("a pick").len(), 1);
+
+        release_pictures(&shots, &["mark-1".to_string()]);
+
+        assert!(
+            shots.pick(&["mark-1".to_string()]).expect("a pick").is_empty(),
+            "a released picture must not still be held"
+        );
+    }
+}
+
+/// What to tell whoever is waiting, once a hand-over to a live chat has been tried.
+///
+/// A pure function of how it went, pulled out of `colai_send` so the branch this lives in
+/// — an `if let` chain that used to hide two bugs at once — can be driven by a test without
+/// starting a Tauri app or a `claude`. Returns `(sent_to, handed_to, why_not)`:
+///
+///   - `sent_to` is `Some(name)` only once `SendMessage` actually delivered.
+///   - `handed_to` is always something true to call this chat, never empty — see below.
+///   - `why_not` is `Some(reason)` whenever the relay was not even tried, or was tried and
+///     failed, and is always worth a line in the log.
+///
+/// `attempt` is `None` exactly when `what_that_chat_is_called` (which asks
+/// `claude agents --json`) came back with no name for this session — seen right after a
+/// session starts, before it has finished registering itself. That used to be the silent
+/// case: nothing set `why_not`, so nothing was logged, and if the registry's own record had
+/// no name either the receipt came back `sent_to: None, handed_to: None` — which
+/// `toolbar-send.js` reads as "the toolbar's own agent has this and the answer comes back
+/// here", the wrong branch entirely, for a mark that was actually left sitting in the
+/// outbox. `registry_name` (from the session's own record, a different source read
+/// separately by `already_open_in_a_chat`) is preferred when it exists because it is
+/// usually the friendlier of the two; the session id is the fallback of last resort, used
+/// only so `handed_to` is never `None` here and can never be mistaken for the other case.
+fn describe_the_handoff(
+    session_id: &str,
+    registry_name: Option<&str>,
+    attempt: Option<(String, Result<(), String>)>,
+) -> (Option<String>, String, Option<String>) {
+    match attempt {
+        None => (
+            None,
+            registry_name.unwrap_or(session_id).to_string(),
+            Some("the chat has no name yet to relay through".to_string()),
+        ),
+        Some((named, Ok(()))) => {
+            (Some(named.clone()), registry_name.unwrap_or(&named).to_string(), None)
+        }
+        Some((named, Err(trouble))) => {
+            (None, registry_name.unwrap_or(&named).to_string(), Some(trouble))
+        }
+    }
+}
+
+#[cfg(test)]
+mod what_to_say_about_a_handoff {
+    use super::*;
+
+    #[test]
+    fn a_delivery_names_the_chat_and_raises_nothing() {
+        let (sent_to, handed_to, why_not) = describe_the_handoff(
+            "sess-1",
+            Some("the-friendly-name"),
+            Some(("the-friendly-name".to_string(), Ok(()))),
+        );
+        assert_eq!(sent_to.as_deref(), Some("the-friendly-name"));
+        assert_eq!(handed_to, "the-friendly-name");
+        assert!(why_not.is_none());
+    }
+
+    #[test]
+    fn a_failed_relay_is_not_a_delivery_but_still_names_the_chat() {
+        let (sent_to, handed_to, why_not) = describe_the_handoff(
+            "sess-1",
+            Some("the-friendly-name"),
+            Some(("the-friendly-name".to_string(), Err("the relay is wedged".to_string()))),
+        );
+        assert!(sent_to.is_none());
+        assert_eq!(handed_to, "the-friendly-name");
+        assert_eq!(why_not.as_deref(), Some("the relay is wedged"));
+    }
+
+    #[test]
+    fn an_unresolved_name_is_logged_rather_than_silently_skipped() {
+        /*
+         * Bug: `claude agents --json` came back with nothing for this session, so the
+         * relay was never tried, and the old code set no `why_not` for it — the one path
+         * through this branch that logged nothing at all no matter what happened.
+         */
+        let (sent_to, handed_to, why_not) =
+            describe_the_handoff("sess-1", Some("the-friendly-name"), None);
+        assert!(sent_to.is_none());
+        assert_eq!(handed_to, "the-friendly-name");
+        assert!(why_not.is_some(), "a skipped relay attempt must say why");
+    }
+
+    #[test]
+    fn with_no_name_anywhere_the_receipt_still_says_something_true() {
+        /*
+         * Bug: with no name from the registry either, the old code returned
+         * `sent_to: None, handed_to: None` — and `toolbar-send.js` treats that combination
+         * as "the toolbar's own agent has this, the answer comes back here", which is not
+         * what happened: the mark was left waiting in the outbox. `handed_to` must never
+         * come back empty here, so the session id is the fallback of last resort.
+         */
+        let (sent_to, handed_to, why_not) = describe_the_handoff("sess-1", None, None);
+        assert!(sent_to.is_none());
+        assert_eq!(handed_to, "sess-1", "a name must be given even when nothing else has one");
+        assert!(why_not.is_some());
+    }
+
+    #[test]
+    fn a_missing_relay_names_the_chat_from_the_attempt_even_without_a_registry_name() {
+        let (sent_to, handed_to, why_not) = describe_the_handoff(
+            "sess-1",
+            None,
+            Some(("named-by-agents-json".to_string(), Err("there is no `claude` to relay through".to_string()))),
+        );
+        assert!(sent_to.is_none());
+        assert_eq!(handed_to, "named-by-agents-json");
+        assert!(why_not.is_some());
+    }
 }
 
 /// Lay a recording out as one picture, on the thread allowed to draw.

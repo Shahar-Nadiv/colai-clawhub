@@ -442,7 +442,12 @@ function render() {
   // it turns in: a mark spinning under a red light would be the toolbar contradicting
   // itself.
   buttons.settings.dataset.walking = String(mood === "working");
-  buttons.settings.title = moodSaid(state.atWork);
+  // What it is doing, and then what pressing it does. The mark is the light and it is also
+  // the way back to the first-run card, which is the only way back there is — so the key
+  // has to say so, or it is a door with nothing written on it.
+  buttons.settings.title = `${moodSaid(state.atWork)} · ${
+    state.tips ? "Hide" : "Show"
+  } the four things worth knowing`;
   buttons.settings.setAttribute("aria-label", buttons.settings.title);
 
   // And what it is doing, beside the mark that says it is doing something.

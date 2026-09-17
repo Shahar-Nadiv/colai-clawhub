@@ -198,7 +198,18 @@ const MODES = {
     label: "Debug",
     says: "Work out why this is happening, and read the code before concluding anything.",
   },
-  build: { label: "Build", says: "Make this change." },
+  /*
+   * `alone` is the same instruction with nothing marked, and Build is the only mode that
+   * needs one. "Make this change." points at the pictures above it, and with no pictures
+   * there is nothing for "this" to be — so typing `hey` into a fresh toolbar sent "Build:
+   * Make this change." over the top of the word "hey", which is an instruction asserting a
+   * change nobody had described. Build is the mode a toolbar starts in and a short word is
+   * the commonest first thing anybody types, so that was many people's first message.
+   *
+   * The other three already read correctly on their own: a question, a plan and a diagnosis
+   * can all be about something said in words, and only a change has to be pointed at.
+   */
+  build: { label: "Build", says: "Make this change.", alone: "Do what is asked below." },
 };
 
 /**
@@ -1176,7 +1187,11 @@ function commandsMatching(word, commands, terminalOnly) {
     .filter((name) => typeof name === "string" && !barred.has(name))
     .filter((name) => !want || name.toLowerCase().startsWith(want))
     .slice(0, COMMANDS_MOST)
-    .map((name) => ({ id: name, label: "/" + name, says: "Claude Code command" }));
+    // `command` says whose row this is, because picking one does something different from
+    // picking a mode: a mode is colai's and gets set, a command is Claude Code's and can
+    // only travel in the words. Told apart by a flag rather than by which list it came
+    // from, because both lists arrive at whoever picked a row as one menu.
+    .map((name) => ({ id: name, label: "/" + name, says: "Claude Code command", command: true }));
 }
 
 /** Enough to choose from; past this it is a list nobody reads. */
@@ -1203,6 +1218,23 @@ function modesMatching(word) {
 function withoutToken(text, token) {
   const said = String(text ?? "");
   return { text: said.slice(0, token.from) + said.slice(token.to), caret: token.from };
+}
+
+/**
+ * The text with a token completed in place, and where the caret lands afterwards.
+ *
+ * The other half of `withoutToken`, for the choices that are words rather than settings. A
+ * mode is colai's own and goes; a Claude Code command and a file path are read by the agent
+ * itself, so they have to still be in the box when the message arrives — completed where
+ * they were typed, with a space after them so the sentence can carry on being written.
+ */
+function insteadOf(text, token, words) {
+  const said = String(text ?? "");
+  const put = `${words} `;
+  return {
+    text: said.slice(0, token.from) + put + said.slice(token.to),
+    caret: token.from + put.length,
+  };
 }
 
 /**
@@ -2358,12 +2390,27 @@ const KEYS = {
   v: "pointer",
   p: "pointAt",
   d: "draw",
+  // The rail's shape key has said "Box / circle · S" since it was built and `s` was not in
+  // this table, so the one letter printed on that key did nothing at all. It names the pair
+  // rather than either of them, the way `d` names the draw tool whatever pen is in it — see
+  // `SHAPES` and `use`.
+  s: "shape",
   b: "box",
   o: "circle",
   m: "measure",
   c: "colour",
   r: "record",
 };
+
+/**
+ * The two tools the shape key carries, in the order `S` walks them.
+ *
+ * Pressing it with neither in hand hands over the first; pressing it again hands over the
+ * other. One letter for two tools that differ only in their outline, which is what the key
+ * itself does — and `B` and `O` still name them outright for anybody who knows which they
+ * want before they reach for it.
+ */
+const SHAPES = ["box", "circle"];
 
 /**
  * What the agent actually reads.
@@ -2474,13 +2521,33 @@ function summaryFor(marks, mode, text, surface, files) {
   }
 
   const asked = MODES[mode] || MODES.plan;
-  said.push(`${asked.label}: ${asked.says}`);
   const own = (text || "").trim();
+  /*
+   * The instruction, when there is something for it to be an instruction about.
+   *
+   * Two ways it was not. With nothing marked, `says` points at pictures that are not there
+   * — so it is `alone` instead: the same mode said about the words below rather than about
+   * a region. And a single word describes nothing at all, so even `alone` over the word
+   * "hey" is a message telling an agent to act on a request nobody made. A person typing
+   * `hey` is saying hello, and the honest message for that is `hey`.
+   *
+   * Only a lone word, deliberately. "fix the header" is three words and a real ask, and
+   * ranking asks by how serious they look would be the toolbar deciding what somebody
+   * meant. One word cannot be an ask; two might be, and that is enough.
+   */
+  const going = marks.length > 0 || brought.length > 0;
+  const aWord = own !== "" && !/\s/.test(own);
+  if (going || !aWord) {
+    said.push(`${asked.label}: ${going ? asked.says : asked.alone || asked.says}`);
+  }
   // Not twice. For a commit the field *is* the commit message and has already been
   // quoted into the instruction verbatim; repeating it underneath as "and here is what
   // I want" would read as a second, vaguer ask about the same words.
   if (own && !isCommitting(marks)) {
-    said.push("");
+    // The blank line is a separator, so it only belongs where there are two things to
+    // separate. A word sent on its own must arrive as that word and not as an empty first
+    // line with the word under it.
+    if (said.length) said.push("");
     said.push(own);
   }
   return said.join("\n");

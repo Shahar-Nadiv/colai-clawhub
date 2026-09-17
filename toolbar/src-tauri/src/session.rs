@@ -898,8 +898,10 @@ fn subtype(frame: &Value) -> &str {
 /// Whatever a tool result actually said, as text.
 ///
 /// The content is a string on the simple path and a list of blocks on the rest; both mean
-/// the same thing to somebody reading a row on the rail.
-fn said_in(content: Option<&Value>) -> String {
+/// the same thing to somebody reading a row on the rail. `pub(crate)` because `relay.rs`
+/// reads the exact same shape out of a `SendMessage` tool_result, to know whether the mark
+/// it just tried to deliver actually went.
+pub(crate) fn said_in(content: Option<&Value>) -> String {
     match content {
         Some(Value::String(text)) => text.clone(),
         Some(Value::Array(blocks)) => blocks

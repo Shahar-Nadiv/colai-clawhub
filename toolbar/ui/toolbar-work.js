@@ -593,6 +593,21 @@ function answerBox(answer, acts) {
   field.rows = 2;
   field.placeholder = "Answer them…";
   field.value = answer.saying_text || "";
+  /*
+   * With `/` and `@` in it, like every other box on this page.
+   *
+   * A reply reaches the conversation exactly as typed, so a command here is a command that
+   * runs and a path is a file that gets read. Its own `.ask-box` because that is what the
+   * menu is positioned against, and this one sits inside a list that scrolls — see the
+   * measurement in `completes`, which is what keeps the menu out of the clipped half.
+   */
+  const asked = document.createElement("div");
+  asked.className = "ask-box";
+  const menu = document.createElement("div");
+  menu.className = "ask-menu";
+  menu.hidden = true;
+  asked.append(field, menu);
+  completes(field, menu, replying(askingOn(answer), (said) => (answer.saying_text = said)));
   // The row's own actions, with the quick replies put in front of them.
   const foot = acts;
   const first = [];
@@ -645,7 +660,7 @@ function answerBox(answer, acts) {
   // No, Yes, Reply, then whatever the row already offered — the order somebody reads
   // them in, and built in one go so the loop above cannot reverse it.
   foot.prepend(...first);
-  box.append(field, foot);
+  box.append(asked, foot);
   return box;
 }
 

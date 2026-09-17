@@ -457,6 +457,25 @@ function drawAsk() {
   field.rows = 2;
   field.placeholder = choices.length ? "…or say something else" : "Answer them…";
   field.value = answer.saying_text || "";
+  /*
+   * `/` and `@` here too, because this box is a prompt like any other.
+   *
+   * What goes in it is handed to the conversation exactly as typed, so a `/` command in a
+   * reply is a command Claude Code runs and an `@` path is a file it reads — the same two
+   * keystrokes doing the same two things they do in a terminal. They worked only in the
+   * composer, which meant the one box that opens by itself, while an agent is stopped and
+   * waiting, was the one where the keys somebody reached for did nothing.
+   */
+  const box = document.createElement("div");
+  box.className = "ask-box";
+  const menu = document.createElement("div");
+  menu.className = "ask-menu";
+  menu.hidden = true;
+  box.append(field, menu);
+  // The same holder the Work panel's reply box uses for this answer. They are never on
+  // screen together — opening one closes the other — and they already share the half-written
+  // words, so a list half chosen in one is the same list in the other.
+  completes(field, menu, replying(askingOn(answer), (said) => (answer.saying_text = said)));
   const go = document.createElement("button");
   go.type = "button";
   go.className = "ask-send";
@@ -470,7 +489,7 @@ function drawAsk() {
     answer.saying_text = field.value;
     go.disabled = Boolean(answer.saying) || !field.value.trim();
   });
-  own.append(field, go);
+  own.append(box, go);
   bits.push(own);
 
   el.flyAsk.replaceChildren(...bits);
