@@ -32,6 +32,8 @@ mod colai_marks;
 mod colai_receivers;
 mod colai_send;
 mod outbox;
+#[cfg(target_os = "linux")]
+mod wrap;
 
 /// One lock for every test that changes the environment.
 ///
@@ -206,9 +208,24 @@ use std::os::unix::process::CommandExt;
 
 fn main() {
     without_somebody_elses_libraries();
+
+    /*
+     * `colai claude` is a terminal, not a window.
+     *
+     * First, because everything below this assumes a screen to draw on and refuses to start
+     * without one — and wrapping somebody's terminal must work over ssh, in a tmux pane, on
+     * a machine with no X at all. It must not detach either: it *is* the foreground process
+     * of that terminal, which is the whole point of it.
+     */
+    let asked: Vec<String> = std::env::args().skip(1).collect();
+    #[cfg(target_os = "linux")]
+    if asked.first().map(String::as_str) == Some("claude") {
+        std::process::exit(wrap::run(&asked[1..]));
+    }
+
     // Before the screen check and before anything is built: whoever asked should be free
     // the moment they have asked, not after a window has gone up.
-    step_out_of_the_way(&std::env::args().skip(1).collect::<Vec<_>>());
+    step_out_of_the_way(&asked);
 
     /*
      * Before anything is built, because the alternative is a toolbar that works.

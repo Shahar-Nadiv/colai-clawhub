@@ -652,7 +652,7 @@ fn where_the_work_is(pid: u32) -> Option<String> {
 const FAMILY_MOST: usize = 400;
 
 /// Every process descended from this one, breadth-first and bounded.
-fn descendants(pid: u32) -> Vec<u32> {
+pub(crate) fn descendants(pid: u32) -> Vec<u32> {
     let mut parents: std::collections::HashMap<u32, Vec<u32>> = std::collections::HashMap::new();
     let Ok(entries) = std::fs::read_dir("/proc") else {
         return Vec::new();
