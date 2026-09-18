@@ -34,7 +34,7 @@ const UI = new URL("./toolbar/ui/", import.meta.url);
 const read = (name: string) => readFileSync(new URL(name, UI), "utf8");
 
 const ORDER = ["toolbar-tools.js","toolbar-rail.js","toolbar-mark.js","toolbar-live.js",
-  "toolbar-answers.js","toolbar-compose.js","toolbar-library.js","toolbar-work.js",
+  "toolbar-answers.js","toolbar-compose.js","toolbar-work.js",
   "toolbar-toast.js","toolbar-send.js","toolbar-dock.js","toolbar.js"];
 
 /** The page, loaded and started, with every command answering the way a missing one would. */
@@ -294,7 +294,6 @@ describe("the page, actually run", () => {
       });
       await settle();
       const receiving = JSON.parse(page.run("JSON.stringify(state.receiving)") as string);
-      expect(receiving.kind).toBe("session");
       expect(receiving.id).toBe("the-one-that-opened-it");
       expect(receiving.name, "and named, so the rail says which").toBe("Fixing the hotkey");
     });
@@ -693,46 +692,27 @@ describe("the same keystrokes in every box there is to type in", () => {
   });
 });
 
-describe("one ask that fails is not news about everything else", () => {
+describe("an ask that fails, and what is kept when it does", () => {
   const CHAT = { key: "chat-1", title: "Fixing the hotkey", preview: "colai-clawhub", at: 2 };
 
-  test("a missing catalogue does not empty the receiver picker", async () => {
+  test("a conversation list that fails is said out loud", async () => {
     /*
-     * Five commands went out under one `Promise.all` and one `catch`, so a rejection from
-     * any of them threw away the four answers that had arrived. One of the five is
-     * `colai_libraries`, which has nothing to do with choosing who receives — so a host with
-     * no catalogue to read had its whole conversation list replaced by "Could not reach the
-     * Gateway" while the Gateway was answering perfectly well about conversations. With
-     * nobody pickable, nothing could be sent anywhere.
+     * The reason the banner exists: this really is news about the list, and replacing the
+     * list with it is a fair trade.
+     *
+     * There used to be four other asks beside it under one `Promise.all` and one `catch`,
+     * so a rejection from any of them — a missing component catalogue, most memorably —
+     * threw away the conversations that had arrived and put this banner over a list that
+     * was perfectly good. Those four are gone; the one ask left is the one the banner is
+     * genuinely about.
      */
-    const page = openTheToolbar({
-      answers: {
-        colai_sessions: [CHAT],
-        colai_libraries: new Error("no catalogue on this host"),
-      },
-    });
-    await settle();
-    expect(page.run("state.sessions.length"), "the conversation that answered is kept").toBe(1);
-    expect(page.run("state.whoTrouble"), "and nothing is blamed on the Gateway").toBe(null);
-    // The picker is only drawn while somebody is looking at it, so it is opened.
-    page.run('state.open = "agents"; render()');
-    const rows = page.dom.document.querySelector("#agent-rows")?.textContent ?? "";
-    expect(rows, "the picker lists it").toContain("Fixing the hotkey");
-    expect(rows, "rather than an error about something else").not.toContain(
-      "Could not reach the Gateway",
-    );
-  });
-
-  test("a conversation list that fails is still said out loud", async () => {
-    // The other half, and the reason the banner exists: this one really is news about the
-    // list, and replacing the list with it is a fair trade.
     const page = openTheToolbar({
       answers: { colai_sessions: new Error("the socket is down") },
     });
     await settle();
     expect(page.run("state.whoTrouble")).toBe("the socket is down");
-    page.run('state.open = "agents"; render()');
-    expect(page.dom.document.querySelector("#agent-rows")?.textContent ?? "").toContain(
+    page.run('state.open = "chat"; render()');
+    expect(page.dom.document.querySelector("#chat-rows")?.textContent ?? "").toContain(
       "Could not reach the Gateway",
     );
   });
@@ -859,8 +839,8 @@ describe("the receiver's name cannot push Send out of the popup", () => {
    * somebody's eyes.
    */
   const css = readFileSync(new URL("./toolbar/ui/toolbar.css", import.meta.url), "utf8");
-  // Anchored to the start of a line, or `.agents-running` finds the rule for
-  // `.agents-key[data-working="true"] .agents-running` and reads a different block.
+  // Anchored to the start of a line, or `.chat-running` finds the rule for
+  // `.chat-key[data-working="true"] .chat-running` and reads a different block.
   const ruleFor = (selector: string) => {
     const at = css.indexOf(`\n${selector} {`);
     return at < 0 ? "" : css.slice(at, css.indexOf("}", at));
@@ -898,9 +878,9 @@ describe("the receiver's name cannot push Send out of the popup", () => {
     expect(ruleFor(".popup > .popup-foot > .popup-to")).toContain("flex-shrink: 1");
     // The same treatment on the rail, where the name is drawn beside the light. The
     // picker's rows already had it; these two did not.
-    expect(ruleFor(".agents-name")).toContain("min-width: 0");
-    expect(ruleFor(".agents-name")).toContain("max-width");
-    expect(ruleFor(".agents-who")).toContain("text-overflow: ellipsis");
-    expect(ruleFor(".agents-running")).toContain("text-overflow: ellipsis");
+    expect(ruleFor(".chat-name")).toContain("min-width: 0");
+    expect(ruleFor(".chat-name")).toContain("max-width");
+    expect(ruleFor(".chat-who")).toContain("text-overflow: ellipsis");
+    expect(ruleFor(".chat-running")).toContain("text-overflow: ellipsis");
   });
 });

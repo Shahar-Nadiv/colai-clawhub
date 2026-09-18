@@ -336,13 +336,13 @@ body {
  * Slow, because it is a state and not an event. A fast pulse says "look at me now",
  * which is exactly wrong for a thing that will take a minute.
  */
-.agents-key[data-working="true"] {
+.chat-key[data-working="true"] {
   box-shadow:
     0 0 0 1.5px color-mix(in srgb, var(--ok) 55%, transparent),
     0 0 14px color-mix(in srgb, var(--ok) 35%, transparent);
   animation: working 2.6s ease-in-out infinite;
 }
-.agents-key[data-working="true"] .agents-running {
+.chat-key[data-working="true"] .chat-running {
   color: var(--ok);
 }
 @keyframes working {
@@ -353,7 +353,7 @@ body {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .agents-key[data-working="true"] {
+  .chat-key[data-working="true"] {
     animation: none;
   }
 }
@@ -525,7 +525,7 @@ body {
   margin-left: 1px;
 }
 
-.agents-key {
+.chat-key {
   gap: 8px;
   padding: 0 10px 0 8px;
   text-align: left;
@@ -536,7 +536,7 @@ body {
    name stretched the key — and with it the whole pill — under the pointer, moving every
    other key on it. The picker's rows already shorten this way; these two did not, and the
    two must not drift apart. */
-.agents-name {
+.chat-name {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -544,16 +544,16 @@ body {
   min-width: 0;
   max-width: 150px;
 }
-.agents-who {
+.chat-who {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.rail-wrap[data-vertical="true"] .agents-name {
+.rail-wrap[data-vertical="true"] .chat-name {
   display: none;
 }
-.agents-running {
+.chat-running {
   font-size: 9.5px;
   opacity: 0.6;
   font-family: var(--font-mono);
@@ -586,12 +586,12 @@ body {
 .key[aria-pressed="true"] .running-dots {
   background: rgb(0 0 0 / 14%);
 }
-.rail-wrap[data-vertical="true"] .agents-key {
+.rail-wrap[data-vertical="true"] .chat-key {
   gap: 3px;
   padding: 0 6px;
 }
 
-.agent-avatar-dot {
+.chat-avatar-dot {
   display: grid;
   place-items: center;
   width: 26px;
@@ -609,23 +609,6 @@ body {
   white-space: nowrap;
 }
 
-/* A session with a run still going. The ring pulses; the row does not move, because a
-   list that shifts under the pointer is a list you cannot click. */
-.agent-avatar-dot[data-busy="true"] {
-  box-shadow: 0 0 0 2px var(--accent);
-  animation: breathe 1.8s ease-in-out infinite;
-}
-@keyframes breathe {
-  50% {
-    box-shadow: 0 0 0 2px transparent;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .agent-avatar-dot[data-busy="true"] {
-    animation: none;
-  }
-}
-
 /* A still picture of the rail as it was, dissolving while the new one arrives. It is
    drawn and never touched: the pointer belongs to the rail underneath it. */
 .ghost {
@@ -636,7 +619,7 @@ body {
 /* ── flyouts ──────────────────────────────────────────────────────────────── */
 
 .flyout,
-.agents {
+.chat-pick {
   position: absolute;
   padding: 6px;
   border-radius: 12px;
@@ -650,7 +633,7 @@ body {
 .flyout-wide {
   width: 250px;
 }
-.agents {
+.chat-pick {
   width: 330px;
   padding: 0;
   overflow: hidden;
@@ -682,7 +665,7 @@ body {
   opacity: 0.5;
 }
 
-.agents-title {
+.chat-title {
   margin: 0;
   padding: 12px 16px 8px;
   font-size: 11px;
@@ -707,51 +690,14 @@ body {
   background: rgb(255 255 255 / 16%);
 }
 
-.agent-rows {
+.chat-rows {
   display: flex;
   flex-direction: column;
   gap: 1px;
   padding: 0 6px 6px;
 }
 
-/* A folder that opens, and the conversations sitting inside it. */
-.twist {
-  flex-shrink: 0;
-  width: 26px;
-  text-align: center;
-  font-size: 9px;
-  color: var(--muted);
-  transition: transform 160ms ease-out;
-}
-.twist[data-open="true"] {
-  transform: rotate(90deg);
-}
-@media (prefers-reduced-motion: reduce) {
-  .twist {
-    transition: none;
-  }
-}
-.row-project .agent-name {
-  font-weight: 500;
-}
-/* Indented by exactly the folder's own twist, so the names line up under it. */
-.row-nested {
-  padding-left: 26px;
-}
-
-/* A heading inside the list, telling the two kinds of receiver apart. */
-.row-group {
-  margin: 6px 0 2px;
-  padding: 0 10px;
-  font-size: 10px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.row-group:first-child {
-  margin-top: 2px;
-}
-.agent-empty {
+.chat-empty {
   padding: 0 16px 14px;
   margin: 0;
   font-size: 12.5px;
@@ -808,17 +754,6 @@ body {
   display: none;
 }
 
-
-/* What the toolbar noticed is in front, offered rather than taken. */
-.suggest-row {
-  cursor: pointer;
-  gap: 8px;
-  margin-top: 4px;
-  border: 1px dashed rgb(255 255 255 / 18%);
-}
-.suggest-row:hover {
-  border-color: var(--accent);
-}
 
 /* A mark waiting to be sent, and the tick that decides whether it goes this time. */
 /*
@@ -1036,58 +971,6 @@ body {
 .chip:hover {
   color: var(--text-strong);
 }
-/* ── the automation panel ─────────────────────────────────────────────────── */
-
-/* A chip row that names what it is choosing between. The label is not a chip, so it
-   does not take a share of the row the way `flex: 1` would give it one. */
-.chip-label {
-  flex: 0 0 auto;
-  align-self: center;
-  padding-right: 4px;
-  color: var(--muted);
-  font-size: 11px;
-}
-.cron-line {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  margin: 0 8px;
-}
-.cron-line .popup-note {
-  margin: 0;
-}
-.cron-line .mode-row {
-  flex: 1;
-  padding: 0;
-}
-.cron-amount {
-  flex: 0 0 68px;
-  width: 68px;
-  text-align: center;
-}
-/* What the schedule comes to, said back. Quiet until it is a schedule, then lit — the
-   one line in the panel that changes as somebody types. */
-.cron-summary {
-  margin: 6px 8px 2px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: rgb(255 255 255 / 5%);
-  color: var(--muted);
-  font-size: 11.5px;
-}
-.cron-summary[data-ready="true"] {
-  color: var(--text-strong);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-}
-/* A fact about how automations work, not a warning about this one. Said quietly, in
-   the margin, where the rest of the panel's small print would be if it had any. */
-.cron-bare {
-  margin: 8px 8px 0;
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.45;
-}
-
 /* Four words where the mode chips have one each. Smaller and given room to breathe,
    rather than four labels touching their own edges. */
 .design-row .chip {
@@ -1198,9 +1081,9 @@ body {
  * ── the work ─────────────────────────────────────────────────────────────────
  *
  * What is waiting, what has been sent, and what came back. Against the side of the
- * screen rather than the middle of it: the library is opened, used and closed, and this
- * is meant to stay open while somebody works — a window in the middle of the screen for
- * an hour is a window in the way.
+ * screen rather than the middle of it, because unlike every other surface here it is
+ * meant to stay open while somebody works — and a window in the middle of the screen
+ * for an hour is a window in the way.
  */
 /*
  * ── how the ask is taken ─────────────────────────────────────────────────────
@@ -1831,7 +1714,7 @@ body {
 .work-write > .popup-note,
 .work-write > .popup-foot,
 .work-write > .popup-warn,
-.work-write > .agent-empty {
+.work-write > .chat-empty {
   margin-left: 0;
   margin-right: 0;
   width: 100%;
@@ -1850,107 +1733,6 @@ body {
 }
 .work-foot:hover {
   color: var(--text);
-}
-
-/*
- * ── the library ──────────────────────────────────────────────────────────────
- *
- * The one window in this toolbar. Every other menu is a list of words because the thing
- * being chosen is its name; a component is recognised by its picture, so this needs room
- * for pictures — and room is what makes it a window rather than a flyout.
- *
- * Centred on the screen the mark is on — placed by `placeLibrary`, not by the stylesheet.
- * The overlay spans every display, so centring on the viewport means centring on the
- * union of all of them: with two monitors side by side that is the bezel, and the window
- * arrives split down the middle with its close button on the screen you are not looking
- * at. The same trap the answer panels already avoid.
- */
-.library {
-  position: fixed;
-  z-index: 80;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: min(560px, 82vw);
-  max-height: 70vh;
-  padding: 12px;
-  border-radius: 14px;
-  background: var(--chrome-strong);
-  border: 1px solid rgb(255 255 255 / 12%);
-  box-shadow: 0 30px 80px rgb(0 0 0 / 68%);
-}
-.library-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-}
-.library-head .agents-title {
-  flex: 1;
-  padding: 2px 0 0;
-}
-.library-find {
-  margin: 0;
-}
-/* Three across, so a preview is wide enough to tell two cards apart at a glance. */
-.library-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  min-height: 0;
-  padding: 2px;
-}
-.library-card {
-  all: unset;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 6px;
-  border-radius: 10px;
-  cursor: pointer;
-  border: 1px solid rgb(255 255 255 / 8%);
-}
-.library-card:hover {
-  background: rgb(255 255 255 / 7%);
-  border-color: rgb(255 255 255 / 16%);
-}
-.library-card:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-/* The frame keeps its height whether or not a picture arrived, so a catalogue with one
-   dead image does not leave a hole in the grid. */
-.library-shot {
-  aspect-ratio: 4 / 3;
-  border-radius: 6px;
-  overflow: hidden;
-  background: rgb(255 255 255 / 5%);
-}
-.library-shot img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.library-name {
-  font-size: 11.5px;
-  color: var(--text-strong);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* What was chosen out of it, said on the mark that asked. */
-.chosen-row {
-  margin-top: 6px;
-}
-.chosen-none {
-  color: var(--muted);
-}
-
-/* Where a design mark's content comes from, under the row saying what kind it is. */
-.source-row {
-  margin-top: 4px;
 }
 
 .popup {
@@ -2170,90 +1952,6 @@ body {
    error, so it stays grey rather than going red. */
 .popup-to-lit[data-up="true"] {
   background: var(--ok);
-}
-
-/*
- * How this will be answered: which model, and how hard it thinks.
- *
- * Its own row, because these two are one question and the row below them — Files,
- * Schedule — is a different one. The model takes what it needs and the slider takes the
- * rest, so a long model name shortens the slider rather than pushing it off the card.
- */
-/*
- * Beside the mode in the send row. Both names shrink rather than push Send off the card,
- * and the receiver yields first: the model is the thing just chosen, and the more likely
- * to be the one being read.
- */
-.model-key {
-  flex: 0 1 auto;
-  min-width: 42px;
-}
-.model-key-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* Wider than the mode's menu: a model is named by a phrase and a provider, where a mode
-   is named by a word. */
-.model-menu {
-  width: 268px;
-}
-/* A menu with nothing in it still has to say why. */
-.menu-empty {
-  margin: 0;
-  padding: 7px 8px;
-  font-size: 11.5px;
-  line-height: 1.45;
-  color: var(--muted);
-}
-
-.effort {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  /* Takes the width Files and Schedule leave on their row. */
-  flex: 1 1 auto;
-  min-width: 96px;
-  margin-left: 6px;
-}
-/*
- * The stops are the model's, so the track is drawn rather than ticked: a model with three
- * efforts and one with five would otherwise need two different sets of marks, and the
- * word beside it already says which stop the handle is on.
- */
-.effort-bar {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 16px;
-  margin: 0;
-  appearance: none;
-  background: none;
-  cursor: pointer;
-}
-.effort-bar::-webkit-slider-runnable-track {
-  height: 3px;
-  border-radius: 999px;
-  background: var(--border-strong);
-}
-.effort-bar::-webkit-slider-thumb {
-  appearance: none;
-  width: 11px;
-  height: 11px;
-  margin-top: -4px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-.effort-bar:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.effort-said {
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--muted);
-  /* Wide enough for the longest level, so the slider does not shorten as it is dragged. */
-  min-width: 44px;
 }
 
 /* Files and Schedule: what else could happen to this message, kept away from the row
@@ -2731,46 +2429,15 @@ body {
   margin-top: 2px;
 }
 
-/* ── how the receiver answers ────────────────────────────────────────────────
- *
- * Model and effort sat on the composer's send row and on the row above it, which said
- * they were part of the message being written. They are not: they belong to the
- * conversation, and the toolbar has always stored them that way. They live with the
- * choice of who is answering now, and the receiver control says what they are. */
-.agent-answer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px 2px;
-  border-top: 1px solid rgb(255 255 255 / 10%);
-  margin-top: 6px;
-}
-
-.agent-answer-said {
-  flex: none;
-  font-size: 10.5px;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--muted-dim);
-}
-
-/* The name and, under it, what will read the message. Two lines in the space the name
-   used to take alone, because the second is a caption and is set as one. */
+/* Who this is going to, set as a column. It carried a caption under the name saying
+   which model would read the message; nothing on this host can name one, so the name is
+   the only line left and the column is what keeps it off the dot and the chevron. */
 .popup-to-stack {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   min-width: 0;
   line-height: 1.25;
-}
-
-.popup-to-how {
-  font-size: 10px;
-  color: var(--muted-dim);
-  max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ── what the agent is doing ──────────────────────────────────────────────────
@@ -3157,7 +2824,7 @@ body {
 .ask-badge {
   display: none;
 }
-.agents-key[data-asking="true"] .ask-badge {
+.chat-key[data-asking="true"] .ask-badge {
   display: grid;
   place-items: center;
   width: 16px;
@@ -3172,7 +2839,7 @@ body {
 }
 /* Same shape of claim as the working ring, in the colour that means "you". A question is
    the one thing on this rail that nothing else will resolve. */
-.agents-key[data-asking="true"] {
+.chat-key[data-asking="true"] {
   box-shadow:
     0 0 0 1.5px color-mix(in srgb, var(--accent) 65%, transparent),
     0 0 14px color-mix(in srgb, var(--accent) 35%, transparent);
@@ -3186,7 +2853,7 @@ body {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .agents-key[data-asking="true"] {
+  .chat-key[data-asking="true"] {
     animation: none;
   }
 }

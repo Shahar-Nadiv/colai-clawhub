@@ -617,7 +617,7 @@ function answerBox(answer, acts) {
    * This used to be a fixed *Yes* and *No* whatever had been asked, which answers a
    * question the agent mostly was not asking — most of what comes back is *which of
    * these three*, and neither button is one of the three. `choicesIn` reads them out of
-   * what it wrote, and is the same decision the popup off the agents key makes, so the
+   * what it wrote, and is the same decision the popup off the conversation key makes, so the
    * two surfaces never offer different answers to the same question.
    */
   const quicks = choicesIn(lastTurn(answer) || "").map((choice) => [
@@ -876,7 +876,6 @@ async function loadWork() {
       .sort((a, b) => (b.at || 0) - (a.at || 0))[0];
     return {
       sessionKey: session.key,
-      agentId: session.agentId || null,
       who: session.title,
       at: session.at || (had && had.at) || now,
       // The conversation's own last line. A send colai made says what colai said
@@ -886,10 +885,6 @@ async function loadWork() {
       marks: ours ? ours.marks : [],
       blocked: ours ? ours.blocked : undefined,
       mine: Boolean(ours) || Boolean(had && had.mine),
-      // From the same round trip, so a row can say "working" before its transcript has
-      // ever been fetched.
-      busy: Boolean(session.busy),
-      unread: Boolean(session.unread),
       // Carried whole, and everything the person did to this panel lives in it. It used
       // to be one field at a time, and the refresh dropped whichever one was added last
       // — an open row shutting itself every few seconds.
@@ -953,15 +948,14 @@ function shownWork() {
 /**
  * Which of the remembered rows belong to whoever is receiving.
  *
- * `whoseConversations` answers about a Gateway session; the panel holds its own rows, so
- * this is the same question asked of those. A row colai itself created is always ours
- * even before the Gateway agrees it exists, or a send would vanish for the seconds
- * between making it and the list catching up.
+ * `whoseConversations` answers about a conversation in the session list; the panel holds
+ * its own rows, so this is the same question asked of those. A row colai itself created is
+ * always ours even before the list agrees it exists, or a send would vanish for the
+ * seconds between making it and the list catching up.
  */
 function mineToShow() {
   const belongs = whoseConversations();
-  return (entry) =>
-    belongs({ key: entry.sessionKey, agentId: entry.agentId }) || Boolean(entry.blocked);
+  return (entry) => belongs({ key: entry.sessionKey }) || Boolean(entry.blocked);
 }
 
 /** Everything the person did to this panel, as opposed to everything the Gateway said. */
@@ -978,8 +972,6 @@ function sameWork(was, now) {
       entry.sessionKey === then.sessionKey &&
       entry.at === then.at &&
       entry.said === then.said &&
-      entry.busy === then.busy &&
-      entry.unread === then.unread &&
       entry.view === then.view &&
       entry.answer === then.answer
     );
@@ -996,18 +988,9 @@ function sameWork(was, now) {
  */
 function whoseConversations() {
   const who = state.receiving;
-  if (who.kind === "session" && who.id) {
-    return (session) => session.key === who.id;
-  }
-  if (who.kind === "thread" && who.id) {
-    const key = state.adoptedKeys ? state.adoptedKeys[who.id] : null;
-    return (session) => Boolean(key) && session.key === key;
-  }
-  if (who.kind === "agent" && who.id) {
-    return (session) => session.agentId === who.id;
-  }
+  if (who.id) return (session) => session.key === who.id;
   // Nobody chosen yet. Everything would be a mixed list, so it is nothing until the rail
-  // has settled on a receiver — which it does as soon as the Gateway answers.
+  // has settled on a receiver — which it does as soon as the session list is read.
   return () => false;
 }
 
@@ -1057,11 +1040,12 @@ async function loadTurns(entry) {
    *
    * Replies arrive by finding the session in `state.answers`; an answer built here was
    * never added to it, so a conversation opened from the panel was frozen at the instant
-   * it was opened — while its own pill went on saying "Working".
+   * it was opened — while its own pill went on saying "Working". Being in that list is the
+   * whole of it: `colai_watch` used to be asked alongside, and on this host the replies
+   * come back down the pipe the message went up rather than to a subscriber.
    */
   if (!state.answers.some((one) => one.sessionKey === live.sessionKey)) {
     state.answers.push(answer);
-    void invoke("colai_watch", { sessionKey: live.sessionKey }).catch(() => {});
   }
   render();
 }

@@ -39,7 +39,7 @@ const HIGHLIGHT_THROUGH: f64 = 0.32;
 const THUMB_EDGE: i32 = 180;
 /// The widest edge a picture keeps before it is shrunk.
 ///
-/// Bounded here rather than at the send, because the Gateway refuses an image over 6MB
+/// Bounded here rather than at the send, because the model refuses an image over 6MB
 /// and a refusal at that point loses the whole batch for one oversized capture.
 ///
 /// The number is a measurement, not a guess. A whole 1920-wide screen sent at 1600 costs
@@ -251,7 +251,7 @@ pub(crate) async fn colai_capture_mark(
     let mut hex = None;
     // The size of the picture that actually goes, which is not the size of the region
     // asked for: a capture wider than an agent will take is shrunk on the way out, and
-    // telling the Gateway the region's size would describe an image nobody has.
+    // claiming the region's size would describe an image nobody has.
     let mut sent = (crop.width, crop.height);
     // Cleared here rather than when the recording ends, so a stop that arrives after the
     // last frame cannot cut the next recording short before it has taken one.

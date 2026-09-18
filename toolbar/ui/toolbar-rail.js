@@ -5,7 +5,7 @@
 // different question from what a mark looks like once it is made.
 //
 // The receiver list is here too, because on this surface it is part of the rail: the
-// agents key is a control on it, and the menu it opens is what makes the rest of this
+// conversation key is a control on it, and the menu it opens is what makes the rest of this
 // mean anything. Sending is elsewhere; choosing is here.
 
 const GLYPHS = {
@@ -33,7 +33,6 @@ const GLYPHS = {
   screenshot:
     '<path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/>',
   send: '<path d="M21 3L10.5 13.5"/><path d="M21 3l-6.8 18-3.7-7.5L3 9.8z"/>',
-  schedule: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5.3l3.4 2"/>',
   folder:
     '<path d="M3 7.5a2 2 0 0 1 2-2h3.6l2 2.4H19a2 2 0 0 1 2 2v7.6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   stop: '<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/>',
@@ -187,12 +186,12 @@ function buildRail() {
   );
   dividers[1].after(exact);
 
-  const agents = document.createElement("button");
-  agents.type = "button";
-  agents.className = "key agents-key";
-  agents.title = "Agents";
-  agents.innerHTML =
-    '<span class="running-dots"></span><span class="agents-name"><span class="agents-who"></span><span class="agents-running"></span></span><span class="ask-badge" aria-hidden="true">?</span><span class="caret">▾</span>';
+  const chat = document.createElement("button");
+  chat.type = "button";
+  chat.className = "key chat-key";
+  chat.title = "Conversation";
+  chat.innerHTML =
+    '<span class="running-dots"></span><span class="chat-name"><span class="chat-who"></span><span class="chat-running"></span></span><span class="ask-badge" aria-hidden="true">?</span><span class="caret">▾</span>';
   /*
    * Two things on one key.
    *
@@ -202,14 +201,14 @@ function buildRail() {
    * a button inside a button is not markup a browser will keep, and the badge has to sit
    * inside this one to come out of it.
    */
-  agents.addEventListener("click", (event) => {
+  chat.addEventListener("click", (event) => {
     if (event.target.closest(".ask-badge")) {
       showAsked();
       return;
     }
-    flyout("agents");
+    flyout("chat");
   });
-  buttons.agents = agents;
+  buttons.chat = chat;
 
   const send = document.createElement("button");
   send.type = "button";
@@ -271,7 +270,7 @@ function buildRail() {
   // and `hidden` set once here would have outlived it — nothing clears it any more.
   stop.dataset.folded = "true";
 
-  dividers[2].after(send, agents, stop, home);
+  dividers[2].after(send, chat, stop, home);
 
   row(el.flyShape, "box", "Box", "box", "B");
   row(el.flyShape, "circle", "Circle", "circle", "O");
@@ -494,73 +493,24 @@ function use(tool) {
 }
 
 /**
- * The agent or session currently marked as receiving, whichever it is.
+ * The conversation currently marked as receiving.
  *
- * Returned as one shape so everything downstream — the rail's label, the popup, the
- * mark beside a row — can name the receiver without first asking which kind it is.
+ * Returned as one shape so everything downstream — the rail's label, the popup, the mark
+ * beside a row — names the receiver the same way. It used to ask which of three kinds it
+ * was first; there is one kind on this host, so there is nothing to ask.
  */
 function receiver() {
   if (state.receiving.id === null) return null;
-  if (state.receiving.kind === "thread") {
-    const thread = everyThread().find((row) => row.id === state.receiving.id);
-    if (thread) return { name: thread.title, emoji: null };
-  } else if (state.receiving.kind === "session") {
-    const session = state.sessions.find((row) => row.key === state.receiving.id);
-    if (session) return { name: session.title, emoji: emojiFor(session) };
-  } else {
-    const agent = state.agents.find((row) => row.id === state.receiving.id);
-    if (agent) return { name: agent.name, emoji: agent.emoji };
-  }
+  const session = state.sessions.find((row) => row.key === state.receiving.id);
+  if (session) return { name: session.title };
   // Off the list rather than gone. The remembered name is what was true when it was
   // picked, which is a better answer than pretending nobody is receiving.
-  return state.receiving.name ? { name: state.receiving.name, emoji: state.receiving.emoji } : null;
+  return state.receiving.name ? { name: state.receiving.name } : null;
 }
 
-/**
- * How many conversations there are to hand something to.
- *
- * Gateway sessions and threads held elsewhere counted as one number, because that is
- * how somebody counts them: they are all conversations, and which process is holding
- * one is the sort of distinction a rail with room for four words should not spend.
- */
+/** How many conversations there are to hand something to. */
 function talking() {
-  return state.sessions.length + everyThread().length;
-}
-
-/** Every conversation held elsewhere, folders flattened away. */
-function everyThread() {
-  return state.projects.flatMap((project) => project.threads);
-}
-
-/**
- * Which folders are open, counting the ones that have no choice about it.
- *
- * A folder holding the conversation currently receiving stays open, because a menu that
- * hides the row it is describing is a menu you cannot check. And a lone folder is opened
- * too: one collapsed row is a list of nothing.
- */
-function openedProjects() {
-  const open = new Set(state.opened);
-  if (state.projects.length === 1) open.add(state.projects[0].key);
-  if (state.receiving.kind === "thread") {
-    const holding = state.projects.find((project) =>
-      project.threads.some((thread) => thread.id === state.receiving.id),
-    );
-    if (holding) open.add(holding.key);
-  }
-  return open;
-}
-
-function toggleProject(key) {
-  if (state.opened.has(key)) state.opened.delete(key);
-  else state.opened.add(key);
-  render();
-}
-
-/** A session wears its agent's face, so the two lists read as one set of people. */
-function emojiFor(session) {
-  const agent = state.agents.find((row) => row.id === session.agentId);
-  return agent ? agent.emoji : null;
+  return state.sessions.length;
 }
 
 function flyout(which) {
@@ -580,11 +530,11 @@ function flyout(which) {
   // list kept warm in the background would be a list that is quietly wrong.
   // Both menus show who could receive, and both are worth a fresh look at what is in
   // front: the answer is different by the time somebody opens one.
-  if (state.open === "agents" || state.open === "send") void learnFront().then(loadWho);
+  if (state.open === "chat" || state.open === "send") void learnFront().then(loadWho);
 }
 
 /**
- * Who this machine can hand a region to: its agents, and the conversations underway.
+ * Which conversations this machine has, so a region has somewhere to go.
  *
  * The application's own lists, not a second idea of them — the toolbar should never
  * disagree with the window behind it about what is running. A failure leaves them alone
@@ -623,7 +573,7 @@ async function watchEverything() {
    * asked again for the rest of the session. This ticker already runs forever, which is
    * the property the retry actually needed.
    */
-  if (state.whoTrouble || state.allowed.length === 0) {
+  if (state.whoTrouble) {
     void loadWho();
   }
   // And the conversations, which move without this toolbar: an agent answers, somebody
@@ -673,60 +623,28 @@ async function watchEverything() {
 }
 
 async function loadWho() {
-  const pick = (kind) => (state.receiving.kind === kind ? state.receiving.id : null);
   /*
-   * Asked together, because the menu shows them together: two answers a second apart would
-   * let the rail claim a receiver that the list below it does not offer.
+   * One ask now, and it used to be five under a single `Promise.all` and a single `catch`
+   * — so any one rejection threw away the four answers that had arrived. Some of the five
+   * had nothing whatever to do with choosing who receives, and a host with no component
+   * catalogue therefore replaced the whole conversation list with "Could not reach the
+   * Gateway" while the Gateway was answering perfectly well about conversations. The four
+   * that were not about conversations are gone; this is the one that is.
    *
-   * Settled rather than all, though. Five commands went out under one `Promise.all` and one
-   * `catch`, so any single rejection threw away the four answers that had arrived — and one
-   * of the five is `colai_libraries`, which has nothing whatever to do with choosing who
-   * receives. A host with no catalogue to read therefore replaced the whole conversation
-   * list with "Could not reach the Gateway" while the Gateway was answering perfectly well
-   * about conversations. `allSettled` keeps every answer that came back, and each ask is
-   * then read on its own terms.
+   * A refusal leaves what was already known alone. "Nobody there" and "could not ask" are
+   * different facts, and emptying the list is how the second gets told as the first. On the
+   * very first load there is nothing to keep, so an ask that fails degrades to the empty
+   * list it started as — which is the honest answer before anything has been heard.
    */
-  const [agents, sessions, projects, allowed, libraries] = await Promise.allSettled([
-    invoke("colai_agents", { receiving: pick("agent") }),
-    invoke("colai_sessions", { receiving: pick("session") }),
-    invoke("colai_threads", { receiving: pick("thread") }),
-    // What this connection may do, asked with the rest rather than once at startup.
-    // The Gateway connects a moment after the app does — which is why the ask below
-    // is retried — so a single question at load is answered before there is anything
-    // to answer it, and a menu would spend the session saying it was not allowed.
-    invoke("colai_allowed"),
-    // Which catalogues this build can read, so the library window can name one rather
-    // than telling somebody to go and find out.
-    invoke("colai_libraries"),
-  ]);
-  /*
-   * A refusal leaves what was already known alone.
-   *
-   * "Nobody there" and "could not ask" are different facts, and emptying a list is how the
-   * second one gets told as the first. On the very first load there is nothing to keep, so
-   * an ask that fails degrades to the empty list it started as — which is the honest answer
-   * before anything has been heard.
-   */
-  const heard = (answer, was) => (answer.status === "fulfilled" ? answer.value || [] : was);
-  state.allowed = heard(allowed, state.allowed);
-  state.libraries = heard(libraries, state.libraries);
-  state.agents = heard(agents, state.agents);
-  state.sessions = heard(sessions, state.sessions);
-  state.projects = heard(projects, state.projects);
-  /*
-   * And what the rail says went wrong, from the three asks the picker is actually made of.
-   *
-   * Only these three. The picker is a list of agents and conversations, so failing to read
-   * one of them is the thing that banner is about — and it replaces the list, which is a
-   * fair trade for news about the list itself. What this connection may do and which
-   * catalogues it can read are settings the picker never shows; either of them putting
-   * "Could not reach the Gateway" over a set of perfectly good conversations is how a
-   * receiver became unpickable because a library was missing. Both are retried on the
-   * ticker regardless, which is where an ask that quietly failed gets another go.
-   */
-  const refused = [agents, sessions, projects].find((answer) => answer.status === "rejected");
-  const why = refused && refused.reason;
-  state.whoTrouble = refused ? (why && why.message ? why.message : String(why)) : null;
+  try {
+    state.sessions = (await invoke("colai_sessions", { receiving: state.receiving.id })) || [];
+    state.whoTrouble = null;
+  } catch (trouble) {
+    // Said rather than swallowed, and it replaces the list — which is a fair trade for
+    // news about the list itself. Retried on the ticker, where an ask that quietly failed
+    // gets another go.
+    state.whoTrouble = trouble && trouble.message ? trouble.message : String(trouble);
+  }
   try {
     // The conversation the toolbar was opened from, when it was opened from one.
     //
@@ -739,20 +657,9 @@ async function loadWho() {
     // more recent than the launch did, and a list that reloads every few seconds must
     // not keep overruling them.
     followTheChatWeCameFrom();
-    // Still nothing, so the Gateway's own default stands in — the first thing somebody
-    // marks still has somewhere to go.
-    if (state.receiving.id === null) {
-      const fallback = state.agents.find((agent) => agent.receiving);
-      if (fallback) {
-        state.receiving = {
-          kind: "agent",
-          id: fallback.id,
-          name: fallback.name,
-          emoji: fallback.emoji,
-          locator: null,
-        };
-      }
-    }
+    // Nothing else stands in. The Gateway named a default agent and the rail fell back to
+    // it; here there is no agent to be default, and an empty receiver is a real answer —
+    // `colai_send` reads it as "start a new conversation".
   } catch (error) {
     // Reachable only on an answer shaped like nothing this expects — a list that came back
     // as something other than a list. Said rather than swallowed: a rail that cannot work
@@ -788,16 +695,10 @@ let mustFollow = false;
  */
 function pointAtTheChatWeCameFrom() {
   if (!cameFrom) return false;
-  if (state.receiving.kind === "session" && state.receiving.id === cameFrom) return true;
+  if (state.receiving.id === cameFrom) return true;
   const chat = state.sessions.find((row) => row.key === cameFrom);
   if (!chat) return false;
-  state.receiving = {
-    kind: "session",
-    id: chat.key,
-    name: chat.title,
-    emoji: null,
-    locator: null,
-  };
+  state.receiving = { id: chat.key, name: chat.title };
   return true;
 }
 
@@ -839,12 +740,12 @@ function heardWhichChat(chat) {
   render();
 }
 
-function receive(kind, id, name, emoji, locator) {
+function receive(id, name) {
   state.picked = true;
-  // The locator travels with the choice. A conversation held elsewhere is addressed by
-  // its catalog, host and thread together, and by the time somebody sends, the list it
-  // came from may have been reloaded out from under the id.
-  state.receiving = { kind, id, name, emoji: emoji || null, locator: locator || null };
+  // The name travels with the id. The menu shows recent conversations, so the list this
+  // came out of may have been reloaded from under the id by the time somebody sends, and
+  // a receiver with no name is a control that has quietly gone blank.
+  state.receiving = { id, name };
   state.open = null;
   void loadWho();
 }

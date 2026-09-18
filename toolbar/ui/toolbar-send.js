@@ -62,41 +62,6 @@ function middleOf(marks) {
   };
 }
 
-/**
- * Open a new conversation where the work is, seeded with what was marked.
- *
- * The first thing a fresh session sees is the reason it exists, rather than an empty
- * prompt somebody then has to explain themselves into.
- */
-async function startHere() {
-  const project = state.inFront;
-  const example = project && project.threads[0];
-  if (!project || !project.path || !example) return;
-  const going = chosenMarks();
-  state.sending = true;
-  render();
-  try {
-    await invoke("colai_start_here", {
-      asked: {
-        catalogId: example.locator.catalogId,
-        hostId: example.locator.hostId,
-        agentId: example.locator.agentId || "main",
-        cwd: project.path,
-        initialMessage: summaryFor(going, state.mode, state.text, state.surface, state.files),
-      },
-    });
-    // The marks stay. A new conversation has been opened with them, and until it is
-    // listed among the receivers there is nothing here to send them to twice.
-    state.open = null;
-    say(`Opened a new conversation in ${project.label}.`, "receipt");
-  } catch (error) {
-    state.trouble = `Could not start there — ${error && error.message ? error.message : String(error)}`;
-  } finally {
-    state.sending = false;
-    render();
-  }
-}
-
 /** The marks that go in the next send, in the order they were made. */
 function chosenMarks() {
   return state.marks.filter((mark) => mark.chosen);
@@ -106,12 +71,7 @@ function chosenMarks() {
 function receiverNow() {
   const who = state.receiving;
   if (!who.id) return null;
-  return { kind: who.kind, id: who.id, locator: who.locator || null };
-}
-
-/** Whether sending to this receiver would hand a conversation over without asking. */
-function needsAgreeing() {
-  return state.receiving.kind === "thread" && !state.adopted.includes(state.receiving.id);
+  return { id: who.id };
 }
 
 /**
@@ -126,7 +86,7 @@ async function sendMarks(ids) {
   if (state.sending) return;
   const who = receiverNow();
   if (!who) {
-    state.trouble = "Nobody is receiving. Choose an agent or a conversation first.";
+    state.trouble = "Nobody is receiving. Choose a conversation first.";
     render();
     return;
   }
@@ -188,11 +148,6 @@ async function sendMarks(ids) {
       // must agree or the message names files that were never sent.
       sheets: going.filter(sheeted).map((mark) => mark.id),
       accent: accentNow(),
-      // How this conversation should answer. Sent every time rather than once: the
-      // conversation is the thing that holds them, and this may be the first send that
-      // has one to hold them on.
-      model: state.model,
-      thinkingLevel: state.effort,
       // Only the ones that travel. What is named rather than carried is already in the
       // message as a path, and sending it twice would mean encoding a gigabyte to say
       // something the sentence above it already said.
@@ -209,13 +164,12 @@ async function sendMarks(ids) {
      */
     state.prompt = sent.prompt || null;
 
-    // The message went; the settings on the conversation may not have. Said rather than
-    // swallowed — the commonest reason is the ordinary one, a first send to an agent that
-    // had no conversation yet to set them on, and the next send lands them. A setting
-    // that appears to have applied and did not is how somebody spends an hour wondering
-    // why the answers look the same.
+    // The message went; something it asked for may not have. This used to be the model
+    // and the effort failing to apply, and neither travels any more — what is left is a
+    // recording somebody asked to arrive as one contact sheet that had to go as separate
+    // frames. Said rather than swallowed: they asked for one thing and got another.
     if (sent.settingsTrouble) {
-      state.trouble = `Sent, but the model and effort did not take: ${sent.settingsTrouble}`;
+      state.trouble = `Sent, but not quite as asked: ${sent.settingsTrouble}`;
     }
     /*
      * And whether everything the message named actually travelled.
@@ -237,13 +191,6 @@ async function sendMarks(ids) {
     }
     if (shortfall.length) {
       state.trouble = `Sent, but ${shortfall.join("; ")} — so the message names more than arrived.`;
-    }
-    if (who.kind === "thread") {
-      state.adopted = [...state.adopted, who.id];
-      // Adopting a thread is what gives it a Gateway session, and a session is the only
-      // thing that can be taken back to an earlier point. Remembered here because this
-      // is the moment it becomes true.
-      state.adoptedKeys = { ...state.adoptedKeys, [who.id]: sent.sessionKey };
     }
     // Something is now working. Kept from here rather than waiting for the first frame
     // back: an agent that thinks for a minute before saying anything is working the

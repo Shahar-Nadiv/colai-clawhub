@@ -4,9 +4,9 @@
 
 Point at anything on your screen and hand it to Claude Code.
 
-<img src="https://raw.githubusercontent.com/Shahar-Nadiv/colai-clawhub/main/media/toolbar.png" alt="The colai rail over a desktop, with the drawing tools open" width="620">
+<img src="media/toolbar.png" alt="The colai rail over a desktop, with the drawing tools open" width="620">
 
-[**Watch it in 30 seconds**](https://github.com/Shahar-Nadiv/colai-clawhub/blob/main/media/toolbar.mp4?raw=1)
+[**Watch it in 30 seconds**](media/toolbar.mp4)
 
 A small rail that floats over every application on your desktop. Draw a box round a thing,
 point at a thing, measure it, pick a colour off it, record a few seconds of it — then say
@@ -27,8 +27,8 @@ claude plugin marketplace add Shahar-Nadiv/colai-clawhub@colai-claud-plugin
 claude plugin install colai@colai
 ```
 
-The branch is named because `main` is the OpenClaw plugin — the same toolbar, talking to an
-OpenClaw Gateway instead. Drop the `@colai-claud-plugin` once this is the default branch.
+The branch has to be named: `claude plugin marketplace add` clones a repository's default
+branch, and this plugin does not live on it yet. Drop the `@colai-claud-plugin` once it does.
 
 Then, in any Claude Code session:
 

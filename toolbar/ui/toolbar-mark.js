@@ -43,16 +43,7 @@ function startGesture(event) {
   // is underneath, and swallowing it is how an overlay earns a reputation.
   if (event.button !== 0) return;
   event.preventDefault();
-  // The library is open over everything, and a press outside it means "not this one".
-  // Without this the glass underneath takes the press and starts drawing a new mark —
-  // so pressing away from the window did not close it, it quietly began another mark
-  // behind it, and the only ways out were a close button on the far screen and a key
-  // nobody had been told about.
-  if (state.library !== null) {
-    closeLibrary();
-    return;
-  }
-  // And the Work panel, for the same reason: a press on the glass is a press somewhere
+  // The Work panel is open over everything, and a press on the glass is a press somewhere
   // that is not the panel. It closes rather than swallowing the press — what was being
   // marked is still being marked, and what was typed is still in the composer when it
   // opens again.
@@ -272,7 +263,7 @@ async function shoot(mark) {
  */
 
 /** The layers that could show up in a photograph, in the order they are stacked. */
-const IN_SHOT = ["rail-wrap", "marks", "pins", "popup", "library", "toasts", "flights"];
+const IN_SHOT = ["rail-wrap", "marks", "pins", "popup", "toasts", "flights"];
 
 /*
  * How far past the mark the picture actually reaches.
@@ -426,7 +417,6 @@ async function learnFront() {
   } catch {
     state.surface = null;
   }
-  state.inFront = projectInFront(state.projects, state.surface);
 }
 
 /** The colour the app is themed in, if it has told us one. */

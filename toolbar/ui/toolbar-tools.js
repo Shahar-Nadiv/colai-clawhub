@@ -121,37 +121,6 @@ const GITS = {
 /** The one a fresh toolbar offers, because it is the commonest thing to want. */
 const GIT_FIRST = "add";
 
-/**
- * The efforts a model offers, and which of them is chosen.
- *
- * From the model rather than from a list held here. Which levels exist is the provider's
- * answer, it differs between models, and a fixed list would be wrong the first time one
- * of them changed — the slider would offer an effort the model ignores, which looks
- * exactly like the slider not working.
- *
- * A model with no levels gets no slider at all. An empty one is a control lying about
- * having a choice.
- */
-function effortStops(model) {
-  const levels = (model && model.levels) || [];
-  return levels.filter((level) => level && level.id);
-}
-
-/**
- * Where the slider sits for a chosen effort.
- *
- * The model's own default when nothing is chosen, and the first stop when it does not
- * name one — never -1, which a range input reads as the leftmost stop anyway and would
- * silently mean "off" on a model whose first level is off.
- */
-function effortAt(model, chosen) {
-  const stops = effortStops(model);
-  if (stops.length === 0) return -1;
-  const wanted = chosen || (model && model.levelDefault) || "";
-  const at = stops.findIndex((level) => level.id === wanted);
-  return at >= 0 ? at : 0;
-}
-
 /** Which command a git mark is asking for, defaulted rather than trusted. */
 function gitKindOf(mark) {
   const id = (mark && mark.git) || GIT_FIRST;
@@ -921,150 +890,6 @@ const RECORD_LENGTHS = [2, 5, 10, 15];
  */
 const RECORD_CLEAR = 16;
 
-/*
- * ── automations ──────────────────────────────────────────────────────────────
- *
- * A send happens once. An automation is the same request on a schedule, and the
- * Gateway already has the machinery for it — this borrows its vocabulary rather than
- * inventing a second one, so a job made here reads the same in the Control UI as one
- * made there.
- *
- * Only what somebody has to decide. OpenClaw's own form keeps triggers, wake mode,
- * timeouts, delivery routes and tool allowances behind an "Advanced" fold; none of
- * that belongs on an overlay, and a panel that asked for it would be a settings page
- * standing on somebody's desktop.
- *
- * The one thing an automation cannot carry is the pictures. A scheduled job takes a
- * message and nothing else, so the words go and the photographs do not — which is said
- * out loud in the panel and written into the message, because an agent told to look at
- * `mark-1.png` that never arrives is worse off than one told there is no picture.
- */
-
-/** How often an automation can repeat, in the Gateway's own words. */
-const REPEATS = {
-  every: { label: "Interval" },
-  at: { label: "Once" },
-  cron: { label: "Cron" },
-};
-
-/** The units an interval is offered in, and what each is worth. */
-const UNITS = {
-  minutes: { label: "Minutes", ms: 60_000 },
-  hours: { label: "Hours", ms: 3_600_000 },
-  days: { label: "Days", ms: 86_400_000 },
-};
-
-/** How an automation starts out: every thirty minutes, in a session of its own. */
-const AUTOMATION_FIRST = {
-  name: "",
-  repeat: "every",
-  amount: "30",
-  unit: "minutes",
-  at: "",
-  expr: "0 9 * * *",
-  tz: "",
-  where: "isolated",
-};
-
-/**
- * The schedule an automation would be created with, or null if it is not one yet.
- *
- * Null rather than a guess: a blank interval and a half-typed cron expression are both
- * "not ready", and the panel would rather grey out its own button than post something
- * the Gateway will reject with a sentence nobody can act on.
- */
-function scheduleOf(cron) {
-  if (cron.repeat === "at") {
-    const at = (cron.at || "").trim();
-    return at ? { kind: "at", at } : null;
-  }
-  if (cron.repeat === "cron") {
-    const expr = (cron.expr || "").trim();
-    if (!expr) return null;
-    const tz = (cron.tz || "").trim();
-    return tz ? { kind: "cron", expr, tz } : { kind: "cron", expr };
-  }
-  const amount = Number(cron.amount);
-  if (!Number.isFinite(amount) || amount <= 0) return null;
-  const unit = UNITS[cron.unit] || UNITS.minutes;
-  // `everyMs`, camel-cased, because the Rust side now takes a typed schedule rather than
-  // forwarding whatever shape arrived. A mistake here is a rejected automation instead of
-  // a job on somebody's Gateway with a field nobody checked.
-  return { kind: "every", everyMs: Math.round(amount * unit.ms) };
-}
-
-/**
- * What the schedule comes to, in a sentence.
- *
- * Written where somebody can read it before they commit to it. "Every 30 minutes" is
- * a setting; "Runs every 30 minutes" is a promise, and the difference is whether
- * anybody notices they typed 30 into the days field.
- */
-function scheduleSays(cron) {
-  const schedule = scheduleOf(cron);
-  if (!schedule) return null;
-  if (schedule.kind === "at") return `Runs once at ${schedule.at}`;
-  if (schedule.kind === "cron") {
-    return schedule.tz
-      ? `Cron schedule ${schedule.expr} (${schedule.tz})`
-      : `Cron schedule ${schedule.expr}`;
-  }
-  const amount = Number(cron.amount);
-  const unit = (UNITS[cron.unit] || UNITS.minutes).label.toLowerCase();
-  return amount === 1 ? `Runs every ${unit.replace(/s$/, "")}` : `Runs every ${amount} ${unit}`;
-}
-
-/**
- * What an automation is called when nobody has named it.
- *
- * From the work rather than from the clock: "Every 30 minutes" is what the schedule
- * already says, and a list of jobs all called that is a list nobody can read.
- */
-function nameFor(marks, text, surface) {
-  const said = (text || "").trim() || (marks.find((mark) => (mark.note || "").trim()) || {}).note;
-  const from = (said || "").trim().split("\n")[0];
-  if (from) return from.length > 60 ? `${from.slice(0, 57)}…` : from;
-  return surface && surface.app ? `Check ${surface.app}` : "Check the screen";
-}
-
-/**
- * What the agent reads every time the automation runs.
- *
- * Not the send message. That one names the pictures attached to it, and an automation
- * has none — a scheduled job carries a message and nothing more. Naming files that
- * will not arrive is the worst of both: the agent goes looking, finds nothing, and
- * reports that something is broken.
- */
-function automationFor(marks, mode, text, surface) {
-  const said = [];
-  const asked = MODES[mode] || MODES.plan;
-  said.push(`${asked.label}: ${asked.says}`);
-  const own = (text || "").trim();
-  if (own) {
-    said.push("");
-    said.push(own);
-  }
-  const notes = marks.map((mark) => (mark.note || "").trim()).filter(Boolean);
-  if (notes.length) {
-    said.push("");
-    said.push(notes.length === 1 ? `About: ${notes[0]}` : `About: ${notes.join("; ")}`);
-  }
-  // The address, and not the coordinates. A scheduled run happens later, when the
-  // window has been moved or closed; a point inside a window that no longer exists is
-  // worse than no point, where "which project, which page" is still true tomorrow.
-  const place = (marks.find((mark) => mark.where) || {}).where || surface;
-  if (place && place.app) {
-    said.push("");
-    for (const line of whereSaid({ ...place, at: null })) said.push(line);
-  }
-  said.push("");
-  said.push(
-    "Set up from the colai toolbar. No pictures travel with a scheduled run, and the " +
-      "screen will have moved on — go and look at what you need.",
-  );
-  return said.join("\n");
-}
-
 /**
  * How long the exact tools take to fold — the stylesheet's number, restated.
  *
@@ -1279,17 +1104,14 @@ function stateOf(entry, runs) {
   if (turns.length > 0 && asksSomething(lastTurn(entry.answer) || "")) return "asking";
   if ((runs || []).some((run) => run.sessionKey === entry.sessionKey)) return "working";
   /*
-   * What the Gateway says about a conversation this toolbar has not opened.
+   * A conversation this toolbar has not opened says nothing about itself.
    *
-   * Most rows in the panel are now conversations colai never sent to, and their turns are
-   * only fetched when somebody opens one. Until then the transcript cannot answer "is it
-   * working" or "is it waiting on me" — but the session list already did, in the same
-   * round trip that drew the row.
+   * The Gateway's session list carried `busy` and `unread`, so a row could say "working"
+   * before its transcript had ever been fetched. Claude Code's list carries neither — one
+   * conversation is live at a time and the toolbar is the thing having it, so `runs` above
+   * is the whole of what is known — and both fields came back hardcoded false, which made
+   * this a branch nothing could take.
    */
-  if (turns.length === 0) {
-    if (entry.busy) return "working";
-    if (entry.unread) return "asking";
-  }
   // No answer object at all means nobody is watching this one, which is not "still
   // working" — it is "nothing more is coming here". Saying otherwise would be a glow
   // over nothing, the same lie the rail's light was fixed for.
@@ -2761,48 +2583,6 @@ function gateFor(tool, surface) {
     blocked: true,
     says: `${(surface && surface.app) || "That app"} isn't connected. Region noted, nothing changed.`,
   };
-}
-
-/**
- * The project the window in front belongs to, if it is obvious which.
- *
- * The toolbar already knows what is in front and already knows every conversation's
- * checkout; nothing connected the two, so the most repeated act in using this was
- * telling it something it could see. An editor's title says which repository is open —
- * "toolbar.js — colai — Visual Studio Code" — and that is the name to match.
- *
- * It guesses at nothing. A name has to appear as a word, so a project called `ui` does
- * not claim every window with "build" in the title; two projects matching equally well
- * means no answer at all, because picking one of them is worse than asking. Being wrong
- * here sends somebody's work to the wrong conversation.
- */
-function projectInFront(projects, front) {
-  const said = `${(front && front.title) || ""} ${(front && front.app) || ""}`.toLowerCase();
-  if (!said.trim()) return null;
-  let best = null;
-  let bestAt = 0;
-  let tied = false;
-  for (const project of projects || []) {
-    const name = ownName(project);
-    // Two characters match half the desktop. A repository is not usually called `go`,
-    // and if it is, choosing the receiver by hand is the safer cost.
-    if (!name || name.length < 3) continue;
-    if (!wordIn(said, name)) continue;
-    if (name.length > bestAt) {
-      best = project;
-      bestAt = name.length;
-      tied = false;
-    } else if (name.length === bestAt) {
-      tied = true;
-    }
-  }
-  return tied ? null : best;
-}
-
-/** A project's own name: the last part of its label, which may carry a parent. */
-function ownName(project) {
-  const label = (project && project.label) || "";
-  return label.split("/").filter(Boolean).pop() || "";
 }
 
 /** Whether a name appears in a title as a word rather than inside another one. */

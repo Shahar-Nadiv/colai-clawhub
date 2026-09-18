@@ -55,12 +55,16 @@ async function verdict(answer, said) {
   }
 }
 
-/** Stop waiting on a conversation, and stop the Gateway talking to nobody. */
-async function forgetAnswer(answer) {
+/**
+ * Stop waiting on a conversation.
+ *
+ * Nothing to unsubscribe from. The Gateway delivered a conversation's messages only to
+ * subscribers and this told it to stop; here the answer comes back down the same pipe the
+ * message went up, so there is no second channel to close.
+ */
+function forgetAnswer(answer) {
   state.answers = state.answers.filter((held) => held !== answer);
   render();
-  const still = state.answers.some((held) => held.sessionKey === answer.sessionKey);
-  if (!still) await invoke("colai_unwatch", { sessionKey: answer.sessionKey }).catch(() => {});
 }
 
 /* ── the question, and the answers to it ─────────────────────────────────── */
@@ -71,7 +75,7 @@ async function forgetAnswer(answer) {
  * the thing that has happened: a question is an interruption, and an interruption that
  * has to be gone looking for is one that waits until somebody happens to look.
  *
- * So it comes out of the agents key — the one that says who is talking — with the
+ * So it comes out of the conversation key — the one that says who is talking — with the
  * agent's own options on buttons. `choicesIn` reads those out of what it wrote; where it
  * cannot, the box is still there, because most questions are not multiple choice.
  */
@@ -92,7 +96,7 @@ async function answerAsked(answer, reply) {
   await verdict(answer, reply);
 }
 
-/** Not now. The badge on the agents key stays, and it opens again from there. */
+/** Not now. The badge on the conversation key stays, and it opens again from there. */
 function hideAsked() {
   const asked = askedOf(state.answers);
   if (!asked) return;
@@ -100,7 +104,7 @@ function hideAsked() {
   render();
 }
 
-/** What the agents key's badge does: bring the question back. */
+/** What the conversation key's badge does: bring the question back. */
 function showAsked() {
   state.pushedAside = null;
   render();

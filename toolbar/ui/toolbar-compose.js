@@ -177,56 +177,6 @@ function drawPopup() {
     }
     rows.push(kinds);
 
-    // And where its content comes from, for the two kinds that can be brought in rather
-    // than copied. A second row rather than more kinds: "component, copied" and
-    // "component, from a catalogue" are one thing with two sources, and making them two
-    // chips in the first row would say they were two different things to build.
-    /*
-     * And only when there is somewhere to bring one in from.
-     *
-     * Choosing a source is a choice between copying what is on screen and picking out of a
-     * catalogue, and picking out of a catalogue means searching one. On a host with no
-     * catalogue to search the second option is a door with nothing behind it, so the row
-     * does not appear at all rather than appearing and failing when pressed. One library
-     * arriving turns it back on.
-     */
-    if (TAKES_SOURCE.includes(kindIdOf(mark)) && (state.libraries || []).length > 0) {
-      const sources = document.createElement("div");
-      sources.className = "mode-row source-row";
-      for (const [id, source] of Object.entries(SOURCES)) {
-        const chip = document.createElement("button");
-        chip.type = "button";
-        chip.className = "chip";
-        chip.setAttribute("aria-pressed", String(sourceOf(mark) === id));
-        chip.textContent = source.label;
-        chip.addEventListener("click", () => {
-          mark.source = id;
-          // Opening the library is the whole point of choosing it, so choosing it opens
-          // the library. Pressing it again with something already chosen goes back to
-          // swap it, which is the only other thing anybody wants from that chip.
-          if (id === "library") openLibrary(mark);
-          else render();
-        });
-        sources.append(chip);
-      }
-      rows.push(sources);
-    }
-
-    // What was chosen, once something has been. Named on the mark itself, because the
-    // library window closes and the popup is then the only place that could say whether
-    // this mark is finished or still half-asked.
-    const chosen = broughtIn(mark);
-    if (sourceOf(mark) === "library") {
-      const said = document.createElement("button");
-      said.type = "button";
-      said.className = chosen ? "row row-quiet chosen-row" : "row row-quiet chosen-row chosen-none";
-      said.textContent = chosen
-        ? `${chosen.name} — from ${chosen.library}`
-        : "Choose one from the library…";
-      said.addEventListener("click", () => openLibrary(mark));
-      rows.push(said);
-    }
-
     const kind = kindOf(mark);
     const line = document.createElement("div");
     line.className = "popup-dest-line";
@@ -284,7 +234,7 @@ function drawPopup() {
   to.title = "Change who receives this";
   to.addEventListener("click", () => {
     state.popup = null;
-    flyout("agents");
+    flyout("chat");
   });
   const keep = document.createElement("button");
   keep.type = "button";
@@ -298,20 +248,10 @@ function drawPopup() {
   now.type = "button";
   now.className = "popup-do popup-go";
   now.disabled = state.sending;
-  now.textContent = state.sending ? "Sending…" : needsAgreeing() ? "Send and adopt" : "Send now";
+  now.textContent = state.sending ? "Sending…" : "Send now";
   now.addEventListener("click", () => void sendMarks([mark.id]));
   foot.append(to, keep, now);
   rows.push(foot);
-
-  // Said before it happens, not after. Continuing a conversation held in another agent
-  // hands it to the Gateway, and somebody driving that thread from a terminal should
-  // find that out from the toolbar rather than from the terminal.
-  if (needsAgreeing()) {
-    const warned = document.createElement("p");
-    warned.className = "popup-warn";
-    warned.textContent = `Sending continues “${state.receiving.name}” from wherever it left off.`;
-    rows.splice(rows.length - 1, 0, warned);
-  }
 
   el.popup.replaceChildren(...rows);
   placePopup(mark);
@@ -436,239 +376,6 @@ function modePick() {
   return box;
 }
 
-/** The model currently chosen, out of whatever the Gateway last said there were. */
-function modelNow() {
-  const known = state.models || [];
-  return known.find((one) => one.id === state.model) || null;
-}
-
-/**
- * How this will be answered: which model, and how hard it should think.
- *
- * A row of its own under the field. Files and Schedule are a different question — what
- * else could happen to this message — and folding these in beside them would make one
- * row of six unrelated controls.
- */
-function modelPick() {
-  const chosen = modelNow();
-  const open = document.createElement("button");
-  open.type = "button";
-  open.className = "mode-key model-key";
-  open.setAttribute("aria-haspopup", "true");
-  open.setAttribute("aria-expanded", "false");
-  const named = document.createElement("span");
-  named.className = "model-key-name";
-  // Before anything has been asked for, the name of the model is not known — and saying
-  // "Default" would be a claim about which one that is.
-  named.textContent = chosen ? chosen.name : state.model || "Model";
-  open.title = chosen ? `${chosen.name} · ${chosen.provider}` : "Choose the model";
-  const mark = document.createElement("span");
-  mark.className = "caret";
-  mark.textContent = "▾";
-  open.append(named, mark);
-
-  const menu = document.createElement("div");
-  menu.className = "ask-menu model-menu";
-  menu.hidden = true;
-
-  const shut = () => {
-    state.picking = null;
-    menu.hidden = true;
-    open.setAttribute("aria-expanded", "false");
-  };
-  const fill = () => {
-    menu.replaceChildren();
-    if (state.modelsTrouble) {
-      const said = document.createElement("p");
-      said.className = "menu-empty";
-      said.textContent = state.modelsTrouble;
-      menu.append(said);
-      return;
-    }
-    if (!state.models) {
-      const said = document.createElement("p");
-      said.className = "menu-empty";
-      said.textContent = "Asking…";
-      menu.append(said);
-      return;
-    }
-    if (state.models.length === 0) {
-      const said = document.createElement("p");
-      said.className = "menu-empty";
-      said.textContent = "Claude Code chooses its own model — use /model to change it.";
-      menu.append(said);
-      return;
-    }
-    for (const model of state.models) {
-      const one = document.createElement("button");
-      one.type = "button";
-      one.className = "ask-menu-row";
-      one.dataset.on = String(model.id === state.model);
-      // Shown and disabled rather than left out. A model missing because nobody has
-      // signed in is something to go and fix; one absent from the list is something
-      // somebody concludes this toolbar cannot do.
-      one.disabled = model.available === false;
-      const name = document.createElement("span");
-      name.className = "ask-menu-name";
-      name.textContent = model.name;
-      const says = document.createElement("span");
-      says.className = "ask-menu-says";
-      says.textContent =
-        model.available === false
-          ? `${model.provider} — ${model.whyNot || "not available"}`
-          : model.provider;
-      one.title = says.textContent;
-      one.append(name, says);
-      one.addEventListener("click", () => {
-        state.model = model.id;
-        // The effort belonged to the old model's stops. Kept only if the new one offers
-        // it too; otherwise its own default, which is the honest answer to "what now".
-        const stops = effortStops(model).map((level) => level.id);
-        if (!stops.includes(state.effort || "")) state.effort = null;
-        remember();
-        render();
-      });
-      menu.append(one);
-    }
-  };
-
-  /*
-   * Open-ness lives in `state`, not in this closure.
-   *
-   * The control that holds this is rebuilt by every render, and while an agent is working
-   * the rail pulses — so renders arrive two or three times a second and the menu was being
-   * destroyed within a frame of being opened. It looked exactly like a button that did
-   * nothing. Same fault the `/` list had, and the same cure.
-   */
-  /*
-   * Placed against the window, not against its ancestors.
-   *
-   * The menu used to be an absolutely-positioned child sitting `bottom: 100%` above the
-   * chip, which is fine in the composer and does not survive the move into the receiver
-   * popover: that popover is `overflow: hidden`, and where exactly the menu lands depends
-   * on a chain of positioned ancestors that Chrome and WebKitGTK do not lay out the same
-   * way. It measured correctly in Chrome and appeared nowhere in the real toolbar.
-   *
-   * Fixed coordinates, worked out from the chip's own box, depend on nothing above them
-   * and cannot be clipped by anything. Same approach `placePopup` already uses for the
-   * mark popup, and for the same reason.
-   */
-  const place = () => {
-    const chip = open.getBoundingClientRect();
-    menu.style.position = "fixed";
-    menu.style.left = "auto";
-    menu.style.right = "auto";
-    menu.style.bottom = "auto";
-    menu.style.width = "260px";
-    // Above the chip, or below it when there is no room above.
-    const tall = Math.min(menu.scrollHeight || 190, 190);
-    const above = chip.top - 6 - tall;
-    const top = above >= 8 ? above : Math.min(chip.bottom + 6, window.innerHeight - tall - 8);
-    menu.style.top = `${Math.round(Math.max(8, top))}px`;
-    menu.style.left = `${Math.round(Math.min(Math.max(8, chip.left), window.innerWidth - 268))}px`;
-  };
-
-  const show = (open_) => {
-    state.picking = open_ ? "model" : null;
-    menu.hidden = !open_;
-    open.setAttribute("aria-expanded", String(open_));
-    if (!open_) return;
-    fill();
-    place();
-    // Asked when it opens, not kept warm: a catalogue held in the background is one
-    // that is quietly wrong the moment somebody signs into a provider. Re-placed when it
-    // lands, because the list is a different height once it has something in it.
-    void loadModels().then(() => {
-      fill();
-      place();
-    });
-  };
-
-  open.addEventListener("click", () => show(menu.hidden));
-
-  // Put back the way it was found, after the rebuild that threw it away.
-  if (state.picking === "model") {
-    menu.hidden = false;
-    open.setAttribute("aria-expanded", "true");
-    fill();
-    // After the chip has been laid out, or its box is still the old one's.
-    requestAnimationFrame(place);
-  }
-  menu.addEventListener("focusout", (event) => {
-    if (!row.contains(event.relatedTarget)) shut();
-  });
-  open.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") shut();
-  });
-
-  const holder = document.createElement("div");
-  holder.className = "mode-pick";
-  holder.append(open, menu);
-  return holder;
-}
-
-/**
- * How hard it should think, as a slider over the chosen model's own stops.
- *
- * On the line with Files and Schedule rather than one of its own. Three rows of controls
- * under one field read as a stack of chrome; this is the row of small things, and the
- * slider fills the width the two words beside it leave.
- */
-function effortPick() {
-  const chosen = modelNow();
-  const stops = effortStops(chosen);
-  if (stops.length > 1) {
-    const effort = document.createElement("label");
-    effort.className = "effort";
-    const said = document.createElement("span");
-    said.className = "effort-said";
-    const bar = document.createElement("input");
-    bar.type = "range";
-    bar.className = "effort-bar";
-    bar.dataset.field = "effort";
-    bar.min = "0";
-    bar.max = String(stops.length - 1);
-    bar.step = "1";
-    const at = Math.max(0, effortAt(chosen, state.effort));
-    bar.value = String(at);
-    said.textContent = stops[at].label;
-    bar.setAttribute("aria-label", "How hard to think");
-    bar.setAttribute("aria-valuetext", stops[at].label);
-    bar.addEventListener("input", () => {
-      const level = stops[Number(bar.value)] || stops[0];
-      // Not a render: this redraws the whole panel and would take the slider out from
-      // under the hand that is dragging it. Only the word beside it moves.
-      said.textContent = level.label;
-      bar.setAttribute("aria-valuetext", level.label);
-    });
-    bar.addEventListener("change", () => {
-      const level = stops[Number(bar.value)] || stops[0];
-      state.effort = level.id;
-      remember();
-    });
-    effort.append(bar, said);
-    return effort;
-  }
-  // A model that does not think in levels gets no slider: an empty one is a control
-  // lying about having a choice.
-  return null;
-}
-
-/** Ask the Gateway which models this receiver could answer with. */
-async function loadModels() {
-  try {
-    const found = await invoke("colai_models", {
-      agentId: state.receiving.kind === "agent" ? state.receiving.id : null,
-    });
-    state.models = Array.isArray(found) ? found : [];
-    state.modelsTrouble = null;
-  } catch (trouble) {
-    // Left as it was rather than emptied: a Gateway that cannot be asked is not the same
-    // as a Gateway with no models, and blanking the list would say it was.
-    state.modelsTrouble = String(trouble || "Could not ask which models there are.");
-  }
-}
-
 /**
  * Send.
  *
@@ -679,20 +386,17 @@ function sendButton() {
   const going = chosenMarks();
   const says = state.sending
     ? "Sending…"
-    : needsAgreeing()
-      ? "Send and adopt"
-      : going.length
-        ? `Send ${counted(going.length, "mark")}`
-        : "Send";
+    : going.length
+      ? `Send ${counted(going.length, "mark")}`
+      : "Send";
 
   const go = document.createElement("button");
   go.type = "button";
-  // Adopting keeps its words. It takes a conversation over from wherever it is running,
-  // which is a decision somebody should read before making, and an arrow cannot say it.
-  // Everything else is the arrow: what is going is already listed directly above it.
-  const spelled = needsAgreeing();
-  go.className = spelled ? "popup-do popup-go" : "popup-do popup-go compose-send";
-  go.textContent = spelled ? says : state.sending ? "…" : "↑";
+  // The arrow, always: what is going is already listed directly above it. It spelled the
+  // words out instead while the receiver could be a conversation held in another agent,
+  // because sending there adopted it and an arrow cannot say that. Nothing is adoptable.
+  go.className = "popup-do popup-go compose-send";
+  go.textContent = state.sending ? "…" : "↑";
   go.title = says;
   go.setAttribute("aria-label", says);
   go.disabled = !canSend(going);
@@ -1159,7 +863,7 @@ function bringFiles(brought) {
 /** One line of prose in a menu that has nothing else to show. */
 function saying(words) {
   const line = document.createElement("p");
-  line.className = "agent-empty";
+  line.className = "chat-empty";
   line.textContent = words;
   return line;
 }
@@ -1233,13 +937,6 @@ function drawComposer(into) {
 
   rows.push(...fileRows());
 
-  if (needsAgreeing()) {
-    const warned = document.createElement("p");
-    warned.className = "popup-warn";
-    warned.textContent = `Sending continues “${state.receiving.name}” from wherever it left off.`;
-    rows.push(warned);
-  }
-
   const foot = document.createElement("div");
   foot.className = "popup-foot";
   const to = document.createElement("button");
@@ -1253,53 +950,15 @@ function drawComposer(into) {
   const named = document.createElement("span");
   named.className = "popup-to-name";
   named.textContent = state.receiving.name || "Choose who receives";
-  // What they will answer with, under their name. Moving the two controls into the
-  // popover would otherwise have hidden the answer as well as the switch — and which
-  // model is about to read this is worth knowing without opening anything.
-  const how = document.createElement("span");
-  how.className = "popup-to-how";
-  const chosen = modelNow();
-  const level = effortStops(chosen).find((stop) => stop.id === state.effort);
-  how.textContent = [chosen ? chosen.name : state.model, level && level.label]
-    .filter(Boolean)
-    .join(" · ");
   const stack = document.createElement("span");
   stack.className = "popup-to-stack";
-  stack.append(named, ...(how.textContent ? [how] : []));
+  stack.append(named);
   const mark = document.createElement("span");
   mark.className = "caret";
   mark.textContent = "▾";
   to.append(lit, stack, mark);
   to.title = "Choose who receives this, and how they answer";
-  to.addEventListener("click", () => flyout("agents"));
-  // What the toolbar can see, offered rather than done.
-  //
-  // Choosing one of these is not like choosing an agent: sending to a conversation
-  // held in another agent adopts it, which hands it to the Gateway and can fail
-  // outright if something is already running it. That is a decision, and a decision
-  // taken on somebody's behalf because a window happened to be in front is the toolbar
-  // arranging a handover nobody asked for. So it says what it sees and waits.
-  if (state.inFront && state.inFront.threads.length && !state.picked) {
-    const suggested = state.inFront.threads[0];
-    const offer = document.createElement("button");
-    offer.type = "button";
-    offer.className = "row suggest-row";
-    const face = document.createElement("span");
-    face.className = "agent-avatar-dot";
-    face.textContent = suggested.title.slice(0, 1).toUpperCase();
-    const said = document.createElement("span");
-    said.className = "agent-name";
-    said.textContent = suggested.title;
-    const why = document.createElement("span");
-    why.className = "row-key";
-    why.textContent = `${state.inFront.label} is in front`;
-    offer.append(face, said, why);
-    offer.addEventListener("click", () =>
-      receive("thread", suggested.id, suggested.title, null, suggested.locator),
-    );
-    rows.push(offer);
-  }
-
+  to.addEventListener("click", () => flyout("chat"));
   // The keystroke, said once beside the key it belongs to. A send key nobody is told
   // about is a send key nobody uses.
   const key = document.createElement("span");
@@ -1383,154 +1042,47 @@ function drawComposer(into) {
 function drawWho() {
   if (state.whoTrouble) {
     const said = document.createElement("p");
-    said.className = "agent-empty";
+    said.className = "chat-empty";
     said.textContent = `Could not reach the Gateway — ${state.whoTrouble}`;
-    el.agentRows.replaceChildren(said);
+    el.chatRows.replaceChildren(said);
     return;
   }
-  if (state.agents.length === 0 && talking() === 0) {
+  if (talking() === 0) {
     const empty = document.createElement("p");
-    empty.className = "agent-empty";
+    empty.className = "chat-empty";
     empty.textContent =
       "Nothing yet. Start a conversation with Claude Code and it appears here.";
-    el.agentRows.replaceChildren(empty);
+    el.chatRows.replaceChildren(empty);
     return;
   }
 
-  const rows = [];
-  if (state.agents.length) {
-    rows.push(group("Agents"));
-    for (const agent of state.agents) {
-      rows.push(
-        whoRow({
-          face: agent.emoji || agent.name.slice(0, 1).toUpperCase(),
-          name: agent.name,
-          receiving: state.receiving.kind === "agent" && state.receiving.id === agent.id,
-          onPick: () => receive("agent", agent.id, agent.name, agent.emoji),
-        }),
-      );
-    }
-  }
-  // Only when there are some: a heading over nothing reads as a list that failed to
-  // load, and the machine having no conversations yet is not a failure.
-  if (state.sessions.length) {
-    rows.push(group("Conversations"));
-    for (const session of state.sessions) {
-      rows.push(
-        whoRow({
-          face: emojiFor(session) || session.title.slice(0, 1).toUpperCase(),
-          name: session.title,
-          note: session.busy ? "Running" : session.unread ? "Unread" : null,
-          busy: session.busy,
-          receiving: state.receiving.kind === "session" && state.receiving.id === session.key,
-          onPick: () => receive("session", session.key, session.title, emojiFor(session)),
-          about: {
-            kind: "session",
-            id: session.key,
-            name: session.title,
-            sessionKey: session.key,
-          },
-        }),
-      );
-    }
-  }
-  // Grouped under whoever holds them, then under the folder each belongs to, because
-  // "Claude Code" and "which project" are the two things you need before a thread's own
-  // name means anything.
-  const open = openedProjects();
-  let holder = null;
-  for (const project of state.projects) {
-    if (project.holder !== holder) {
-      holder = project.holder;
-      rows.push(group(holder));
-    }
-    // A folder with no name holds threads that belong to no project; they are listed
-    // where they are rather than filed under something invented.
-    if (project.label === null) {
-      rows.push(...project.threads.map(threadRow));
-      continue;
-    }
-    rows.push(projectRow(project, open.has(project.key)));
-    if (open.has(project.key)) rows.push(...project.threads.map(threadRow));
-  }
-  el.agentRows.replaceChildren(...rows);
-  drawAnswerSettings();
+  /*
+   * One list, and no heading over it.
+   *
+   * There were three: an "Agents" group, the conversations, and a tree of projects with
+   * the threads each held. The agent list came back empty on this host — one Claude means
+   * one entry, which is not a choice — and the project tree was OpenClaw's second axis,
+   * conversations belonging to somebody else's checkout. Claude Code's own conversations
+   * already carry the directory they were had in, which `colai_sessions` puts under each
+   * name, so the tree would have been this same list drawn twice.
+   */
+  const rows = state.sessions.map((session) =>
+    whoRow({
+      face: session.title.slice(0, 1).toUpperCase(),
+      name: session.title,
+      receiving: state.receiving.id === session.key,
+      onPick: () => receive(session.key, session.title),
+      about: {
+        id: session.key,
+        name: session.title,
+        sessionKey: session.key,
+      },
+    }),
+  );
+  el.chatRows.replaceChildren(...rows);
 }
 
-/**
- * How the chosen receiver should answer: which model, and how hard it thinks.
- *
- * Here rather than in the composer because that is what they are about. Both are
- * properties of the conversation, not of the message being written — the toolbar already
- * stores them that way, beside the dock position rather than with the text — and putting
- * them on the send row said the opposite twice over: that they were part of this message,
- * and that they were worth a third of the width of the row that sends it.
- */
-function drawAnswerSettings() {
-  if (!el.agentAnswer) return;
-  const model = modelPick();
-  const effort = effortPick();
-  const said = document.createElement("span");
-  said.className = "agent-answer-said";
-  said.textContent = "Answers with";
-  el.agentAnswer.replaceChildren(said, model, ...(effort ? [effort] : []));
-}
-
-/** A folder, as a row that opens. */
-function projectRow(project, open) {
-  const row = document.createElement("button");
-  row.type = "button";
-  row.className = "row row-project";
-  row.setAttribute("aria-expanded", String(open));
-  if (project.path) row.title = project.path;
-
-  const twist = document.createElement("span");
-  twist.className = "twist";
-  twist.textContent = "▸";
-  twist.dataset.open = String(open);
-
-  const label = document.createElement("span");
-  label.className = "agent-name";
-  label.textContent = project.label;
-
-  const many = document.createElement("span");
-  many.className = "row-key";
-  many.textContent = String(project.threads.length);
-
-  row.append(twist, label, many);
-  row.addEventListener("click", () => toggleProject(project.key));
-  return row;
-}
-
-/** A conversation inside a folder, indented under it. */
-function threadRow(thread) {
-  const row = whoRow({
-    face: thread.title.slice(0, 1).toUpperCase(),
-    name: thread.title,
-    note: thread.whereAt,
-    receiving: state.receiving.kind === "thread" && state.receiving.id === thread.id,
-    onPick: () => receive("thread", thread.id, thread.title, null, thread.locator),
-    about: {
-      kind: "thread",
-      id: thread.id,
-      name: thread.title,
-      // A thread has no session until it has been sent to; the toolbar knows which of
-      // them it adopted, and that is the only kind that can be gone back through.
-      sessionKey: state.adoptedKeys ? state.adoptedKeys[thread.id] : undefined,
-    },
-  });
-  row.classList.add("row-nested");
-  return row;
-}
-
-function group(label) {
-  const heading = document.createElement("p");
-  heading.className = "row-group";
-  heading.textContent = label;
-  return heading;
-}
-
-function whoRow({ face, name, note, busy, receiving, onPick, about }) {
+function whoRow({ face, name, receiving, onPick, about }) {
   const row = document.createElement("button");
   row.type = "button";
   row.className = "row";
@@ -1538,9 +1090,8 @@ function whoRow({ face, name, note, busy, receiving, onPick, about }) {
   row.setAttribute("aria-pressed", String(receiving));
 
   const avatar = document.createElement("span");
-  avatar.className = "agent-avatar-dot";
+  avatar.className = "chat-avatar-dot";
   avatar.textContent = face;
-  if (busy) avatar.dataset.busy = "true";
 
   const label = document.createElement("span");
   label.className = "agent-name";
@@ -1548,13 +1099,13 @@ function whoRow({ face, name, note, busy, receiving, onPick, about }) {
   label.title = name;
 
   row.append(avatar, label);
-  // "Receiving" wins over "Running": one is what this menu is for, the other is
-  // background news, and two marks on one row would make neither readable.
-  const said = receiving ? "Receiving" : note;
-  if (said) {
+  // Marked when it is the one receiving. It used to lose that mark to a "Running" or
+  // "Unread" note off the row itself, and those came back hardcoded false — one
+  // conversation is live at a time and the toolbar is the thing having it.
+  if (receiving) {
     const tail = document.createElement("span");
     tail.className = "row-key";
-    tail.textContent = said;
+    tail.textContent = "Receiving";
     row.append(tail);
   }
   row.addEventListener("click", onPick);

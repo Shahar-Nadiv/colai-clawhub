@@ -278,8 +278,6 @@ function remember() {
         dock: state.dock,
         tucked: state.tucked,
         away: state.away,
-        model: state.model,
-        effort: state.effort,
       }),
     );
   } catch {
@@ -300,10 +298,6 @@ function recall() {
       // existed has no opinion, and open is what somebody who has not said should get.
       state.tucked = put.tucked === true;
       state.away = put.away === true;
-      // How somebody wants their work answered is the same kind of fact as where they
-      // put the rail: chosen once, meant until changed.
-      state.model = typeof put.model === "string" ? put.model : null;
-      state.effort = typeof put.effort === "string" ? put.effort : null;
       return;
     }
   } catch {

@@ -5,9 +5,10 @@
 // why nobody could install it without running that fork. Here it is its own program, so
 // a plugin can put it on somebody's machine.
 //
-// What that costs is one copy: `gateway_ws`, `gateway`, `cli` and
-// `gateway_device_identity` came across from the desktop app, trimmed to what the
-// toolbar calls. See the header on `gateway_ws.rs`.
+// It came across with a copy of that app's Gateway client — `gateway_ws`, `gateway`,
+// `cli` and `gateway_device_identity` — and none of the four is here now: there is no
+// Gateway on this host to talk to. `session.rs` runs `claude` as a child process
+// instead, which is the whole of the transport.
 //
 // What it does not need is most of that app — Quick Chat, the updater, the installer,
 // discovery, sleep handling. Fourteen thousand lines the toolbar never called.
@@ -27,7 +28,6 @@ mod colai_capture;
 mod colai_files;
 #[cfg(target_os = "linux")]
 mod colai_inspect;
-mod colai_library;
 mod colai_marks;
 mod colai_receivers;
 mod colai_send;
@@ -364,25 +364,15 @@ fn main() {
             colai_files::colai_search_files,
             #[cfg(target_os = "linux")]
             colai_inspect::colai_showing,
-            colai_library::colai_libraries,
-            colai_library::colai_library_search,
-            colai_receivers::colai_agents,
-            colai_receivers::colai_allowed,
             colai_receivers::colai_at_work,
-            colai_receivers::colai_models,
             colai_receivers::colai_sessions,
             colai::colai_came_from,
-            colai_receivers::colai_threads,
-            colai_send::colai_automate,
             colai_send::colai_said,
             colai_send::colai_send,
-            colai_send::colai_start_here,
             colai_send::colai_stop,
             colai_send::colai_answer,
             colai_send::colai_allow_now,
-            colai_send::colai_undo,
-            colai_send::colai_watch,
-            colai_send::colai_unwatch
+            colai_send::colai_undo
         ])
         .build(tauri::generate_context!())
         .expect("colai failed to start")

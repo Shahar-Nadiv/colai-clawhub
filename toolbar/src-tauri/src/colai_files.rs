@@ -350,7 +350,7 @@ pub(crate) struct Found {
 
 /// Files under the folders somebody works in, matching what they have typed so far.
 ///
-/// The roots come from the Gateway, not from the caller. That is the whole shape of
+/// The roots come from the conversation's own directory, not from the caller. That is the whole shape of
 /// this: a page that could name its own roots could name `/`.
 ///
 /// Matched on the shown path rather than the file name, so `src/ap` finds
@@ -566,7 +566,7 @@ pub(crate) fn carry(paths: &[String], roots: &[std::path::PathBuf]) -> Carried {
             mime_type: mime_of(asked).to_string(),
             file_name: name.to_string(),
             content: base64::engine::general_purpose::STANDARD.encode(bytes),
-            // Not a picture, so it has no size on screen. The Gateway sniffs the real
+            // Not a picture, so it has no size on screen. Whoever receives it reads the real
             // type off the bytes anyway; these are a hint, not a claim.
             width: 0,
             height: 0,
@@ -590,7 +590,7 @@ pub(crate) struct Carried {
 
 /// A guess at the type, from the extension.
 ///
-/// Deliberately shallow. The Gateway sniffs the actual bytes and warns when the two
+/// Deliberately shallow. Whoever receives the file reads the actual bytes and can see when the two
 /// disagree, so the only job here is to be a useful hint for the handful of things
 /// somebody actually drags onto a toolbar — and to say "unknown" honestly otherwise
 /// rather than guessing text and having something binary arrive mangled.
@@ -689,8 +689,8 @@ mod tests {
         assert!(!may_read(&root.join("private/secrets.pem"), &roots));
         // Nothing to read is not permission to read it later.
         assert!(!may_read(&project.join("src/nothing-here.rs"), &roots));
-        // And no roots at all refuses everything, which is what an unreachable Gateway
-        // leaves behind — no answer is not permission.
+        // And no roots at all refuses everything, which is the state a conversation whose
+        // directory is unknown leaves behind — no answer is not permission.
         assert!(!may_read(&project.join("src/main.rs"), &[]));
 
         std::fs::remove_dir_all(&root).unwrap();

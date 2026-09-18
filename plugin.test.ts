@@ -11,7 +11,15 @@
 // line shell script stands in for the 11 MB binary because nothing here is about the
 // binary — it is about whether the thing that shipped is the thing that runs.
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -260,6 +268,57 @@ describe("the launcher that stands in for the binary", () => {
     const WHERE = '"${XDG_CONFIG_HOME:-$HOME/.config}/ai.colai.toolbar/colai-toolbar.pid"';
     expect(notice, "the notice must derive it this way").toContain(WHERE);
     expect(launcher, "and the launcher the same way").toContain(WHERE);
+  });
+
+  test("an update takes the version it replaces with it", () => {
+    /*
+     * The digest lives in the directory name rather than the filename on purpose — X11 takes
+     * a window's `WM_CLASS` from the executable's basename, so a digest in the filename makes
+     * the overlay announce itself as a different application after every release.
+     *
+     * The cost of that went unnoticed until somebody measured an install: every release left
+     * its predecessor behind, nine and a half megabytes a version, accumulating for the life
+     * of the machine and none of it ever runnable again. Ten releases is a hundred megabytes
+     * of binaries nobody will ever execute.
+     */
+    const { where, cache } = installedWith(A_TOOLBAR);
+    const stale = join(cache, "colai", "aaaaaaaaaaaa");
+    mkdirSync(stale, { recursive: true });
+    writeFileSync(join(stale, "colai-toolbar"), "an earlier release");
+
+    execFileSync(join(where, "bin", "colai-toolbar"), ["show"], {
+      env: { ...process.env, XDG_CACHE_HOME: cache, COLAI_TOOLBAR_BIN: "" },
+      encoding: "utf8",
+    });
+
+    expect(existsSync(stale), "the version it replaced should be gone").toBe(false);
+    // And exactly one is left: the one it just unpacked.
+    expect(readdirSync(join(cache, "colai")).length).toBe(1);
+  });
+
+  test("a refused update leaves the working copy alone", () => {
+    /*
+     * The sweep lives inside the successful-unpack branch, which is the whole of why it is
+     * safe. A tampered archive is refused before anything is removed, so somebody whose
+     * download was corrupted still has the toolbar they had yesterday.
+     */
+    const { where, cache } = installedWith(A_TOOLBAR, "0".repeat(64));
+    const good = join(cache, "colai", "keepthisone");
+    mkdirSync(good, { recursive: true });
+    writeFileSync(join(good, "colai-toolbar"), "yesterday's toolbar");
+
+    let refused = false;
+    try {
+      execFileSync(join(where, "bin", "colai-toolbar"), ["show"], {
+        env: { ...process.env, XDG_CACHE_HOME: cache, COLAI_TOOLBAR_BIN: "" },
+        encoding: "utf8",
+        stdio: "pipe",
+      });
+    } catch {
+      refused = true;
+    }
+    expect(refused, "a digest that does not match must refuse to run").toBe(true);
+    expect(existsSync(good), "and must not have swept anything").toBe(true);
   });
 
   test("a caller who named one is not overruled", () => {

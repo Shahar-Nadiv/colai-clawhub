@@ -9,10 +9,16 @@
 // Gateway on this host, and a struct named after one would send the next reader looking
 // for a service that does not exist.
 //
-// Several of these are filled in less than they used to be — nothing here schedules
-// anything, and nothing asks to go back — and the fields that are no longer filled are
-// noted where they sit rather than removed, because the page still reads them and a
-// missing field is a silent `undefined` where an empty one is a drawn nothing.
+// Several of these are filled in less than they used to be — nothing asks to go back —
+// and the fields that are no longer filled are noted where they sit rather than removed,
+// because the page still reads them and a missing field is a silent `undefined` where an
+// empty one is a drawn nothing.
+//
+// Scheduling's shapes are not among them. `CronAdd` and its schedule, target, wake mode
+// and payload enums described a Gateway that ran agents in the background, and nothing on
+// this host can be asked to run a turn later — so they are deleted rather than kept empty:
+// a type nobody can construct teaches the next reader that the feature is merely switched
+// off somewhere, and sends them looking for the switch.
 
 use serde::{Deserialize, Serialize};
 
@@ -36,32 +42,6 @@ pub(crate) struct Conversation {
     /// news or history — a run that fell over yesterday is not a warning about now.
     pub last_activity_at: Option<i64>,
     pub updated_at: Option<i64>,
-}
-
-/// One model the toolbar could answer with.
-///
-/// Only what the page draws. Claude Code's own entry carries a great deal more — context
-/// windows, fallbacks, runtime bindings — and carrying it through would mean this struct
-/// changing every time any of that did.
-#[derive(Debug, Clone, Default, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ModelChoice {
-    pub id: String,
-    pub name: String,
-    pub provider: String,
-    /// Whether it can actually be used right now, and why not when it cannot.
-    ///
-    /// Shown rather than hidden. A model missing because nobody has signed in is
-    /// something to go and fix; a model that is simply absent from the list is something
-    /// somebody concludes this toolbar cannot do.
-    pub available: bool,
-    pub why_not: Option<String>,
-    /// The efforts this model offers, in the order it offers them.
-    ///
-    /// From the model rather than from a list held here: which levels exist is the
-    /// provider's answer and it changes without asking us.
-    pub levels: Vec<ModelLevel>,
-    pub level_default: Option<String>,
 }
 
 /// What everything running adds up to, for something that can only say one
@@ -96,51 +76,6 @@ pub(crate) struct AtWork {
     pub known: Vec<String>,
 }
 
-/// A conversation held by an agent Claude Code knows about but does not own — a Claude
-/// Code thread, and whatever else registers a catalog later.
-///
-/// These are not Claude Code sessions and the difference is not pedantic: the store can be
-/// empty while two dozen of these are open, which is exactly what a machine looks like
-/// when somebody works in a coding agent all day.
-#[derive(Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct CatalogThread {
-    pub thread_id: String,
-    /// Which agent the host says owns it, when it says.
-    pub agent_id: Option<String>,
-    pub name: Option<String>,
-    pub cwd: Option<String>,
-    pub git_branch: Option<String>,
-    pub archived: Option<bool>,
-}
-
-/// Everything needed to name one conversation held in another agent.
-///
-/// The toolbar has to carry all of it, not just the thread id: continuing a thread is
-/// addressed by catalog, host and thread together, and an id on its own names nothing.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ThreadLocator {
-    pub catalog_id: String,
-    pub host_id: String,
-    pub thread_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub agent_id: Option<String>,
-}
-
-/// Asking an external agent to open a fresh conversation in a directory.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct StartHere {
-    pub catalog_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub host_id: Option<String>,
-    pub agent_id: String,
-    pub cwd: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub initial_message: Option<String>,
-}
-
 /// One turn of a conversation, as Claude Code recorded it.
 ///
 /// Both halves, because two surfaces want this list and they want different parts of it:
@@ -165,37 +100,6 @@ pub(crate) struct Rewound {
     pub editor_text: Option<String>,
 }
 
-/// An automation, as the toolbar asks for one.
-///
-/// Claude Code's own `cron.add` shape, narrowed to what a panel on an overlay offers:
-/// a name, when it runs, where it runs, and what it says. Triggers, wake mode,
-/// timeouts, delivery routes and tool allowances are the Control UI's Advanced fold
-/// and stay there — every one of them is a decision somebody should make sitting down.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct CronAdd {
-    pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub agent_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub session_key: Option<String>,
-    pub schedule: CronSchedule,
-    /// `main` posts into the agent's own timeline; `isolated` runs a turn of its own.
-    pub session_target: CronSessionTarget,
-    pub wake_mode: CronWakeMode,
-    pub payload: CronPayload,
-}
-
-/// What came back, as much of it as is worth saying.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct CronAdded {
-    #[serde(default)]
-    pub id: String,
-    #[serde(default)]
-    pub name: String,
-}
-
 /// A picture carried alongside a message.
 ///
 /// Claude Code takes base64 in `content` and does its own normalizing from there, so
@@ -212,63 +116,3 @@ pub(crate) struct ChatAttachment {
     pub height: i32,
 }
 
-
-/// One stop on the effort slider.
-#[derive(Debug, Clone, Default, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ModelLevel {
-    pub id: String,
-    pub label: String,
-}
-
-/// When a job runs.
-///
-/// Closed, and typed, because this crosses in from the WebView and comes back out as
-/// persistent state on somebody's Gateway. It used to be a bare `serde_json::Value`
-/// forwarded verbatim — the widest untyped hole in the whole IPC surface, next door to
-/// commands that are careful about every field.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub(crate) enum CronSchedule {
-    /// Once, at a moment.
-    At { at: String },
-    /// On a cron expression, in a named zone or the Gateway's own.
-    Cron {
-        expr: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        tz: Option<String>,
-    },
-    /// On an interval.
-    Every { every_ms: u64 },
-}
-
-/// Whether a run joins the agent's own timeline or gets one of its own.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) enum CronSessionTarget {
-    Main,
-    Isolated,
-}
-
-/// Whether a due job wakes the agent now or waits for the next heartbeat.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) enum CronWakeMode {
-    Now,
-    Heartbeat,
-}
-
-/// What a run does. One kind today; the tag is what lets there be another.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub(crate) enum CronPayload {
-    AgentTurn { message: String },
-}
-
-#[derive(Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct CatalogHost {
-    pub host_id: String,
-    #[serde(default)]
-    pub sessions: Vec<CatalogThread>,
-}

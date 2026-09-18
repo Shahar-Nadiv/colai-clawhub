@@ -165,19 +165,9 @@ pub(crate) fn ensure_overlay(app: &AppHandle) -> Result<WebviewWindow, String> {
      */
     apply_shape(&window, &[])?;
 
-    /*
-     * Wake the Gateway connection, the way Quick Chat does when its window opens.
-     *
-     * The client is shared and connects lazily, so a surface that never activates it
-     * finds it unreachable no matter how long the app has been running — the toolbar
-     * asked for agents and was told "Gateway unreachable — retrying" while the dashboard
-     * beside it was connected and fine.
-     */
-    // `try_state`, because the toolbar can be opened before the client is registered —
-    // by the setup hook itself, before the managed state is in place. A missing client means
-    // the connection is not ready to wake, not that anything is wrong.
-    // Nothing to wake. The Gateway held a connection that had to be told the toolbar was
-    // up; `claude` is started per conversation and needs no rousing.
+    // Nothing to rouse. This used to wake a shared, lazily-connected client that would
+    // otherwise report itself unreachable to whichever surface had not activated it; a
+    // `claude` is started per conversation and needs no such nudge.
     Ok(window)
 }
 
@@ -453,7 +443,7 @@ fn apply_shape(_window: &WebviewWindow, _rects: &[(i32, i32, i32, i32)]) -> Resu
 /// hesitating under the hand that was drawing on it.
 ///
 /// `spawn_blocking` rather than plain `async`: the work is blocking whichever thread it
-/// lands on, and an async command lands on a tokio worker shared with the Gateway socket.
+/// lands on, and an async command lands on a tokio worker shared with everything else.
 /// Nothing here touches GDK, which is what makes moving it off the main thread safe at
 /// all — the contact sheet next door is the counter-example.
 #[tauri::command]
@@ -834,7 +824,7 @@ pub(crate) fn colai_take_keyboard(app: AppHandle) -> Result<(), String> {
 ///
 /// The same words arrive two ways and mean the same thing both times: on the arguments
 /// this process started with, and through `tauri-plugin-single-instance` when a second
-/// copy is run while one is already up. `openclaw colai toggle` is the second case, and
+/// copy is run while one is already up. `colai-toolbar toggle` is the second case, and
 /// the first is what happens when nothing was running yet.
 /// A launch said which conversation it came from; point the rail there.
 ///
@@ -910,18 +900,9 @@ pub(crate) fn colai_summon(app: AppHandle) -> Result<(), String> {
     window
         .show()
         .map_err(|error| format!("Could not show the overlay: {error}"))?;
-    /*
-     * And try the Gateway again, if it had given up.
-     *
-     * A refused pairing or a missing credential parks the driver until something tells it
-     * to retry, and in the desktop app that something was reopening Quick Chat. There is
-     * no Quick Chat here, so nothing ever did — an operator who reset their state left the
-     * toolbar disconnected for the rest of the session with no way back but killing it.
-     *
-     * Somebody summoning the toolbar is the closest thing to "try again" this program
-     * has, and it costs nothing when the driver is not parked.
-     */
-    // Same: there is no parked reconnect to resume.
+    // There is no parked connection to resume. Summoning the toolbar used to double as
+    // "try reconnecting", because a refused pairing parked a driver until something asked
+    // it to retry and nothing here ever did. Nothing to retry now.
     Ok(())
 }
 

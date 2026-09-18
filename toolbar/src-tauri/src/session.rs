@@ -1,10 +1,10 @@
 // The Claude Code session the toolbar is pointed at.
 //
-// This is what `gateway_ws.rs` was, and it is a twentieth of the size. The Gateway needed a
-// WebSocket, a protocol, an ed25519 device identity, a TLS pin and a credential bootstrap
-// because it was a service on a socket that had to be told who was calling. Claude Code is
-// a program on this machine, and the toolbar runs it — so the trust boundary is process
-// ancestry and there is nothing to authenticate.
+// This replaced a WebSocket client that is no longer in the tree, and it is a twentieth of
+// the size. That client needed a protocol, an ed25519 device identity, a TLS pin and a
+// credential bootstrap because it was a service on a socket that had to be told who was
+// calling. Claude Code is a program on this machine and the toolbar runs it, so the trust
+// boundary is process ancestry and there is nothing to authenticate.
 //
 //     claude --print --input-format stream-json --output-format stream-json --verbose
 //
@@ -1763,5 +1763,30 @@ mod against_this_machine {
             "no live session found at all — this test is itself running inside one, so the \
              reader has stopped understanding the registry"
         );
+    }
+}
+
+#[cfg(test)]
+mod what_a_send_costs {
+    use super::*;
+
+    /// How long `where_it_is_had` takes on this machine's real transcripts.
+    ///
+    /// Ignored by default because it reads `~/.claude/projects` and the answer depends on how
+    /// much conversation is on the disk. Run it when changing how the cwd is found:
+    ///
+    ///     cargo test -- --ignored what_one_send_spends_finding_a_directory --nocapture
+    #[test]
+    #[ignore = "reads ~/.claude/projects on this machine"]
+    fn what_one_send_spends_finding_a_directory() {
+        let newest = conversations(1).pop().expect("a conversation on this machine");
+        let began = std::time::Instant::now();
+        let found = where_it_is_had(Some(&newest.session_key));
+        let took = began.elapsed();
+        println!("  where_it_is_had: {took:?} -> {found:?}");
+
+        let began = std::time::Instant::now();
+        let listed = conversations(400);
+        println!("  conversations(400): {:?} for {} rows", began.elapsed(), listed.len());
     }
 }

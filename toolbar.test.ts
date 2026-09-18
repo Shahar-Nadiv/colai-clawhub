@@ -38,17 +38,6 @@ type Reserved = { top: number; right: number; bottom: number; left: number };
 type Screen = { x: number; y: number; width: number; height: number; reserved?: Reserved };
 type Surface = { app: string; connector: string | null } | null;
 
-/** One model the toolbar could answer with, as `chat.metadata` describes it. */
-type Model = {
-  id: string;
-  name: string;
-  provider: string;
-  available?: boolean;
-  whyNot?: string;
-  levels?: { id: string; label: string }[];
-  levelDefault?: string | null;
-};
-
 type ToolbarHelpers = {
   TOOLS: Record<string, { label: string; writes: boolean }>;
   DRAWS: Record<string, string>;
@@ -63,10 +52,6 @@ type ToolbarHelpers = {
   counted: (many: number, noun: string) => string;
   MODES: Record<string, { label: string; says: string }>;
   spanOf: (points: Point[], screen: { width: number; height: number }) => number;
-  projectInFront: (
-    projects: { label: string | null; path?: string }[],
-    front: { app?: string; title?: string } | null,
-  ) => { label: string | null } | null;
   detailOf: (mark: {
     tool: string;
     px?: number;
@@ -138,25 +123,11 @@ type ToolbarHelpers = {
   MODE_FIRST: string;
   CLICK_MEANS: Record<string, string>;
   wholeDisplay: (mark: { tool: string; region?: unknown; points?: unknown[] }) => boolean;
-  effortStops: (model: Model | null) => { id: string; label: string }[];
-  effortAt: (model: Model | null, chosen: string | null) => number;
   gitKindOf: (mark: { git?: string } | null) => string;
   repoFor: (where: Front | null) => string | null;
   isCommitting: (marks: { tool?: string; git?: string }[]) => boolean;
   homeOf: (mark: { design?: string; dest?: string }) => string;
   WHOLE_DISPLAY: string[];
-  scheduleOf: (cron: Cron) => Record<string, unknown> | null;
-  scheduleSays: (cron: Cron) => string | null;
-  nameFor: (marks: { note?: string }[], text: string, surface: Surface) => string;
-  automationFor: (
-    marks: { tool: string; note?: string; where?: Front | null; spot?: Spot | null }[],
-    mode: string,
-    text: string,
-    surface: Surface,
-  ) => string;
-  AUTOMATION_FIRST: Cron;
-  UNITS: Record<string, { label: string; ms: number }>;
-  REPEATS: Record<string, { label: string }>;
   FOLD_TIME: number;
   PENS: Record<string, { label: string; glyph: string; kind: string }>;
   PEN_FIRST: string;
@@ -313,18 +284,6 @@ type Spot = {
   on?: "desktop";
 };
 
-/** The automation being written, as the panel holds it. */
-type Cron = {
-  name: string;
-  repeat: string;
-  amount: string;
-  unit: string;
-  at: string;
-  expr: string;
-  tz: string;
-  where: string;
-};
-
 /** A file or folder somebody dropped on the toolbar, as the page holds it. */
 type Brought = { path: string; name: string; bytes: number; folder: boolean };
 
@@ -404,7 +363,7 @@ function glyphsInTheRail(): Record<string, unknown> {
 
 const context: { helpers?: ToolbarHelpers } & Record<string, unknown> = {};
 vm.runInNewContext(
-  `${toolbarSource}\nthis.helpers = { TOOLS, DRAWS, dockFor, usable, boxOf, pathFor, gateFor, counted, spentSaid, MODES, summaryFor, screenAt, spanOf, detailOf, projectInFront, RECORD_LENGTHS, carrying, sizeOf, secondsLeft, recordFrame, RECORD_CLEAR, DESIGNS, DESIGN_FIRST, GITS, GIT_FIRST, gitKindOf, repoFor, isCommitting, MODE_FIRST, CLICK_MEANS, wholeDisplay, effortStops, effortAt, labelOf, homeOf, WHOLE_DISPLAY, scheduleOf, scheduleSays, nameFor, automationFor, AUTOMATION_FIRST, UNITS, REPEATS, FOLD_TIME, PENS, PEN_FIRST, PATHS, kindFor, ARROW_HEAD, ARROW_WIDE, ARROW_LEAST, ARROW_MOST, HIGHLIGHT_WIDE, placeOf, whereSaid, spotIn, spotSaid, samePlace, stillRunning, runsNow, runningSaid, RUN_QUIET, sheeted, asksSomething, choicesIn, questionIn, askedOf, CHOICE_MOST, agoSaid, briefly, KEEPS_MARKING, numberOf, MOODS, moodOf, moodSaid, moodMark, STATES, stateOf, needingYou, workCountSaid, handHue, tokenAt, modesMatching, withoutToken, SOURCES, TAKES_SOURCE, sourceOf, broughtIn, unchosen, centredIn, FOLLOWS_WINDOW, anchorOf, intoWindow, ontoScreen, showingNow, asDrawn, entrySaid, doingOf, doingSaid, DOING_FIRST, DOING_MOST, DOING_QUIET, DOING_TOOLS, troubleSaid, NEVER_RAN, askedFor, DIFF_MOST, commandsMatching, COMMANDS_MOST };`,
+  `${toolbarSource}\nthis.helpers = { TOOLS, DRAWS, dockFor, usable, boxOf, pathFor, gateFor, counted, spentSaid, MODES, summaryFor, screenAt, spanOf, detailOf, RECORD_LENGTHS, carrying, sizeOf, secondsLeft, recordFrame, RECORD_CLEAR, DESIGNS, DESIGN_FIRST, GITS, GIT_FIRST, gitKindOf, repoFor, isCommitting, MODE_FIRST, CLICK_MEANS, wholeDisplay, labelOf, homeOf, WHOLE_DISPLAY, FOLD_TIME, PENS, PEN_FIRST, PATHS, kindFor, ARROW_HEAD, ARROW_WIDE, ARROW_LEAST, ARROW_MOST, HIGHLIGHT_WIDE, placeOf, whereSaid, spotIn, spotSaid, samePlace, stillRunning, runsNow, runningSaid, RUN_QUIET, sheeted, asksSomething, choicesIn, questionIn, askedOf, CHOICE_MOST, agoSaid, briefly, KEEPS_MARKING, numberOf, MOODS, moodOf, moodSaid, moodMark, STATES, stateOf, needingYou, workCountSaid, handHue, tokenAt, modesMatching, withoutToken, SOURCES, TAKES_SOURCE, sourceOf, broughtIn, unchosen, centredIn, FOLLOWS_WINDOW, anchorOf, intoWindow, ontoScreen, showingNow, asDrawn, entrySaid, doingOf, doingSaid, DOING_FIRST, DOING_MOST, DOING_QUIET, DOING_TOOLS, troubleSaid, NEVER_RAN, askedFor, DIFF_MOST, commandsMatching, COMMANDS_MOST };`,
   context,
 );
 const {
@@ -422,7 +381,6 @@ const {
   screenAt,
   spanOf,
   detailOf,
-  projectInFront,
   RECORD_LENGTHS,
   carrying,
   sizeOf,
@@ -439,18 +397,9 @@ const {
   MODE_FIRST,
   CLICK_MEANS,
   wholeDisplay,
-  effortStops,
-  effortAt,
   labelOf,
   homeOf,
   WHOLE_DISPLAY,
-  scheduleOf,
-  scheduleSays,
-  nameFor,
-  automationFor,
-  AUTOMATION_FIRST,
-  UNITS,
-  REPEATS,
   FOLD_TIME,
   PENS,
   PEN_FIRST,
@@ -961,53 +910,6 @@ describe("marks that are more than one picture", () => {
   });
 });
 
-describe("the project in front of you", () => {
-  const projects = [
-    { label: "Desktop/colai", path: "/home/someone/Desktop/colai" },
-    { label: "renti", path: "/home/someone/renti" },
-    { label: "ui", path: "/home/someone/ui" },
-  ];
-
-  test("an editor's title names the repository it has open", () => {
-    const found = projectInFront(projects, {
-      title: "toolbar.js — colai — Visual Studio Code",
-      app: "Code",
-    });
-    expect(found?.label).toBe("Desktop/colai");
-  });
-
-  test("a project's own name is matched, not the parent carried for uniqueness", () => {
-    // The label reads "Desktop/colai" only because another checkout shares its name.
-    // "Desktop" is not what an editor puts in its title.
-    expect(projectInFront(projects, { title: "Desktop", app: "Files" })).toBeNull();
-  });
-
-  test("a short name does not claim half the desktop", () => {
-    // `ui` appears inside "building", "quicksilver", and most other words.
-    expect(projectInFront(projects, { title: "building the guide", app: "Code" })).toBeNull();
-  });
-
-  test("a name has to be a word, not a fragment of one", () => {
-    expect(projectInFront(projects, { title: "rentier accounts", app: "Code" })).toBeNull();
-    expect(projectInFront(projects, { title: "renti — README", app: "Code" })?.label).toBe("renti");
-  });
-
-  test("two equally good answers is no answer", () => {
-    // Sending somebody's work to the wrong conversation is worse than asking them.
-    const twins = [
-      { label: "one/build", path: "/a/one/build" },
-      { label: "two/build", path: "/b/two/build" },
-    ];
-    expect(projectInFront(twins, { title: "build — Code", app: "Code" })).toBeNull();
-  });
-
-  test("nothing in front is not a guess", () => {
-    expect(projectInFront(projects, null)).toBeNull();
-    expect(projectInFront(projects, { title: "", app: "" })).toBeNull();
-    expect(projectInFront([], { title: "colai", app: "Code" })).toBeNull();
-  });
-});
-
 describe("files somebody brought in", () => {
   const file = (name: string, bytes: number, folder = false) => ({
     path: `/home/someone/${name}`,
@@ -1259,112 +1161,6 @@ describe("the design family", () => {
     // survive being asked for with a click.
     expect(WHOLE_DISPLAY).toContain("design");
     expect(WHOLE_DISPLAY).toContain("screenshot");
-  });
-});
-
-describe("scheduling what was marked", () => {
-  const cron = (over: Partial<Cron> = {}): Cron => ({ ...AUTOMATION_FIRST, ...over });
-
-  test("it starts as something that would work if you pressed Create", () => {
-    // A panel that opens invalid makes somebody solve a puzzle before they can do the
-    // obvious thing. Every thirty minutes, in a session of its own, is the obvious thing.
-    expect(scheduleOf(cron())).toEqual({ kind: "every", everyMs: 30 * 60_000 });
-    expect(AUTOMATION_FIRST.where).toBe("isolated");
-  });
-
-  test("an interval is counted in whatever unit was picked", () => {
-    expect(scheduleOf(cron({ amount: "2", unit: "hours" }))).toEqual({
-      kind: "every",
-      everyMs: 2 * 3_600_000,
-    });
-    expect(scheduleOf(cron({ amount: "1", unit: "days" }))).toEqual({
-      kind: "every",
-      everyMs: 86_400_000,
-    });
-  });
-
-  test("half-written is not a schedule, and says so rather than guessing", () => {
-    // Null is what greys the Create button out. Posting a guess would come back as a
-    // Gateway rejection nobody can act on, one round trip later.
-    expect(scheduleOf(cron({ amount: "" }))).toBeNull();
-    expect(scheduleOf(cron({ amount: "0" }))).toBeNull();
-    expect(scheduleOf(cron({ amount: "-5" }))).toBeNull();
-    expect(scheduleOf(cron({ amount: "soon" }))).toBeNull();
-    expect(scheduleOf(cron({ repeat: "at", at: "" }))).toBeNull();
-    expect(scheduleOf(cron({ repeat: "cron", expr: "  " }))).toBeNull();
-    expect(scheduleSays(cron({ amount: "" }))).toBeNull();
-  });
-
-  test("a timezone is sent only when there is one", () => {
-    // An empty string is not "the host timezone", it is an empty string, and the
-    // schema would take it as one.
-    expect(scheduleOf(cron({ repeat: "cron", expr: "0 9 * * *", tz: "" }))).toEqual({
-      kind: "cron",
-      expr: "0 9 * * *",
-    });
-    expect(
-      scheduleOf(cron({ repeat: "cron", expr: "0 9 * * *", tz: " Europe/Amsterdam " })),
-    ).toEqual({ kind: "cron", expr: "0 9 * * *", tz: "Europe/Amsterdam" });
-  });
-
-  test("the schedule is said back as a sentence before it is agreed to", () => {
-    // "Every 30" is a setting; "Runs every 30 minutes" is a promise, and the difference
-    // is whether anybody notices they typed 30 into the days field.
-    expect(scheduleSays(cron())).toBe("Runs every 30 minutes");
-    expect(scheduleSays(cron({ amount: "1", unit: "hours" }))).toBe("Runs every hour");
-    expect(scheduleSays(cron({ amount: "1", unit: "days" }))).toBe("Runs every day");
-    expect(scheduleSays(cron({ repeat: "at", at: "2026-09-08T09:00" }))).toBe(
-      "Runs once at 2026-09-08T09:00",
-    );
-    expect(scheduleSays(cron({ repeat: "cron", expr: "0 9 * * *" }))).toBe(
-      "Cron schedule 0 9 * * *",
-    );
-  });
-
-  test("it borrows the Gateway's own words for the choices", () => {
-    // A job made here is listed beside jobs made in the Control UI. Calling the same
-    // thing something else on this surface would make them look like two features.
-    expect(Object.values(REPEATS).map((one) => one.label)).toEqual(["Interval", "Once", "Cron"]);
-    expect(Object.values(UNITS).map((one) => one.label)).toEqual(["Minutes", "Hours", "Days"]);
-  });
-
-  test("an automation is named after the work, not after the clock", () => {
-    // "Every 30 minutes" is what the schedule already says, and a list of jobs all
-    // called that is a list nobody can read.
-    expect(nameFor([], "Tell me if this goes red.", null)).toBe("Tell me if this goes red.");
-    expect(nameFor([{ note: "the build status" }], "", null)).toBe("the build status");
-    expect(nameFor([], "", { app: "Firefox", connector: null })).toBe("Check Firefox");
-    expect(nameFor([], "", null)).toBe("Check the screen");
-  });
-
-  test("a long first line is cut rather than sent whole", () => {
-    const said = nameFor([], "x".repeat(200), null);
-    expect(said.length).toBeLessThanOrEqual(60);
-    expect(said.endsWith("…")).toBe(true);
-  });
-
-  test("what runs never names a picture, because none of them travel", () => {
-    // The worst version of this bug is silent: an agent told to look at mark-1.png goes
-    // looking, finds nothing, and reports that something is broken.
-    const said = automationFor(
-      [{ tool: "box", note: "the build status" }],
-      "debug",
-      "Tell me if this goes red.",
-      { app: "Firefox", connector: null },
-    );
-    expect(said).not.toContain("mark-1.png");
-    expect(said).not.toContain(".png");
-    expect(said).toContain("Debug:");
-    expect(said).toContain("Tell me if this goes red.");
-    expect(said).toContain("About: the build status");
-    expect(said).toContain("In Firefox");
-    expect(said).toContain("No pictures travel");
-  });
-
-  test("marks with nothing written on them add nothing to it", () => {
-    const said = automationFor([{ tool: "box" }, { tool: "box" }], "ask", "Look here.", null);
-    expect(said).not.toContain("About:");
-    expect(said).toContain("Look here.");
   });
 });
 
@@ -2136,20 +1932,6 @@ describe("the message an agent actually reads", () => {
     // Across the seam of a second monitor, still the desktop's own coordinate.
     const far = spotIn({ tool: "pointAt", points: [{ x: 3200 / 3840, y: 0.5 }] }, null, desk);
     expect(far).toMatchObject({ x: 3200, on: "desktop" });
-  });
-
-  test("an automation carries the address and refuses the coordinates", () => {
-    // It runs later, when the window has moved or gone. "Which project" is still true
-    // tomorrow; "340,128" is a number about a window that no longer exists.
-    const said = automationFor(
-      [{ tool: "box", where: code, spot: { x: 340, y: 128 } }],
-      "ask",
-      "watch this",
-      null,
-    );
-    expect(said).toContain("In Code — ~/colai");
-    expect(said).not.toContain("340,128");
-    expect(said).not.toContain("window 1920");
   });
 });
 
@@ -3348,40 +3130,6 @@ describe("a window lands on a screen, not across two", () => {
     const huge = centredIn(usable(LEFT), { width: 4000, height: 2000 });
     expect(huge).toEqual({ x: 0, y: 0 });
   });
-
-  test("a render that changes nothing leaves the window's controls alone", () => {
-    /*
-     * The rail re-renders for reasons that have nothing to do with this window — an
-     * agent replying, the five-second look at what every agent is doing. Rebuilding the
-     * window on each of those replaces its close button with a new one, and a click
-     * needs its press and its release on the *same* element: so the press did nothing,
-     * silently, and only sometimes.
-     */
-    const library = readFileSync(
-      new URL("./toolbar/ui/toolbar-library.js", import.meta.url),
-      "utf8",
-    );
-    const draw = library.slice(library.indexOf("function drawLibrary"));
-    const guard = draw.indexOf("=== shown");
-    const rebuild = draw.indexOf("replaceChildren");
-    expect(guard).toBeGreaterThan(-1);
-    expect(guard).toBeLessThan(rebuild);
-    // And what somebody is typing is not part of that comparison: rebuilding on every
-    // keystroke would throw away the field they are typing into.
-    const signature = draw.slice(draw.indexOf("const asItStands"), guard);
-    expect(signature).not.toContain("query");
-  });
-
-  test("a press outside the library closes it before anything can be drawn", () => {
-    // Without this the glass underneath took the press and began another mark behind the
-    // window, so pressing away from it did not dismiss it — it quietly drew.
-    const mark = readFileSync(new URL("./toolbar/ui/toolbar-mark.js", import.meta.url), "utf8");
-    const gesture = mark.slice(mark.indexOf("function startGesture"));
-    const closes = gesture.indexOf("closeLibrary()");
-    const draws = gesture.indexOf("addMark(");
-    expect(closes).toBeGreaterThan(-1);
-    expect(closes).toBeLessThan(draws);
-  });
 });
 
 describe("copying what is here, or bringing something in", () => {
@@ -3399,17 +3147,14 @@ describe("copying what is here, or bringing something in", () => {
     expect(Object.keys(SOURCES)).toEqual(["copy", "library"]);
 
     /*
-     * And the row is only offered when there is somewhere to bring one in from. Searching a
-     * catalogue means asking one, the asking went through the OpenClaw Gateway, and there is
-     * no Gateway here — so `colai_libraries` returns nothing and the choice disappears rather
-     * than becoming a door with nothing behind it.
+     * Nothing draws the row on this host. Searching a catalogue means asking one, the
+     * asking went through the OpenClaw Gateway, and there is no Gateway here — so the
+     * chip that offered the choice is gone rather than left as a door with nothing behind
+     * it, and `sourceOf` answers "copy" for every mark anybody can make. What is asserted
+     * here is only that the table has stayed coherent with itself.
      */
     const compose = readFileSync(new URL("./toolbar/ui/toolbar-compose.js", import.meta.url), "utf8");
-    expect(compose, "the source row is gated on having a library").toMatch(
-      /TAKES_SOURCE\.includes\(kindIdOf\(mark\)\) && \(state\.libraries \|\| \[\]\)\.length > 0/,
-    );
-    const rust = readFileSync(new URL("./toolbar/src-tauri/src/colai_library.rs", import.meta.url), "utf8");
-    expect(rust, "and this host offers none").toMatch(/fn colai_libraries\(\) -> Vec<Named> \{(?:.|\n)*?Vec::new\(\)/);
+    expect(compose, "and no chip can set a mark's source again").not.toContain("openLibrary");
   });
 
   test("a wireframe is a copy however the mark is labelled", () => {
@@ -3531,28 +3276,6 @@ describe("copying what is here, or bringing something in", () => {
     expect(unchosen([{ tool: "pointAt" }])).toBeNull();
     expect(unchosen([])).toBeNull();
   });
-
-  test("the toolbar never names the call that costs money", () => {
-    // Browsing is free metadata; fetching a component's source is paid and counted, and
-    // it belongs to the agent doing the work once, on the one thing somebody chose.
-    // Asserted across both languages, because either could reach for it.
-    const rust = readFileSync(
-      new URL("./toolbar/src-tauri/src/colai_library.rs", import.meta.url),
-      "utf8",
-    );
-    const library = readFileSync(
-      new URL("./toolbar/ui/toolbar-library.js", import.meta.url),
-      "utf8",
-    );
-    for (const [what, source] of [
-      // Production only: the Rust tests name it deliberately, to assert it is not asked
-      // for, and a check that counted that would be checking itself.
-      ["rust", rust.slice(0, rust.indexOf("#[cfg(test)]")).replaceAll(/\/\/[^\n]*/g, "")],
-      ["page", library],
-    ] as const) {
-      expect(source, what).not.toContain("get_component");
-    }
-  });
 });
 
 describe("and how a call ended", () => {
@@ -3666,7 +3389,7 @@ describe("one global scope, and the traps in it", () => {
    */
   const files = ["toolbar.js", "toolbar-answers.js", "toolbar-compose.js", "toolbar-rail.js",
                  "toolbar-work.js", "toolbar-mark.js", "toolbar-live.js", "toolbar-toast.js",
-                 "toolbar-dock.js", "toolbar-send.js", "toolbar-library.js", "toolbar-tools.js"];
+                 "toolbar-dock.js", "toolbar-send.js", "toolbar-tools.js"];
   const read = (name: string) =>
     readFileSync(new URL(`./toolbar/ui/${name}`, import.meta.url), "utf8");
 
@@ -3737,7 +3460,7 @@ describe("every element the page reaches for is on the page", () => {
     );
     const scripts = ["toolbar.js", "toolbar-answers.js", "toolbar-compose.js", "toolbar-rail.js",
                      "toolbar-work.js", "toolbar-mark.js", "toolbar-live.js", "toolbar-toast.js",
-                     "toolbar-dock.js", "toolbar-send.js", "toolbar-library.js"]
+                     "toolbar-dock.js", "toolbar-send.js"]
       .map((name) => readFileSync(new URL(`./toolbar/ui/${name}`, import.meta.url), "utf8"))
       .join("\n");
     const reached = new Set([...scripts.matchAll(/\bel\.(\w+)/g)].map((m) => m[1]));
@@ -3763,13 +3486,13 @@ describe("the stylesheet says each thing once", () => {
    *
    *   .caret       complementary — a transition in one block, type in the other
    *   .work-steps  complementary — layout in one, counter-reset in the other
-   *   .agents      a real override: padding 6px, then padding 0. The second wins.
+   *   .chat-pick   a real override: padding 6px, then padding 0. The second wins.
    *   .work-turn   a real override: gap 6px, then gap 2px. The second wins.
    *
    * The last two render as their second block says, and merging them would mean changing
    * rules whose history is not obvious. A ratchet instead: these four, and no new ones.
    */
-  const GRANDFATHERED = ["caret", "agents", "work-turn", "work-steps"];
+  const GRANDFATHERED = ["caret", "chat-pick", "work-turn", "work-steps"];
 
   test("no new class is declared twice", () => {
     const declared = [...css.matchAll(/^\.([\w-]+) \{/gm)].map((m) => m[1]);
@@ -3784,7 +3507,7 @@ describe("the stylesheet says each thing once", () => {
     // a thing somebody meant to style.
     const scripts = ["toolbar.js", "toolbar-answers.js", "toolbar-compose.js", "toolbar-rail.js",
                      "toolbar-work.js", "toolbar-mark.js", "toolbar-live.js", "toolbar-toast.js",
-                     "toolbar-dock.js", "toolbar-send.js", "toolbar-library.js"]
+                     "toolbar-dock.js", "toolbar-send.js"]
       .map((name) => readFileSync(new URL(`./toolbar/ui/${name}`, import.meta.url), "utf8"))
       .join("\n");
     const html = readFileSync(new URL("./toolbar/ui/toolbar.html", import.meta.url), "utf8");
@@ -4641,10 +4364,6 @@ describe("one light for every agent at once", () => {
       "utf8",
     );
     const page = readFileSync(new URL("./toolbar/ui/toolbar.js", import.meta.url), "utf8");
-    const library = readFileSync(
-      new URL("./toolbar/ui/toolbar-library.js", import.meta.url),
-      "utf8",
-    );
 
     // Around the whole redraw, not around one panel. The Work panel minded its own
     // fields and nothing minded the rest, so a note under a mark — the popup is rebuilt
@@ -4667,17 +4386,15 @@ describe("one light for every agent at once", () => {
     expect(compose, "a mark's note in the composer").toMatch(/note\.dataset\.field = `note:/);
     expect(compose, "a mark's note in its popup").toMatch(/note\.dataset\.field = `popup-note:/);
     expect(compose, "where a design goes").toMatch(/where\.dataset\.field = `dest:/);
-    expect(compose, "how hard to think").toContain('bar.dataset.field = "effort"');
-    expect(library, "the library search").toContain('find.dataset.field = "library-find"');
     expect(work, "the reply field").toMatch(/field\.dataset\.field = `say:/);
 
     // And a letter is never a shortcut while a box is open to be written in — belt to
     // the braces above, so that losing the caret can cost a keystroke but not the tool.
     const key = page.slice(page.indexOf("function onKey("), page.indexOf("/* ── start"));
-    expect(key, "not while a mark or the library is open").toContain(
-      "state.popup !== null || state.library !== null",
+    expect(key, "not while a mark is open to be written in").toContain(
+      "state.popup !== null",
     );
-    expect(key.indexOf("state.popup !== null || state.library !== null")).toBeLessThan(
+    expect(key.indexOf("state.popup !== null")).toBeLessThan(
       key.indexOf("KEYS[event.key.toLowerCase()]"),
     );
 
@@ -5092,52 +4809,6 @@ describe("git, as six things one key can mean", () => {
 });
 
 describe("how the next send will be answered", () => {
-  const opus: Model = {
-    id: "anthropic/claude-opus-5",
-    name: "Claude Opus 5",
-    provider: "anthropic",
-    available: true,
-    levels: [
-      { id: "off", label: "Off" },
-      { id: "low", label: "Low" },
-      { id: "medium", label: "Medium" },
-      { id: "high", label: "High" },
-    ],
-    levelDefault: "medium",
-  };
-  const plain: Model = { id: "openai/gpt", name: "GPT", provider: "openai", levels: [] };
-
-  test("the efforts on offer are the model's own, not a list kept here", () => {
-    /*
-     * Which levels exist is the provider's answer and differs between models. A fixed
-     * list would be wrong the first time one of them changed — the slider would offer an
-     * effort the model ignores, which looks exactly like the slider not working.
-     */
-    expect(effortStops(opus).map((level) => level.id)).toEqual(["off", "low", "medium", "high"]);
-    // A model that does not think in levels gets no stops, and the composer draws no
-    // slider at all: an empty one is a control lying about having a choice.
-    expect(effortStops(plain)).toEqual([]);
-    expect(effortStops(null)).toEqual([]);
-    // A level with no id is not a stop somebody could be moved to.
-    expect(effortStops({ ...plain, levels: [{ id: "", label: "Nowhere" }] })).toEqual([]);
-  });
-
-  test("the handle starts where the model says, not at the left", () => {
-    /*
-     * Nothing chosen means the model's own default. Falling back to the leftmost stop
-     * would read as "off" on every model whose first level is off — the toolbar quietly
-     * turning thinking down on a model somebody just picked.
-     */
-    expect(effortAt(opus, null)).toBe(2);
-    expect(effortAt(opus, "high")).toBe(3);
-    // A remembered effort the model has never heard of: its first stop, not -1, which a
-    // range input reads as the leftmost anyway.
-    expect(effortAt(opus, "ultra")).toBe(0);
-    // Nothing to sit on at all.
-    expect(effortAt(plain, "high")).toBe(-1);
-    expect(effortAt({ ...opus, levelDefault: null }, null)).toBe(0);
-  });
-
   test("a fresh toolbar builds, and an unreadable mode still plans", () => {
     /*
      * Two different questions that were the same value. The default is what a fresh
@@ -5157,51 +4828,22 @@ describe("how the next send will be answered", () => {
     );
   });
 
-  test("switching model does not carry an effort the new one cannot do", () => {
-    // Every model has its own stops, so a remembered "high" is meaningless on a model
-    // that only knows off and low. Dropped rather than sent, because sending it is how a
-    // setting silently does nothing.
-    const compose = readFileSync(
-      new URL("./toolbar/ui/toolbar-compose.js", import.meta.url),
-      "utf8",
-    );
-    expect(compose).toMatch(
-      /if \(!stops\.includes\(state\.effort \|\| ""\)\) state\.effort = null/,
-    );
-    // And the slider is only drawn when there is a choice to make.
-    expect(compose).toMatch(/if \(stops\.length > 1\)/);
-    // Dragging it must not redraw the panel out from under the hand doing the dragging.
-    const dragging = compose.slice(compose.indexOf('bar.addEventListener("input"'));
-    expect(dragging.slice(0, 320)).not.toContain("render()");
-  });
-
-  test("a model that cannot be used is shown and refused, never hidden", () => {
-    // A model missing because nobody has signed in is something to go and fix. One
-    // absent from the list is something somebody concludes this toolbar cannot do.
-    const compose = readFileSync(
-      new URL("./toolbar/ui/toolbar-compose.js", import.meta.url),
-      "utf8",
-    );
-    expect(compose).toContain("one.disabled = model.available === false");
-    expect(compose, "and it says why").toContain("model.whyNot");
-    // The catalogue is asked for when the picker opens rather than kept warm.
-    expect(compose).toContain("void loadModels()");
-  });
-
-  test("a setting that did not take is said out loud", () => {
+  test("a send that could not do as it was asked says so out loud", () => {
     /*
-     * The commonest reason is the ordinary one: a first send to an agent has no
-     * conversation yet to set a model on. The message still goes — sending is what was
-     * asked for — but a setting that appears to have applied and did not is how somebody
-     * spends an hour wondering why the answers look the same.
+     * This used to be the model or the effort failing to apply to the conversation.
+     * Neither travels any more — Claude Code takes its model when the process starts —
+     * and what the field still carries is a recording somebody asked to arrive as one
+     * contact sheet that had to be sent as separate frames instead. Either way the rule
+     * is the same: they asked for one thing and got another, and a difference nobody is
+     * told about is how somebody spends an hour wondering why the answer looks wrong.
      */
     const send = readFileSync(new URL("./toolbar/ui/toolbar-send.js", import.meta.url), "utf8");
     expect(send).toContain("sent.settingsTrouble");
     expect(send).toContain("state.trouble");
-    // And both travel with every send, because this may be the first one with a
-    // conversation to hold them.
-    expect(send).toContain("model: state.model");
-    expect(send).toContain("thinkingLevel: state.effort");
+    // And nothing about a model is sent with the message any more: the picker could only
+    // ever say "Claude Code chooses its own model", so it is gone rather than left there.
+    expect(send, "no model travels").not.toContain("model: state.model");
+    expect(send, "and no effort either").not.toContain("thinkingLevel: state.effort");
   });
 });
 
@@ -5298,7 +4940,6 @@ describe("clicking away closes what is open", () => {
     const shutting = page.slice(page.indexOf("function shutWhatIsOpen("));
     expect(shutting.slice(0, 700), "the Work panel").toContain("state.work.open = false");
     expect(shutting.slice(0, 700), "any open menu").toContain("state.open = null");
-    expect(shutting.slice(0, 700), "and the library").toContain("state.library = null");
   });
 
   test("taking a picture is not somebody clicking away", () => {
@@ -5334,7 +4975,6 @@ describe("clicking away closes what is open", () => {
 
     // Inside what is open is not outside it.
     expect(pressing.slice(0, 800)).toContain("el.work.contains(at)");
-    expect(pressing.slice(0, 800)).toContain("el.library.contains(at)");
     expect(pressing.slice(0, 800)).toContain('at.closest(".flyout")');
 
     // A control already means something. Closing on the way down only to have the click
@@ -5362,261 +5002,6 @@ describe("clicking away closes what is open", () => {
   });
 });
 
-describe("what the plugin ships", () => {
-  const dir = new URL("./", import.meta.url);
-  const manifest = JSON.parse(readFileSync(new URL("package.json", dir), "utf8")) as {
-    files: string[];
-    dependencies?: Record<string, string>;
-    scripts?: Record<string, string>;
-    openclaw?: { extensions?: string[] };
-  };
-
-  /*
-   * npm ships what `files` names and nothing else.
-   *
-   * The toolbar is compiled on the installing machine, from sources that travel inside
-   * the package — so a path left out of this list is not a missing nicety, it is a build
-   * that cannot happen on anybody's machine but this one, and it fails after install
-   * rather than in any check here. These name the things the install actually opens.
-   */
-  const shipped = (path: string) =>
-    manifest.files.some((entry) => path === entry || path.startsWith(entry));
-
-  test("everything the build reads is in the package", () => {
-    for (const needed of [
-      "toolbar/src-tauri/Cargo.toml",
-      "toolbar/src-tauri/Cargo.lock",
-      "toolbar/src-tauri/build.rs",
-      "toolbar/src-tauri/tauri.conf.json",
-      "toolbar/src-tauri/src/",
-      "toolbar/src-tauri/permissions/",
-      // The pages are embedded into the binary at compile time, so they have to be here
-      // before cargo runs, not after.
-      "toolbar/ui/",
-    ]) {
-      expect(shipped(needed), `${needed} is missing from package.json files`).toBe(true);
-    }
-  });
-
-  test("everything OpenClaw reads is in the package", () => {
-    // The manifest is how the plugin is discovered without running it, and the entry is
-    // what runs. Either one absent is an installed plugin that does nothing.
-    expect(shipped("openclaw.plugin.json")).toBe(true);
-    expect(shipped("index.ts")).toBe(true);
-    expect(shipped("src/")).toBe(true);
-    expect(manifest.openclaw?.extensions).toEqual(["./index.ts"]);
-  });
-
-  test("the command that answers for the toolbar is declared where doctor cannot", () => {
-    /*
-     * `openclaw doctor` cannot ask. Core's `registerBundledHealthChecks` names five
-     * bundled plugins and has no seam for an installed one, and a plugin's `register`
-     * does not run in the doctor process at all — measured, by loading a probe into the
-     * installed copy and running doctor: it never fired.
-     *
-     * A plugin's own command does load it. So the manifest declares `colai`, and it has
-     * to be declared in both places: `cliCommands` for the command tree, and
-     * `activation.onCommands` so the plugin is loaded when somebody types it.
-     */
-    const declared = JSON.parse(readFileSync(new URL("openclaw.plugin.json", dir), "utf8")) as {
-      cliCommands?: { name: string }[];
-      activation?: { onCommands?: string[]; onStartup?: boolean };
-    };
-    expect(declared.cliCommands?.map((command) => command.name)).toEqual(["colai"]);
-    expect(declared.activation?.onCommands).toContain("colai");
-    // And still with the Gateway, which is what actually puts it on screen.
-    expect(declared.activation?.onStartup).toBe(true);
-  });
-
-  test("the toolbar travels already built", () => {
-    /*
-     * It cannot be built on the installing machine, and not for want of trying: OpenClaw
-     * passes `--ignore-scripts` to every managed npm install, always, with no flag and no
-     * config to opt in. A `postinstall` here would simply never run — measured in a
-     * container, where three variants installed identically in six seconds and none of
-     * them compiled anything.
-     *
-     * So each binary is staged into its platform package before anything is packed, and
-     * that is what ships — gzipped, because the registry takes files up to 10 MB and the
-     * binary is over 12. It is laid out on first use instead of on install;
-     * `src/unpack.ts` says why that is not the same thing as a postinstall. The container
-     * run under `test/` is what would notice if the host ever stopped forcing
-     * `--ignore-scripts`; nothing here reads OpenClaw's source to find out.
-     */
-    expect(manifest.scripts?.postinstall, "a postinstall here can never run").toBeUndefined();
-    // Not in the wrapper — in the package for the machine that can run it.
-    expect(shipped("bin/colai-toolbar.gz"), "no binary travels in the wrapper").toBe(false);
-    for (const name of manifest.openclaw.install.requiredPlatformPackages) {
-      const which = name.slice("@colai/toolbar-".length);
-      const pkg = JSON.parse(readFileSync(new URL(`platforms/${which}/package.json`, dir), "utf8"));
-      expect(pkg.files, `${name} must carry the binary`).toContain("bin/colai-toolbar.gz");
-    }
-    // Two ways to produce it, and they are not interchangeable: one for working on it
-    // here, one for the copy strangers get. Which is which is settled by the test below
-    // about publishing; this only asserts both exist.
-    expect(existsSync(new URL("scripts/build-toolbar.mjs", dir))).toBe(true);
-    expect(existsSync(new URL("scripts/build-release.mjs", dir))).toBe(true);
-    expect(manifest.scripts?.["build:toolbar"]).toBe("node scripts/build-toolbar.mjs");
-  });
-
-  test("a toolbar built on a developer's machine cannot be published", () => {
-    /*
-     * Two properties of the binary are decided by the machine that compiled it and by
-     * nothing in this repository: the oldest Linux it will run on, and whose home
-     * directory is inside it. Built on a current desktop, both were wrong — a GLIBC_2.39
-     * floor, which is Ubuntu 24.04 and little else, and the author's checkout path, which
-     * `--remap-path-prefix` structurally cannot reach because Tauri embeds it rather than
-     * rustc emitting it.
-     *
-     * Neither is visible in the tarball. The size is right, the digest matches, the
-     * install succeeds, and the failure arrives on a stranger's machine as a window that
-     * never opens. So it is refused at the one moment it is still catchable.
-     */
-    expect(manifest.scripts?.prepack, "the gate runs before anything is packed").toContain(
-      "node scripts/check-shippable.mjs",
-    );
-    // Packing must not rebuild the toolbar. A local cargo build here would overwrite the
-    // release artifact with one carrying this machine's floor and path — the exact thing
-    // the gate exists to prevent, done immediately after passing it.
-    expect(manifest.scripts?.prepack, "and does not rebuild what it just approved").not.toContain(
-      "build-toolbar",
-    );
-    expect(manifest.scripts?.["build:release"]).toBe("node scripts/build-release.mjs");
-    for (const file of [
-      "scripts/check-shippable.mjs",
-      "scripts/build-release.mjs",
-      "release/Dockerfile",
-    ]) {
-      expect(existsSync(new URL(file, dir)), `${file} is missing`).toBe(true);
-    }
-
-    // A developer build must invalidate the note that says otherwise, or the gate waves
-    // through a stale approval.
-    const dev = readFileSync(new URL("scripts/build-toolbar.mjs", dir), "utf8");
-    // Beside `staged`, not at a path spelled out again: the note that must die is the one
-    // sitting next to the binary this script just wrote, and a second spelling of that path
-    // is free to drift away from the first.
-    expect(dev, "a local build clears the release note").toMatch(
-      /rmSync\(`\$\{staged\}\.build\.json`/,
-    );
-  });
-
-  test("drawing happens on the thread allowed to draw", () => {
-    /*
-     * Structural on purpose, and the one place in this file where that is the honest
-     * shape: the rule is "GDK is only touched from the main thread", and observing it
-     * needs a GTK main loop, a display and a real send. What can be checked is that the
-     * one path which broke it no longer names the drawing directly.
-     *
-     * It mattered more than a panic usually does. GDK does not decline when it is used
-     * from the wrong thread, it aborts the thread it is on — here a tokio worker inside
-     * the `colai_send` command. Tauri does not catch that across the command boundary, so
-     * the promise on the page never settled, its `finally` never ran, and `state.sending`
-     * stayed true for the life of the process: send one recording as a contact sheet, and
-     * Send never worked again until the toolbar was restarted.
-     */
-    const send = readFileSync(new URL("toolbar/src-tauri/src/colai_send.rs", dir), "utf8");
-
-    expect(send, "the sheet is drawn through the main thread").toContain("run_on_main_thread");
-    const helper = send.indexOf("fn sheet_on_the_main_thread");
-    expect(helper, "and there is one seam it goes through").toBeGreaterThan(-1);
-
-    // Every mention of the drawing outside that helper would be a way around it.
-    const direct = [...send.matchAll(/colai_capture::contact_sheet/g)].map((hit) => hit.index ?? 0);
-    expect(direct.length, "the drawing is named once").toBe(1);
-    expect(direct[0], "and only inside the helper").toBeGreaterThan(helper);
-  });
-
-  test("npm refuses the machines a binary cannot run on — in the package that holds it", () => {
-    /*
-     * A binary is one executable for one machine. Without `os` and `cpu`, npm installs it
-     * onto anything perfectly happily, the host loads the plugin, and the toolbar exits
-     * 127 — a working install of a program that cannot run.
-     *
-     * Those two keys used to sit on the wrapper, which was right while there was one
-     * binary and became exactly wrong once there were several: npm reads them before it
-     * considers a single optional dependency, so `os: ["linux"]` here would refuse a Mac
-     * the wrapper and it would never reach the Mac binary inside. The keys belong to the
-     * packages that actually hold an executable, and that is where they now are — tested
-     * against the platform manifests in `index.test.ts`.
-     */
-    expect(manifest.os, "the wrapper runs anywhere").toBeUndefined();
-    expect(manifest.cpu).toBeUndefined();
-    expect(Object.keys(manifest.optionalDependencies ?? {}).length).toBeGreaterThan(0);
-  });
-
-  test("the runtime the host actually loads is built by this package", () => {
-    /*
-     * The entry is `./index.ts`, and OpenClaw refuses a TypeScript entry with no compiled
-     * output beside it — so `dist/index.js` decides whether the plugin loads at all.
-     *
-     * It used to be built by a script in the OpenClaw repository, which is not part of
-     * this package and is not on a publisher's disk, into a directory git ignores. A
-     * publish from a clean checkout therefore shipped every file except the one the host
-     * runs, and said nothing: the tarball was the right size and the failure arrived on
-     * somebody else's machine as "plugin not found". Nothing outside this directory may
-     * be needed to produce it.
-     */
-    expect(manifest.scripts?.prepack, "packing must build it").toContain(
-      "node scripts/build-runtime.mjs",
-    );
-    expect(existsSync(new URL("scripts/build-runtime.mjs", dir))).toBe(true);
-    expect(shipped("dist/"), "and the tarball must carry it").toBe(true);
-
-    const builds = readFileSync(new URL("scripts/build-runtime.mjs", dir), "utf8");
-    // The host's own SDK and a declared dependency stay external. Bundling either ships a
-    // second copy that cannot recognise the first.
-    for (const theirs of ["openclaw", "zod"]) {
-      expect(builds, `${theirs} is the host's to provide`).toContain(`"${theirs}"`);
-    }
-    // Its only tool is one this package declares, or a publisher does not have it.
-    expect(manifest.devDependencies?.esbuild, "declared, not borrowed").toBeTruthy();
-  });
-
-  test("it asks the installed package first and a build directory last", () => {
-    /*
-     * Three places, and the order is the whole behaviour: the platform package npm
-     * installed, then `platforms/` in a checkout, then `target/`. A `target/` build exists
-     * only on a machine where somebody is working on the toolbar, and preferring it would
-     * mean a developer's half-finished binary shadowing the one that was shipped.
-     */
-    const entry = readFileSync(new URL("index.ts", dir), "utf8");
-    const looking = entry.slice(entry.indexOf("function toolbarBinary"));
-    const installed = looking.indexOf("whereTheBuildIs");
-    const checkout = looking.indexOf('"platforms"');
-    const built = looking.indexOf("target/release");
-    expect(installed).toBeGreaterThan(-1);
-    expect(installed).toBeLessThan(checkout);
-    expect(checkout).toBeLessThan(built);
-  });
-
-  test("what index.ts imports, the package declares", () => {
-    // A plugin gets its own dependencies; nothing hoists them from the host.
-    const entry = readFileSync(new URL("index.ts", dir), "utf8");
-    for (const match of entry.matchAll(/^import[^"']+["']([^"']+)["'];$/gm)) {
-      const from = match[1] ?? "";
-      if (from.startsWith("node:") || from.startsWith(".") || from.startsWith("openclaw/")) {
-        continue;
-      }
-      const parts = from.split("/");
-      const pkg = from.startsWith("@") ? parts.slice(0, 2).join("/") : (parts[0] ?? from);
-      expect(manifest.dependencies?.[pkg], `${pkg} is imported but not depended on`).toBeTruthy();
-    }
-  });
-
-  test("it looks for the binary cargo actually writes", () => {
-    /*
-     * Two files decide this name and neither can see the other: `[[bin]] name` in
-     * Cargo.toml puts the file in `target/<profile>/`, and `index.ts` spawns it by path.
-     * Renaming the crate would leave a plugin that installs, builds, and starts nothing.
-     */
-    const cargo = readFileSync(new URL("toolbar/src-tauri/Cargo.toml", dir), "utf8");
-    const named = /\[\[bin\]\][\s\S]*?name\s*=\s*"([^"]+)"/.exec(cargo);
-    expect(named?.[1]).toBeTruthy();
-    const entry = readFileSync(new URL("index.ts", dir), "utf8");
-    expect(entry).toContain(`"${named?.[1]}"`);
-  });
-});
 
 describe("the way back when the toolbar is put away", () => {
   const dir = new URL("./toolbar/src-tauri/src/", import.meta.url);
@@ -5633,7 +5018,7 @@ describe("the way back when the toolbar is put away", () => {
      */
     const rail = readFileSync(new URL("./toolbar/ui/toolbar-rail.js", import.meta.url), "utf8");
     expect(Object.keys(glyphsInTheRail())).not.toContain("away");
-    expect(rail).toContain("dividers[2].after(send, agents, stop, home)");
+    expect(rail).toContain("dividers[2].after(send, chat, stop, home)");
   });
 
   test("there is no tray, and nothing still talks to one", () => {
@@ -5725,7 +5110,7 @@ describe("the way back when the toolbar is put away", () => {
   });
 });
 
-describe("the work panel is a view of OpenClaw's conversations", () => {
+describe("the work panel is a view of the conversations on this machine", () => {
   const dir = new URL("./toolbar/ui/", import.meta.url);
   const dir2 = new URL("./", import.meta.url);
   const work = readFileSync(new URL("toolbar-work.js", dir), "utf8");
@@ -5762,13 +5147,19 @@ describe("the work panel is a view of OpenClaw's conversations", () => {
   });
 
   test("the binding is a setting, and changing it takes effect", () => {
-    const declared = JSON.parse(readFileSync(new URL("openclaw.plugin.json", dir2), "utf8")) as {
-      configSchema?: { properties?: Record<string, unknown> };
-    };
-    expect(Object.keys(declared.configSchema?.properties ?? {})).toContain("hotkey");
-    // Read from the environment when the process starts, so it has to restart to change.
-    const process_ = readFileSync(new URL("src/toolbar-process.ts", dir2), "utf8");
-    expect(process_).toContain("COLAI_HOTKEY");
+    /*
+     * The setting survived its delivery mechanism. It used to be declared in an OpenClaw
+     * manifest's `configSchema` and read by a Node wrapper that spawned the toolbar; both are
+     * gone, and the toolbar reads the environment itself. So this now asserts the thing that
+     * is actually true rather than the thing that used to carry it — the same behaviour, one
+     * layer fewer.
+     */
+    const hotkey = readFileSync(new URL("toolbar/src-tauri/src/hotkey.rs", dir2), "utf8");
+    expect(hotkey, "the chord is read from the environment").toContain(
+      'std::env::var("COLAI_HOTKEY")',
+    );
+    // Read once when the process starts, so changing it means restarting the toolbar.
+    expect(hotkey).toContain("pub(crate) fn wanted()");
   });
 
   test("the first run names what cannot be discovered by looking", () => {
@@ -5820,7 +5211,7 @@ describe("the work panel is a view of OpenClaw's conversations", () => {
     expect(rail.match(/role", "menuitem"/g)?.length ?? 0).toBeGreaterThanOrEqual(5);
     expect(page, "and arrows walk it, wrapping at both ends").toContain("function walkMenu");
     // The heading was counted as one of the choices. It names the menu instead.
-    expect(html).toContain('aria-labelledby="agents-title"');
+    expect(html).toContain('aria-labelledby="chat-title"');
   });
 
   test("an open suggestion list survives a redraw it has nothing to do with", () => {
@@ -5896,29 +5287,6 @@ describe("the work panel is a view of OpenClaw's conversations", () => {
       css.slice(css.indexOf(".send-key {"), css.indexOf(".send-key[data-waiting")),
       "and the key it is positioned against says so",
     ).toContain("position: relative");
-  });
-
-  test("model and effort sit with the conversation, not with the message", () => {
-    /*
-     * They were on the composer's send row and the row above it, which said twice over
-     * that they were part of the message being written: they are not. Both belong to the
-     * conversation, and the toolbar already stored them that way — beside the dock
-     * position, not with the text. On the send row they cost a third of its width and
-     * shortened the receiver's name to make room.
-     *
-     * They open from the control that chooses who answers, and that control says what
-     * they are — hiding the switch is fine, hiding the answer is not.
-     */
-    const compose = readFileSync(new URL("toolbar/ui/toolbar-compose.js", dir2), "utf8");
-    const html = readFileSync(new URL("toolbar/ui/toolbar.html", dir2), "utf8");
-
-    expect(compose).toContain("function drawAnswerSettings(");
-    expect(html, "inside the popover the receiver already opens").toContain('id="agent-answer"');
-    // Off the send row, both of them.
-    expect(compose).toContain("foot.append(to, modePick(), gap, inField, key, go);");
-    expect(compose, "and off the row above").not.toContain("if (effort) extras.append(effort);");
-    // Named where the choice is made.
-    expect(compose).toContain("popup-to-how");
   });
 
   test("a receipt and a failure stop looking the same", () => {
@@ -6103,20 +5471,6 @@ describe("the work panel is a view of OpenClaw's conversations", () => {
     expect(send).toContain("rememberWork()");
   });
 
-  test("a row says what it is doing before its transcript exists", () => {
-    /*
-     * Most rows are conversations colai never sent to, and their turns are only fetched
-     * on open — so until then the transcript cannot say whether one is running or waiting
-     * on somebody. The session list already did, in the round trip that drew the row.
-     */
-    const tools = readFileSync(new URL("toolbar-tools.js", dir), "utf8");
-    const deciding = tools.slice(tools.indexOf("function stateOf"));
-    const body = deciding.slice(0, deciding.indexOf("\n}"));
-    expect(body).toContain("turns.length === 0");
-    expect(body).toContain("entry.busy");
-    expect(body).toContain("entry.unread");
-  });
-
   test("an empty panel says whether it is empty or merely unanswered", () => {
     // A list nobody answered looks exactly like a list with nothing in it.
     const loading = work.slice(work.indexOf("async function loadWork"));
@@ -6262,7 +5616,10 @@ describe("reading a conversation in the work panel", () => {
     const fetching = work.slice(work.indexOf("async function loadTurns"));
     expect(fetching).toContain("state.history.find((one) => one.sessionKey === entry.sessionKey)");
     // And it goes on listening, or the conversation is frozen at the instant it opened.
-    expect(fetching).toContain('invoke("colai_watch"');
+    // Being in `state.answers` is the whole of that now: `colai_watch` asked the Gateway
+    // to deliver to a subscriber, and on this host the reply comes back down the pipe the
+    // message went up.
+    expect(fetching).toContain("state.answers.push(answer)");
   });
 
   test("a refresh keeps what the person did to the panel", () => {
@@ -6291,12 +5648,15 @@ describe("reading a conversation in the work panel", () => {
 
   test("it shows the conversations of whoever is receiving", () => {
     // A mixed list is a list nobody can read. The dropdown chooses; the panel follows.
+    //
+    // One kind of receiver, so one comparison. It branched on three — an agent, a session,
+    // a thread held elsewhere — and the other two came off lists this host answers empty.
     const whose = work.slice(work.indexOf("function whoseConversations"));
     const body = whose.slice(0, whose.indexOf("\n}\n"));
-    expect(body).toContain('who.kind === "session"');
-    expect(body).toContain('who.kind === "agent"');
-    expect(body).toContain('who.kind === "thread"');
-    expect(body).toContain("session.agentId === who.id");
+    expect(body).toContain("session.key === who.id");
+    expect(body, "and no kind to ask about").not.toContain("who.kind");
+    // Nobody chosen is nothing shown, rather than everything mixed together.
+    expect(body).toContain("return () => false");
   });
 
   test("a long reply is folded, wraps, and keeps its shape", () => {

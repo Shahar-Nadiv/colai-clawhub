@@ -1,7 +1,7 @@
 {
   "name": "@colai/toolbar",
   "version": "0.1.3",
-  "description": "Point at anything on screen and hand it to an agent",
+  "description": "The colai toolbar, as a Claude Code plugin. Not published to npm \u2014 Claude Code installs a plugin from a clone.",
   "license": "MIT",
   "type": "module",
   "keywords": [
@@ -17,63 +17,14 @@
   "publishConfig": {
     "access": "public"
   },
-  "files": [
-    "LICENSE",
-    "README.md",
-    "CHANGELOG.md",
-    "index.ts",
-    "src/",
-    "dist/",
-    "openclaw.plugin.json",
-    "toolbar/ui/",
-    "toolbar/src-tauri/src/",
-    "toolbar/src-tauri/permissions/",
-    "toolbar/src-tauri/icons/",
-    "toolbar/src-tauri/Cargo.toml",
-    "toolbar/src-tauri/Cargo.lock",
-    "toolbar/src-tauri/build.rs",
-    "toolbar/src-tauri/tauri.conf.json"
-  ],
-  "dependencies": {
-    "zod": "4.4.3"
-  },
   "scripts": {
-    "build": "node scripts/build-runtime.mjs && node scripts/build-toolbar.mjs",
-    "ship": "node scripts/ship.mjs",
-    "prepack": "node scripts/check-shippable.mjs && node scripts/build-runtime.mjs",
     "test": "vitest run",
-    "build:runtime": "node scripts/build-runtime.mjs",
     "build:toolbar": "node scripts/build-toolbar.mjs",
     "build:release": "node scripts/build-release.mjs"
   },
   "devDependencies": {
-    "esbuild": "0.28.2",
     "linkedom": "^0.18.12",
-    "openclaw": "2026.9.1",
     "vitest": "4.1.11"
-  },
-  "openclaw": {
-    "extensions": [
-      "./index.ts"
-    ],
-    "build": {
-      "openclawVersion": "2026.9.1",
-      "pluginSdkVersion": "2026.9.1"
-    },
-    "install": {
-      "clawhubSpec": "clawhub:@colai/toolbar",
-      "defaultChoice": "clawhub",
-      "minHostVersion": ">=2026.9.1",
-      "requiredPlatformPackages": [
-        "@colai/toolbar-linux-x64"
-      ]
-    },
-    "compat": {
-      "pluginApi": ">=2026.9.1"
-    }
-  },
-  "optionalDependencies": {
-    "@colai/toolbar-linux-x64": "0.1.3"
   },
   "repository": {
     "type": "git",
@@ -82,5 +33,6 @@
   "homepage": "https://github.com/Shahar-Nadiv/colai-clawhub#readme",
   "bugs": {
     "url": "https://github.com/Shahar-Nadiv/colai-clawhub/issues"
-  }
+  },
+  "private": true
 }

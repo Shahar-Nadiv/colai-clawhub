@@ -121,7 +121,8 @@ fi
 # taskbar grouping and any window rule the user has written off that string. Unpacked as
 # `colai-toolbar-3e18b97d6676` the overlay announces itself under a different name after
 # every release.
-cache="${XDG_CACHE_HOME:-$HOME/.cache}/colai/$(printf '%s' "$expected" | cut -c1-12)"
+root="${XDG_CACHE_HOME:-$HOME/.cache}/colai"
+cache="$root/$(printf '%s' "$expected" | cut -c1-12)"
 binary="$cache/colai-toolbar"
 
 if [ ! -x "$binary" ] || [ "$(digest_of "$binary")" != "$expected" ]; then
@@ -147,6 +148,22 @@ if [ ! -x "$binary" ] || [ "$(digest_of "$binary")" != "$expected" ]; then
   chmod 755 "$partial"
   mv -f "$partial" "$binary"
   trap - EXIT INT TERM
+
+  # And the one it replaces goes.
+  #
+  # The digest is in the directory name so that X11 sees a stable executable basename across
+  # releases — see above. The cost of that, unnoticed until somebody measured an install, is
+  # that every release left its predecessor behind: nine and a half megabytes per version,
+  # accumulating for the life of the machine, none of it ever runnable again.
+  #
+  # Only after a successful unpack, and only siblings — so a failed or refused update leaves
+  # the working copy exactly where it was. Unlinking a binary that is currently executing is
+  # safe on Linux: the running process keeps its inode, and the next launch finds this one.
+  for stale in "$root"/*; do
+    [ -d "$stale" ] || continue
+    [ "$stale" = "$cache" ] && continue
+    rm -rf "$stale"
+  done
 fi
 
 exec "$binary" "$@"

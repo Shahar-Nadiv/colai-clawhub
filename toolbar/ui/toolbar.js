@@ -25,14 +25,12 @@ const el = {
   flyGit: document.getElementById("fly-git"),
   flyRecord: document.getElementById("fly-record"),
   flyDraw: document.getElementById("fly-draw"),
-  library: document.getElementById("library"),
   work: document.getElementById("work"),
   toasts: document.getElementById("toasts"),
   flights: document.getElementById("flights"),
-  flyAgents: document.getElementById("fly-agents"),
+  flyChat: document.getElementById("fly-chat"),
   flyAsk: document.getElementById("fly-ask"),
-  agentAnswer: document.getElementById("agent-answer"),
-  agentRows: document.getElementById("agent-rows"),
+  chatRows: document.getElementById("chat-rows"),
   trouble: document.getElementById("trouble"),
   doing: document.getElementById("doing"),
   tips: document.getElementById("tips"),
@@ -54,16 +52,9 @@ const state = {
   // Every display, each with what its own desktop keeps of it. The overlay covers the
   // whole desk, so which screen a thing is on is a question that now has to be asked.
   screens: [],
-  agents: [],
   sessions: [],
-  // Conversations held elsewhere, already grouped by the folder they belong to.
-  projects: [],
-  // Which of those folders are open. A menu of two dozen threads is unreadable flat,
-  // and a menu of only folders shows nothing, so what is open is the thing being
-  // remembered rather than a default applied to everybody.
-  opened: new Set(),
-  // Null while the lists are good, a message while the Gateway could not be asked. The
-  // two are different facts and the rail says which.
+  // Null while the list is good, a message while it could not be read. The two are
+  // different facts and the rail says which.
   whoTrouble: null,
   /*
    * What this conversation has cost, in dollars.
@@ -84,7 +75,7 @@ const state = {
   // The name is kept beside the id on purpose. The menu shows recent conversations, so
   // a session picked an hour ago can fall off it; forgetting who was receiving because
   // they scrolled out of a menu would be the toolbar losing your choice for you.
-  receiving: { kind: "agent", id: null, name: null, emoji: null },
+  receiving: { id: null, name: null },
   marks: [],
   undone: [],
   // The mark whose popup is open, if any. One at a time: two dialogs about two regions
@@ -102,21 +93,10 @@ const state = {
   // The recording underway, while it is underway: the region it covers and when it
   // ends. Null the rest of the time.
   recording: null,
-  // The automation being written, while the panel is open. Started from its own
-  // defaults each time rather than kept: a schedule is about one piece of work, and
-  // yesterday's interval sitting in the box is a job somebody creates by accident.
-  // Which conversation the row menu is about, and what it found to go back to.
-  // What this connection is allowed to do, as the Gateway itself reported it. Empty
-  // until the handshake, and empty is not "everything".
-  allowed: [],
-  // The session key a thread got when it was adopted, so it can be gone back through.
-  adoptedKeys: {},
   // The runs the toolbar believes are underway: one per session it has sent to and not
   // yet heard the end of. Kept as a list rather than a flag, because "one agent is
   // working" and "four are" are different things to be told.
   runs: [],
-  // The library window, while it is open, and which mark it will answer.
-  library: null,
   // The Work window: what is waiting, what has been sent, and whether marks are drawn.
   // `scope` is how wide the work panel looks: "mine" is the receiver's conversations,
   // which is what it has always shown, and "all" is everything colai knows about.
@@ -142,8 +122,6 @@ const state = {
   // has spoken, which is a reason to leave every mark alone rather than to hide them —
   // a window with an empty id is the other thing, and means nothing is in front.
   front: null,
-  // The catalogues this build knows how to read, so the library window can say which.
-  libraries: [],
   // What every agent on this Gateway is doing, which is not the same question as what
   // this toolbar started. Null until the Gateway has answered once: no light is the
   // honest state before anything is known, and a green one would be a claim.
@@ -164,14 +142,6 @@ const state = {
   // Which git command the next git mark is asking for. Chosen on the menu, and
   // changeable on the mark afterwards, exactly as the design kind is.
   gitKind: GIT_FIRST,
-  // How the next send should be answered. Both are settings on the conversation rather
-  // than fields on a message, so they are applied to whoever receives it — and they
-  // stick, because somebody who picked a model meant it for more than one send.
-  model: null,
-  effort: null,
-  // The catalogue, asked for when the picker opens rather than kept warm.
-  models: null,
-  modelsTrouble: null,
   // Whether the exact tools are folded shut. Open to begin with — the rail is what
   // this toolbar is, and a first look at it should be the whole thing. Remembered with
   // the dock, because it is the same kind of fact: how somebody wants this to sit.
@@ -192,15 +162,9 @@ const state = {
   // Whether the receiver was chosen rather than worked out. A guess may fill an empty
   // seat; it may never take one somebody has sat in.
   picked: false,
-  // The project the window in front belongs to, when that is obvious.
-  inFront: null,
   // What the next send is for, and anything else somebody wants to say with it.
   mode: MODE_FIRST,
   text: "",
-  // Conversations held elsewhere that have already been agreed to. Continuing one hands
-  // it to the Gateway, which is a real change of ownership, so it is asked once and then
-  // remembered rather than asked on every send.
-  adopted: [],
   // Set while a send is in the air, so a second click cannot post it twice.
   sending: false,
   // What went wrong, when something did. Null the rest of the time, which is the rest
@@ -264,7 +228,6 @@ function pressedSomewhereElse(event) {
   if (!at || typeof at.closest !== "function") return;
   // Inside the thing that is open is not outside it.
   if (state.work.open && el.work.contains(at)) return;
-  if (state.library !== null && el.library.contains(at)) return;
   if (state.open !== null && at.closest(".flyout")) return;
   if (at.closest("button, input, select, textarea, label, .grip")) return;
   shutWhatIsOpen();
@@ -292,11 +255,7 @@ function shutWhatIsOpen() {
     state.work.open = false;
     shut = true;
   }
-  if (state.library !== null) {
-    state.library = null;
-    shut = true;
-  }
-  // One redraw for all three, rather than one per thing that happened to be open.
+  // One redraw for both, rather than one per thing that happened to be open.
   if (shut) render();
 }
 
@@ -383,8 +342,8 @@ function render() {
       // them and a rebase is not a thing to find out about by doing it.
       button.title =
         state.tool === "git" ? `Git · ${GITS[gitKindOf({ git: state.gitKind })].label}` : "Git";
-    } else if (id === "agents") {
-      button.setAttribute("aria-pressed", String(state.open === "agents"));
+    } else if (id === "chat") {
+      button.setAttribute("aria-pressed", String(state.open === "chat"));
     } else if (id === "send") {
       button.setAttribute("aria-pressed", String(state.open === "send"));
     } else if (id === "exact") {
@@ -417,7 +376,7 @@ function render() {
   // still working is a worse lie than never having said so.
   state.runs = runsNow(state.runs, state.atWork, Date.now(), state.history);
   const working = runningSaid(state.runs);
-  buttons.agents.dataset.working = String(state.runs.length > 0);
+  buttons.chat.dataset.working = String(state.runs.length > 0);
   // Only what is being received. The key stops the conversation somebody is looking at,
   // and the panel is already filtered to it — a run whose conversation is not on screen is
   // not one this key is about.
@@ -467,17 +426,18 @@ function render() {
    * does not wave away the fact: the agent is still stopped, and the badge is the way
    * back to it.
    */
-  buttons.agents.dataset.asking = String(Boolean(askedOf(state.answers)));
-  const mark = buttons.agents.querySelector(".running-dots");
-  // An initial when there is no emoji, because upright the name beside this is hidden
-  // and an empty mark leaves the control saying nothing at all.
-  mark.textContent = who ? who.emoji || who.name.slice(0, 1).toUpperCase() : "";
+  buttons.chat.dataset.asking = String(Boolean(askedOf(state.answers)));
+  const mark = buttons.chat.querySelector(".running-dots");
+  // An initial, because upright the name beside this is hidden and an empty mark leaves
+  // the control saying nothing at all. It was the agent's emoji when there was one; a
+  // conversation has no face, so the first letter of its name is the whole of it.
+  mark.textContent = who ? who.name.slice(0, 1).toUpperCase() : "";
   mark.hidden = !who;
-  buttons.agents.querySelector(".agents-who").textContent = who
+  buttons.chat.querySelector(".chat-who").textContent = who
     ? who.name
-    : state.agents.length || talking()
+    : talking()
       ? "Choose who receives"
-      : "Agents";
+      : "Conversation";
   /*
    * Under the name: what is happening, or what it has cost.
    *
@@ -485,7 +445,7 @@ function render() {
    * count, which the picker below already shows. What is worth the line instead is the
    * running total, because it is the one number nobody can see anywhere else.
    */
-  buttons.agents.querySelector(".agents-running").textContent = state.whoTrouble
+  buttons.chat.querySelector(".chat-running").textContent = state.whoTrouble
     ? "unavailable"
     : working || (state.spent > 0 ? spentSaid(state.spent) : "");
 
@@ -547,14 +507,14 @@ function render() {
   for (const button of el.flyRecord.children) {
     button.setAttribute("aria-pressed", String(Number(button.dataset.seconds) === state.recordFor));
   }
-  el.flyAgents.hidden = state.open !== "agents";
+  el.flyChat.hidden = state.open !== "chat";
 
   // Filled before it is placed. A menu is measured to decide whether it fits on the
   // screen, and measuring it empty answers a question about a different menu — which is
   // how a full list of conversations came to hang off the bottom of the display while
   // the same code, run again a moment later, put it back.
 
-  if (state.open === "agents") drawWho();
+  if (state.open === "chat") drawWho();
   // Filled before it is placed, for the same reason: it is measured to decide whether it
   // fits on the screen, and a question with four options on it is not the height of one
   // with none.
@@ -574,9 +534,9 @@ function render() {
     [el.flyGit, buttons.git],
     [el.flyRecord, buttons.record],
     [el.flyDraw, buttons.draw],
-    [el.flyAgents, buttons.agents],
+    [el.flyChat, buttons.chat],
     // Out of the key that says who is talking, which is where the question came from.
-    [el.flyAsk, buttons.agents],
+    [el.flyAsk, buttons.chat],
     // The work panel hangs off send, the key that opens it.
     [el.work, buttons.send],
   ]) {
@@ -585,7 +545,6 @@ function render() {
 
   drawMarks();
   drawPopup();
-  drawLibrary();
   drawToasts();
   drawTips();
   drawTrouble();
@@ -720,7 +679,6 @@ function shape() {
       ? [{ x: 0, y: 0, width: window.innerWidth, height: window.innerHeight }]
       : [boxAround(el.wrap)];
   if (state.popup !== null && !el.popup.hidden) rects.push(boxAround(el.popup));
-  if (state.library !== null && !el.library.hidden) rects.push(boxAround(el.library));
   if (state.work.open && !el.work.hidden) rects.push(boxAround(el.work));
   if (state.toasts.length && !el.toasts.hidden) rects.push(boxAround(el.toasts));
   // The first-run card, which has a button on it. Everything the overlay does not claim
@@ -860,12 +818,6 @@ function onKey(event) {
     void invoke("colai_cut_recording");
     return;
   }
-  // The library next: it opens over the popup and closes back to it, so Escape there
-  // means "not this one" rather than "throw the mark away".
-  if (event.key === "Escape" && state.library !== null) {
-    closeLibrary();
-    return;
-  }
   if (event.key === "Escape" && state.popup !== null) {
     cancelMark(state.popup);
     return;
@@ -910,9 +862,9 @@ function onKey(event) {
   // Nor while a box is open asking to be written in, whatever the page currently thinks
   // has the cursor. `render` puts the caret back into the box after every redraw, so
   // this should not come up — but if it ever does, a letter meant for the note is worth
-  // dropping and is not worth changing the tool for. Both of these open over the work
-  // and close back to it with Escape, which is still the way out.
-  if (state.popup !== null || state.library !== null) return;
+  // dropping and is not worth changing the tool for. The popup opens over the work and
+  // closes back to it with Escape, which is still the way out.
+  if (state.popup !== null) return;
   const tool = KEYS[event.key.toLowerCase()];
   if (tool) {
     event.preventDefault();

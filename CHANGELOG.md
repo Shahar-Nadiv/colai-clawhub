@@ -1,7 +1,9 @@
 # Changelog
 
-Two products share this history, because they share a toolbar. Versions **0.2.0 and up** are
-the Claude Code plugin on this branch; **0.1.x** is the OpenClaw plugin on `main`.
+A Claude Code plugin, from 0.2.0 onwards. Versions **0.1.x** were a different product that
+shared this toolbar and this history; nothing of it remains on this branch as of 0.4.0, and
+the entries below are left exactly as written. A changelog that is edited to match the present
+is not a record of anything.
 
 ## 0.3.0 — 2026-09-16 (Claude Code)
 

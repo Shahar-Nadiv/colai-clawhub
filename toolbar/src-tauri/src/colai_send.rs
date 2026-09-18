@@ -15,21 +15,18 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State, Manager};
 
 use crate::colai_capture::MarkShots;
-use crate::wire::{
-    ChatAttachment, CronAdd, CronAdded, Point, Rewound,
-    StartHere, ThreadLocator,
-};
+use crate::wire::{ChatAttachment, Point, Rewound};
 
 /// Who is getting this, as the page knows them.
+///
+/// An id and nothing else. It carried a `kind` — `agent`, `session` or `thread` — and a
+/// `locator` for the thread case, and neither was ever read: there is one kind of
+/// receiver here, so the kind was a constant and the locator addressed a catalogue that
+/// does not exist on this host.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Receiver {
-    /// `agent`, `session`, or `thread`.
-    pub kind: String,
     pub id: String,
-    /// Only a thread has one, and a thread cannot be reached without it.
-    #[serde(default)]
-    pub locator: Option<ThreadLocator>,
 }
 
 /// What the receipt gets to say.
@@ -58,12 +55,12 @@ pub(crate) struct Sent {
     /// thinking about it — the worst of both, since the answer did arrive, just
     /// somewhere else.
     pub watching: bool,
-    /// Why the model or the effort did not take, when they did not.
+    /// What the send could not do as asked, when it could not.
     ///
-    /// The commonest reason is the ordinary one: a first send to an agent has no
-    /// conversation yet, so there was nothing to set it on. Said rather than swallowed —
-    /// a setting that appears to have applied and did not is how somebody spends an hour
-    /// wondering why the answers look the same.
+    /// It used to be the model or the effort failing to apply. Neither travels any more,
+    /// and what is left is the contact sheet: a recording somebody asked to arrive as one
+    /// picture that had to be sent as separate frames. Said rather than swallowed, because
+    /// they asked for one thing and got another — see `attach`.
     pub settings_trouble: Option<String>,
     /// The chat this was put straight into, when the relay reached it.
     ///
@@ -101,10 +98,6 @@ pub(crate) async fn colai_send(
     // who was agreeing with a suggestion.
     mark_ids: Option<Vec<String>>,
     files: Option<Vec<String>>,
-    // How this conversation should answer, when somebody has chosen. Optional both
-    // ways: nobody choosing is not the same as choosing the default.
-    model: Option<String>,
-    thinking_level: Option<String>,
 ) -> Result<Sent, String> {
     let message = message.trim().to_string();
     if message.is_empty() {
@@ -116,34 +109,25 @@ pub(crate) async fn colai_send(
      *
      * OpenClaw had three kinds of receiver — an agent, a session, a thread in somebody
      * else's project — because it ran many agents and the toolbar had to say which. Claude
-     * Code has one Claude and a pile of conversations, so there is one kind: a session,
-     * and an empty id means start a new one.
+     * Code has one Claude and a pile of conversations, so there is one kind and no field
+     * to say so: an id names a conversation, and an empty id means start a new one.
      */
     let key = (!receiver.id.trim().is_empty()).then(|| receiver.id.clone());
 
     /*
-     * How this should be answered, before it is asked.
+     * Nothing here chooses a model or an effort.
      *
-     * Model and effort are settings on the conversation rather than fields on a message,
-     * so they are applied to the conversation this is about to go to. Only when one is
-     * set: an unset pair is somebody who has not chosen, not somebody choosing "default".
-     *
-     * A send to an agent with no conversation yet has nothing to patch and this fails.
-     * The message still goes — sending is what was asked for — and the failure is carried
-     * back rather than swallowed, because a setting that silently did not apply is worse
-     * than one that visibly did not. The next send lands it, the conversation now existing.
-     */
-    /*
-     * Model and effort are not applied here.
-     *
-     * The Gateway kept them on the conversation and had a method to patch it. Claude Code
-     * takes the model when the process starts and keeps its own thinking setting, so there
-     * is nothing to patch mid-conversation — and a call that silently did nothing would be
-     * worse than not making it. The rail's pickers are removed on this host rather than
+     * The Gateway kept both on the conversation and had a method to patch it, and this
+     * command took them as arguments to pass along. Claude Code takes its model when the
+     * process starts and keeps its own thinking setting, so there is nothing to patch
+     * mid-conversation — the arguments arrived and were discarded, and the rail's pickers
+     * could only ever say "Claude Code chooses its own model". Both are gone rather than
      * left as controls that move nothing.
+     *
+     * `settings_trouble` survives them, because it says one other thing: a recording that
+     * could not be laid out as one contact sheet and went as separate frames instead.
      */
     let mut settings_trouble: Option<String> = None;
-    let _ = (&model, &thinking_level);
     let (mut attachments, sheet_trouble) = attach(
         &app,
         &shots,
@@ -548,35 +532,6 @@ fn attach(
     Ok((carried, trouble))
 }
 
-/// Make an automation out of what was marked.
-///
-/// The same request, on a schedule, and the schedule is the Gateway's own — a job made
-/// here is a job the Control UI can list, edit and stop, rather than a second idea of
-/// what a recurring task is.
-///
-/// It carries words and no pictures, which is not a shortcut: a scheduled job takes a
-/// message and nothing else. The page composes the message knowing that, and says so
-/// where somebody can read it before agreeing to it.
-#[tauri::command]
-pub(crate) async fn colai_automate(
-    #[allow(unused_variables)] receiver: Receiver,
-    #[allow(unused_variables)] message: String,
-    #[allow(unused_variables)] schedule: CronAdd,
-) -> Result<CronAdded, String> {
-    /*
-     * No scheduler on this host.
-     *
-     * OpenClaw ran agents in the background and could be told to run one later; Claude
-     * Code is a session somebody is sitting in front of. Rather than invent a scheduler
-     * inside a toolbar, this says so — and the rail's automation control is removed on
-     * this host rather than left as a button that explains itself only after being pressed.
-     */
-    Err("Scheduling is an OpenClaw feature; Claude Code has no scheduler.".to_string())
-}
-
-/// Where a conversation could be taken back to.
-///
-
 /// What was said in a conversation, both halves of it.
 ///
 /// The Work panel keeps its own record of what was sent from this toolbar, and that
@@ -669,52 +624,4 @@ pub(crate) async fn colai_undo(
     dry_run: bool,
 ) -> Result<(), String> {
     session.undo_since(&prompt, dry_run)
-}
-
-/// Start listening to a conversation this toolbar did not start.
-///
-/// Sending already subscribes to what it sent. This is the other way in: the Work panel
-/// lists every conversation the Gateway holds, and opening one there should mean its
-/// replies keep arriving — otherwise it shows whatever was true at the instant it was
-/// opened while its own pill goes on saying "Working".
-#[tauri::command]
-pub(crate) async fn colai_watch(#[allow(unused_variables)] session_key: String) -> Result<bool, String> {
-    /*
-     * Nothing to subscribe to, so nothing to fail.
-     *
-     * The Gateway delivered a conversation's messages only to subscribers, and this asked
-     * to be one. Here the answer comes back down the same pipe the message went up: there
-     * is no second channel, and therefore none to miss.
-     */
-    Ok(true)
-}
-
-/// Stop listening to a conversation.
-///
-/// Called when the overlay is put away and when what was being waited on is dismissed.
-/// A subscription the Gateway is holding for a window that has gone is a socket kept
-/// open for nobody.
-#[tauri::command]
-pub(crate) async fn colai_unwatch(#[allow(unused_variables)] session_key: String) -> Result<(), String> {
-    // See `colai_watch`: there is nothing to stop listening to.
-    Ok(())
-}
-
-/// Open a new conversation where the work is.
-///
-/// Seeded with what was marked, so the first thing the new session sees is the reason
-/// it exists rather than an empty prompt somebody then has to explain themselves into.
-#[tauri::command]
-pub(crate) async fn colai_start_here(
-    #[allow(unused_variables)] asked: StartHere,
-) -> Result<(), String> {
-    /*
-     * The Gateway could open a terminal on a project and start a conversation in it.
-     * Nothing here can: Claude Code is started by the person, in the directory they mean,
-     * and a toolbar spawning terminals on their behalf is a different product.
-     *
-     * A conversation started *by the toolbar* simply has no key yet — see `colai_send`,
-     * where an empty receiver id means exactly that.
-     */
-    Err("Start a conversation by running claude where you want it.".to_string())
 }

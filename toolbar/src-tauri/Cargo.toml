@@ -20,14 +20,7 @@ cairo-rs = "0.18.5"
 gdk = "0.18.2"
 gtk = "0.18.2"
 base64 = "0.23.1"
-# The Gateway handshake signs a device identity, and the identity is stored on disk.
-ed25519-dalek = "3.0.0"
-getrandom = "0.4.3"
-sha2 = "0.11.0"
-subtle = "2.6.1"
-zeroize = "1.9.0"
 futures-util = "0.3.34"
-rustls = { version = "0.23.45", default-features = false, features = ["ring", "std", "tls12"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 tauri = { version = "2.11.5", features = ["image-png", "tray-icon", "unstable"] }
@@ -38,7 +31,6 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-opener = "2.5.5"
 tauri-plugin-single-instance = "2.4.4"
 tokio = { version = "1.53.1", features = ["macros", "sync", "time"] }
-tokio-tungstenite = { version = "0.30.0", features = ["rustls-tls-native-roots"] }
 uuid = { version = "1.26.0", features = ["v4"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]

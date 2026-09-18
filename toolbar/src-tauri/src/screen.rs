@@ -2,7 +2,7 @@
 //!
 //! The same question `src/screen.ts` asks in Node, asked again here — and it has to be
 //! asked twice, because the Node answer only guards the two doors Node knows about. The
-//! plugin's service start checks it and `openclaw colai show` checks it, and then anybody
+//! launcher checks it and `/colai:show` checks it, and then anybody
 //! who runs `bin/colai-toolbar show` directly, or puts it in a desktop autostart entry, or
 //! wires it to a keyboard shortcut, walks straight past both.
 //!
