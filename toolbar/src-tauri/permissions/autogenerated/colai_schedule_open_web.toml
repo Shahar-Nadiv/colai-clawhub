@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-schedule-open-web"
+description = "Enables the colai_schedule_open_web command without any pre-configured scope."
+commands.allow = ["colai_schedule_open_web"]
+
+[[permission]]
+identifier = "deny-colai-schedule-open-web"
+description = "Denies the colai_schedule_open_web command without any pre-configured scope."
+commands.deny = ["colai_schedule_open_web"]

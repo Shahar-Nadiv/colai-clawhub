@@ -1,0 +1,30 @@
+/*
+ * The two faces the rest of OpenClaw already uses, carried into the toolbar's own bundle.
+ *
+ * Copied from `ui/public/fonts/`, not fetched: this window is an overlay on somebody's
+ * desktop and has no business waiting on a network request to draw itself. The design
+ * system reaches these through Google Fonts; that is right for a document and wrong for
+ * an application that has to render offline.
+ *
+ * Latin normal only. The Control UI ships italic and latin-ext beside these, and the
+ * panel uses neither — a face declared without its file is a request that fails silently
+ * and falls back, which looks exactly like the font not having been changed at all.
+ *
+ * SIL Open Font License 1.1, unmodified, with the upstream licence text beside them.
+ */
+
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("instrument-sans-latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("jetbrains-mono-latin.woff2") format("woff2");
+}

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-describe-files"
+description = "Enables the colai_describe_files command without any pre-configured scope."
+commands.allow = ["colai_describe_files"]
+
+[[permission]]
+identifier = "deny-colai-describe-files"
+description = "Denies the colai_describe_files command without any pre-configured scope."
+commands.deny = ["colai_describe_files"]

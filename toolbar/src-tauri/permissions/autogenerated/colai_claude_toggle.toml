@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-claude-toggle"
+description = "Enables the colai_claude_toggle command without any pre-configured scope."
+commands.allow = ["colai_claude_toggle"]
+
+[[permission]]
+identifier = "deny-colai-claude-toggle"
+description = "Denies the colai_claude_toggle command without any pre-configured scope."
+commands.deny = ["colai_claude_toggle"]

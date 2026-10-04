@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-allow-now"
+description = "Enables the colai_allow_now command without any pre-configured scope."
+commands.allow = ["colai_allow_now"]
+
+[[permission]]
+identifier = "deny-colai-allow-now"
+description = "Denies the colai_allow_now command without any pre-configured scope."
+commands.deny = ["colai_allow_now"]

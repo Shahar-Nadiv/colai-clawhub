@@ -1,0 +1,38 @@
+{
+  "name": "@colai/toolbar",
+  "version": "0.4.0",
+  "description": "The colai toolbar, as a Claude Code plugin. Not published to npm — Claude Code installs a plugin from a clone.",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "toolbar",
+    "screen",
+    "annotation",
+    "linux"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "build:toolbar": "node scripts/build-toolbar.mjs",
+    "build:release": "node scripts/build-release.mjs",
+    "stage:windows": "node scripts/stage-windows.mjs",
+    "stage:macos": "node scripts/stage-macos.mjs",
+    "check:macos": "node scripts/check-macos.mjs",
+    "build:release:windows": "node scripts/build-release-windows.mjs"
+  },
+  "devDependencies": {
+    "linkedom": "^0.18.12",
+    "vitest": "4.1.11"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shahar-Nadiv/colai-clawhub.git"
+  },
+  "homepage": "https://github.com/Shahar-Nadiv/colai-clawhub#readme",
+  "bugs": {
+    "url": "https://github.com/Shahar-Nadiv/colai-clawhub/issues"
+  },
+  "private": true
+}

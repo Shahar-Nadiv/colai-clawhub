@@ -1,0 +1,183 @@
+// Build the toolbar that actually ships.
+//
+// `build-toolbar.mjs` builds one for the machine it is run on, which is what you want
+// while working on it and never what you want to publish: the binary inherits its build
+// host's glibc as the oldest Linux it can run on, and Tauri embeds the build context
+// path — the author's home directory — inside it. Neither is visible in the tarball and
+// neither is recoverable by the person who installs it.
+//
+// So the published one is built somewhere neutral and old on purpose. Everything about
+// that machine is in `release/Dockerfile`, and the result carries a note saying where it
+// came from, which `check-shippable.mjs` reads before anything can be packed.
+
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import {
+  copyFileSync,
+  cpSync,
+  mkdirSync,
+  renameSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { gzipSync } from "node:zlib";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const IMAGE = "colai-release-build:jammy";
+
+function run(command, args, options = {}) {
+  const done = spawnSync(command, args, { stdio: "inherit", encoding: "utf8", ...options });
+  if (done.error) {
+    console.error(`colai: could not run ${command} — ${done.error.message}`);
+    process.exit(1);
+  }
+  if (done.status !== 0) {
+    process.exit(done.status ?? 1);
+  }
+  return done;
+}
+
+if (spawnSync("docker", ["version"], { stdio: "ignore" }).status !== 0) {
+  console.error("colai: a release build needs Docker, and it is not running here.");
+  console.error("Everything about the build machine is in release/Dockerfile.");
+  process.exit(1);
+}
+
+console.log("colai: preparing the release image.");
+run("docker", [
+  "build",
+  "-f",
+  join(root, "release", "Dockerfile"),
+  "-t",
+  IMAGE,
+  join(root, "release"),
+]);
+
+// Copied, not mounted. The path is part of the artifact — see the Dockerfile — so the
+// crate has to be built somewhere that says nothing about who built it.
+const work = mkdtempSync(join(tmpdir(), "colai-release-"));
+try {
+  mkdirSync(join(work, "out"), { recursive: true });
+  // `target/` is left behind rather than copied and then deleted. It used to be copied
+  // and then deleted, which is minutes of disk-to-disk for a directory the container has
+  // no use for — it builds from nothing — and on a full disk it is the thing that fails
+  // the build. A local `cargo test` puts three gigabytes of debug artifacts there, so
+  // this is the ordinary case rather than the unlucky one.
+  const notTheTarget = join(root, "toolbar", "src-tauri", "target");
+  cpSync(join(root, "toolbar", "src-tauri"), join(work, "src-tauri"), {
+    recursive: true,
+    filter: (from) => from !== notTheTarget && !from.startsWith(`${notTheTarget}/`),
+  });
+  // `frontendDist` is `../ui`, so the page has to sit beside the crate exactly as it does
+  // in the checkout, or the binary is built around an empty window.
+  cpSync(join(root, "toolbar", "ui"), join(work, "ui"), { recursive: true });
+  copyFileSync(join(root, "release", "build.sh"), join(work, "build.sh"));
+
+  console.log("colai: building. The first run downloads and compiles everything.");
+  const built = run(
+    "docker",
+    [
+      "run",
+      "--rm",
+      "-v",
+      `${work}:/build`,
+      "-v",
+      `${join(work, "out")}:/out`,
+      IMAGE,
+      "sh",
+      "/build/build.sh",
+    ],
+    { stdio: ["ignore", "pipe", "inherit"] },
+  );
+  process.stdout.write(built.stdout ?? "");
+
+  // The number that decides which machines this runs on, taken from the build's own
+  // report rather than guessed from the image tag.
+  const glibc = (built.stdout ?? "").match(/GLIBC_([0-9]+\.[0-9]+)\s*$/m)?.[1];
+  if (!glibc) {
+    console.error("colai: the build did not report the glibc it needs, so it is not trusted.");
+    process.exit(1);
+  }
+
+  /*
+   * Into the platform package, not into the plugin's own `bin/`.
+   *
+   * There is one binary per machine now and they are published as packages of their own —
+   * `@colai/toolbar-linux-x64` and the rest — so each build belongs beside the manifest
+   * that declares the `os` and `cpu` it is for. The wrapper ships no binary at all.
+   *
+   * This script only ever produces the Linux one: it builds inside a container, and macOS
+   * cannot be built in one. The Mac build comes from CI on a real macOS runner and stages
+   * into `platforms/darwin-arm64/` the same way.
+   */
+  const WHICH = "linux-x64";
+  const home = join(root, "platforms", WHICH, "bin");
+  mkdirSync(home, { recursive: true });
+  const staged = join(home, "colai-toolbar");
+  /*
+   * Written beside, then moved over. A plain copy fails with ETXTBSY when the toolbar
+   * staged here is the one currently running — which it very often is, because this is the
+   * path the launcher prefers, so the ordinary way to try a build is to leave it running
+   * and build again. `rename` replaces the directory entry and leaves the running process
+   * holding the old inode, which is exactly what is wanted: it keeps working, and the next
+   * start gets the new one.
+   */
+  const arriving = `${staged}.arriving`;
+  copyFileSync(join(work, "out", "colai-toolbar"), arriving);
+  renameSync(arriving, staged);
+
+  const digest = createHash("sha256").update(readFileSync(staged)).digest("hex");
+  writeFileSync(`${staged}.sha256`, `${digest}\n`);
+  writeFileSync(
+    `${staged}.build.json`,
+    `${JSON.stringify({ image: IMAGE, glibc, at: new Date().toISOString().slice(0, 10), sha256: digest }, null, 2)}\n`,
+  );
+
+  /*
+   * And the archive, which is what actually ships.
+   *
+   * The registry takes files up to 10 MB and this binary is over 12, so the uncompressed
+   * one cannot be published — see `src/unpack.ts`. Level 9 because this runs once at
+   * release time and every install pays for the difference.
+   *
+   * Both are written: the binary because everything local reads it — the digest, the
+   * glibc floor, the fresh-install harness — and the archive because `files` ships that.
+   *
+   * GNU gzip's -9 when the host has it, because zlib's level 9 is not the same search and
+   * came out 139 KB larger on the Windows toolbar. `-n` keeps the name and time out of the
+   * header, so the same binary always packs to the same archive. zlib is the fallback; the
+   * digest above is of the unpacked binary, which either archive gives back unchanged.
+   */
+  const archive = `${staged}.gz`;
+  const unpacked = readFileSync(staged);
+  const gnu = spawnSync("gzip", ["-9", "-n", "-c"], { input: unpacked, maxBuffer: 1 << 30 });
+  writeFileSync(
+    archive,
+    !gnu.error && gnu.status === 0 && gnu.stdout.length > 0 ? gnu.stdout : gzipSync(unpacked, { level: 9 }),
+  );
+
+  const asMegabytes = (bytes) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  console.log(
+    `colai: staged at platforms/${WHICH}/bin/colai-toolbar, runs on glibc ${glibc} and newer.`,
+  );
+  console.log(
+    `colai: ships as @colai/toolbar-${WHICH} — ` +
+      `${asMegabytes(statSync(staged).size)} unpacked, ${asMegabytes(statSync(archive).size)} packed.`,
+  );
+  console.log(`colai: sha256 ${digest}`);
+} finally {
+  // Belt to the braces of the container clearing its own `target/`: anything left that
+  // this user cannot delete is a temporary directory, and losing it is not worth failing
+  // a build that has already produced its artifact.
+  try {
+    rmSync(work, { recursive: true, force: true });
+  } catch (error) {
+    console.warn(`colai: could not remove ${work} — ${error.message}`);
+  }
+}

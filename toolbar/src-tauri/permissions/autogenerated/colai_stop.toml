@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-stop"
+description = "Enables the colai_stop command without any pre-configured scope."
+commands.allow = ["colai_stop"]
+
+[[permission]]
+identifier = "deny-colai-stop"
+description = "Denies the colai_stop command without any pre-configured scope."
+commands.deny = ["colai_stop"]

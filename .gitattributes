@@ -1,0 +1,30 @@
+# Line endings, pinned so colai ships the same on every machine.
+#
+# The launcher `bin/colai-toolbar` is a POSIX `#!/bin/sh` script, and the
+# `.sha256` files it reads are plain text it compares byte-for-byte. With
+# Git's default `core.autocrlf=true` on Windows, a fresh clone would check
+# those out with CRLF — which breaks the shebang on Linux/macOS (`/bin/sh^M:
+# bad interpreter`) and appends a stray `\r` to the hash the launcher reads,
+# failing the integrity check. So every text file is normalised to LF on
+# checkout, on every platform; Node, Cargo and the editors all handle LF fine
+# on Windows.
+* text=auto eol=lf
+
+# The one exception: a Windows batch file is dispatched by cmd.exe, which
+# expects CRLF. `bin/colai-toolbar.cmd` is the shim that lets `colai-toolbar`
+# resolve from cmd/PowerShell (an extensionless file is not on PATHEXT), so it
+# has to check out with CRLF even though everything else stays LF.
+*.cmd   text eol=crlf
+
+# Binary artifacts: never normalise, never try to diff them.
+*.gz    binary
+*.exe   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.ico   binary
+*.mp4   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary

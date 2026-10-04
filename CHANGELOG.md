@@ -1,0 +1,183 @@
+# Changelog
+
+A Claude Code plugin, from 0.2.0 onwards. Versions **0.1.x** were a different product that
+shared this toolbar and this history; nothing of it remains on this branch as of 0.4.0, and
+the entries below are left exactly as written. A changelog that is edited to match the present
+is not a record of anything.
+
+## Unreleased
+
+## 0.4.0 — 2026-10-04
+
+Windows, a preview of macOS, and a toolbar that starts itself.
+
+- **Windows (x86-64).** A prebuilt binary ships beside the Linux one; the launcher picks it
+  under Git for Windows, and a `colai-toolbar.cmd` shim lets it resolve from cmd and
+  PowerShell too. Line endings are pinned so the POSIX launcher survives a Windows clone.
+- **macOS (Apple Silicon), preview.** The overlay, click-through, capture, front-window
+  tracking and file pickers are implemented and pass CI on a real Mac; there is no prebuilt
+  binary yet — build it with `npm run build:toolbar` and `npm run stage:macos`. See
+  `docs/macos.md`.
+- **No commands to type.** The `SessionStart` hook starts the toolbar when a session opens
+  (`COLAI_AUTOSTART=0` to opt out). `/colai:show` and `/colai:quit` are gone; `colai-toolbar
+  quit` stops it.
+- **Work panel, redesigned.** Each conversation reads as a You/Claude thread with your own
+  words rather than the message colai composed; every prompt has **Rewind to here**, which
+  previews and then puts back the file edits made from that point on, plus **Copy /rewind**
+  for the conversation itself.
+- **Replies that arrive later are noticed.** A chat you handed a mark to is followed after
+  its first answer; each later reply raises a toast and a red unread count on the Work key.
+- **Scheduled tasks**, from a clock key beside Work — once, hourly, daily or weekly, carrying
+  a picture of whatever was pointed at.
+- **Settings** can be dragged and closed, and show Claude Code's own plugins, skills and MCP
+  servers next to colai's.
+- **Faster and lighter.** Idle CPU fell from about 27% of a core to about 1%; the
+  conversation list is cached instead of re-reading every transcript every five seconds
+  (100 ms → under 1 ms), and sending no longer scans them at all.
+- **Fixes.** `@` file-mentions find files again; a mirrored turn no longer settles as done
+  while a long tool is still running; popups flip to the side with room instead of running
+  off the screen.
+- **Security.** Agent-authored HTML is rendered with the network disabled; scheduled tasks
+  never run with auto-accepted edits in a home, root or credentials directory; the
+  permission list matches the commands that exist.
+- The Context map is hidden in this release and returns later.
+
+## 0.3.0 — 2026-09-16 (Claude Code)
+
+The plugin can be installed rather than pointed at.
+
+- **A marketplace.** `claude plugin marketplace add Shahar-Nadiv/colai-clawhub` and then
+  `claude plugin install colai@colai`. Until now the only way in was `--plugin-dir`, which
+  nobody discovers.
+- **`bin/colai-toolbar` is a launcher, not the binary.** Claude Code puts a plugin's `bin/`
+  on PATH and runs nothing at install time — there is no `postinstall` — so whatever the
+  clone contains is the whole of what you get. The 4 MB archive travels in the repository
+  and the 11 MB binary it unpacks to does not; the launcher unpacks it into `~/.cache/colai`
+  on first use and checks it against the digest beside it every time before running it.
+- **595 MB of `node_modules` no longer lands in every install.** Claude Code installs a
+  plugin by copying its checkout, and a `package-lock.json` in it makes the installer run
+  npm over the manifest beside it — which here is the OpenClaw npm wrapper, so an install
+  fetched 328 packages including OpenClaw itself into the plugin directory of somebody who
+  wanted a toolbar. The lockfile is gone from this branch: a clone is 14 MB, and an install
+  is now what the clone is.
+- **A machine with no build is told which machine it is**, rather than being handed an
+  x86-64 binary and shown `Exec format error`.
+- **`commands/README.md` was a command.** Every `.md` in `commands/` becomes one, so a note
+  meant for developers was a listable `/colai:README` in everyone's session. It has moved to
+  `docs/`, and `claude plugin validate --strict` now runs in the suite.
+- The README described installing an OpenClaw plugin and talking to a Gateway. It now
+  describes this one, including the part the Gateway version had no equivalent for: every
+  mark costs tokens on your own Claude account.
+
+## 0.2.0 — 2026-09-15 (Claude Code)
+
+The toolbar talks to Claude Code instead of an OpenClaw Gateway.
+
+- The Gateway client, its device identity and its credential bootstrap are gone — 4,903
+  lines — replaced by a `claude` process the toolbar owns and speaks stream-json to. It uses
+  the login you already have; there is no API key and no second account.
+- `/colai:show` puts the toolbar on screen, and it survives the session ending: the binary
+  puts itself into a process group of its own, because `setsid` is refused by Claude Code's
+  sandbox and an overlay that only survives one way of being started is fragile.
+- A snap-packaged terminal used to hand the toolbar its own library paths and kill it before
+  it drew. It now drops those entries and re-executes itself clean, whoever starts it.
+
+## 0.1.3 — unreleased
+
+The binary moves out of the plugin and into a package per machine.
+
+- **`@colai/toolbar` no longer carries a binary.** It names one platform package per kind
+  of machine as an optional dependency, each declaring the `os` and `cpu` it is for, and
+  npm installs only the one that matches. This is how esbuild and swc ship, and OpenClaw
+  supports it directly: `openclaw.install.requiredPlatformPackages` makes the host verify
+  the matching build actually arrived, retry once with a cold cache, and roll the install
+  back if it did not.
+- **`os: ["linux"]` is gone from the plugin**, and that is the point of the change: npm
+  reads it before it considers a single optional dependency, so it refused a Mac the
+  package before the Mac could ever be offered a Mac binary. The refusal now lives in the
+  packages that hold an executable.
+- **A machine with no build is told which machine it is.** "Cannot find module" sent people
+  looking for a failed download; it now says there is no build for `darwin arm64` and names
+  what there is.
+- The digest compiled into the runtime is one per build. It stays in the wrapper rather
+  than moving beside each binary, which makes the gate stronger: the wrapper is a different
+  package from the binary it vouches for.
+
+There is still one build, Linux x86-64. Nothing about what the toolbar does has changed.
+
+## 0.1.2 — 2026-09-15
+
+A second audit, and the half of the first fix that was missing.
+
+- **An attached file can no longer forge the block either.** 0.1.1 stopped a window title
+  closing `<observed>…</observed>`, which left the fields *outside* that block — an
+  attachment's name and path, the repository a git mark is about — free to open one of
+  their own. That is the better attack, not a safer one: an unclosed block swallows the
+  instruction and your own sentence into a region announcing that nothing inside it is an
+  instruction, and the attachment list is composed first, so the forgery goes first. A
+  Linux filename may contain `<` and `>`, so a downloaded archive was enough to plant one.
+  Angle brackets now go at the single point every composed field already passes through.
+
+## 0.1.1 — 2026-09-15
+
+An audit before the first public release, and what it found.
+
+- **A window title can no longer close the block it is quoted inside.** Facts read off
+  the desktop are wrapped in `<observed>…</observed>` so an agent can tell them from an
+  instruction. A browser's window title is the page's own `<title>`, chosen by whoever
+  wrote the page — and a title containing `</observed>` ended the block early, so
+  everything after it arrived in the same voice as the real instruction. Angle brackets
+  are now removed from everything inside the block.
+- **TLS updated.** rustls 0.23.43 → 0.23.45, for RUSTSEC-2026-0285, in which TLS 1.3
+  handshake messages could be accepted across encryption level boundaries. It affects a
+  Gateway reached over a network far more than one on loopback.
+- **The toolbar is unpacked more carefully.** The temporary file refuses to follow a
+  symlink left in its place, and a corrupt or hostile archive is refused rather than
+  decompressed without limit.
+- **The snap library guard was wrong twice.** It missed `/var/lib/snapd/snap`, which is
+  where snapd mounts on Fedora and openSUSE — so on those the fix did nothing. And when
+  it did fire it discarded the whole variable, taking any of your own entries with it.
+  Now only the snap entries are removed.
+- **One scope fewer.** The toolbar asked the Gateway for `operator.pairing` and never
+  used it.
+- The README and this file both said the toolbar's only network connection is your own
+  Gateway. The component library's preview pictures come from `cdn.21st.dev`. Corrected
+  in both.
+
+## 0.1.0 — 2026-09-14
+
+First public release.
+
+Point at anything on your screen and hand it to an OpenClaw agent: box it, point at it,
+measure it, sample a colour off it, record a few seconds of it, then say what you want and
+send it with a picture of exactly what you meant.
+
+### What it sends, and what it does not
+
+- URL query strings and fragments are removed before a mark leaves the machine. That is
+  where session tokens, signed-link signatures and email addresses live.
+- `/home/<someone>` is rewritten as `~` in every path read off a window.
+- A mark that would capture the whole desktop — a screenshot or design mark clicked
+  without dragging — says so in the composer before it is sent.
+- Screenshots are held in memory and never written to disk.
+- No telemetry, no analytics, no crash reporting, no update check. Everything the toolbar
+  sends goes to your own OpenClaw Gateway. The component library is the one exception: its
+  preview pictures come from `cdn.21st.dev`, which therefore sees your IP address while
+  that panel is open. No other host is accepted for a preview.
+
+### Where it runs
+
+- Linux, X11, glibc 2.35 and newer — Ubuntu 22.04, Debian 12, Fedora 38 and later.
+- It refuses to start on Wayland rather than pointing at the wrong window, and says how to
+  switch to an X11 session.
+- It says which of `xprop` and `xwininfo` is missing, and how to install them, instead of
+  silently failing to name the window a mark was made on.
+- A missing runtime library surfaces as the loader's own message naming the library.
+- The binary travels compressed and unpacks on first use, so the plugin's directory must
+  be writable the first time the toolbar is asked for. What is unpacked is checked against
+  the digest shipped beside it before it is ever run.
+
+Proved on Ubuntu 22.04, Debian 12 and Debian 13, installed from the packed tarball into a
+machine that had never seen it, drawn on a screen of that machine's own, and uninstalled
+again leaving nothing behind. The Fedora and Arch dependency lines above were run in clean
+containers of those distributions.

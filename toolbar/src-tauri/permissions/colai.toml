@@ -1,0 +1,67 @@
+# Colai's overlay and settings commands.
+#
+# One window, one grant, and the grant is the point.
+#
+# The overlay covers the whole screen and reads what is in front of it. Everything it
+# can do is here, and nothing else is. If the page in it were ever compromised, that is
+# the whole blast radius.
+#
+# It was two grants when the toolbar lived inside the OpenClaw desktop app: the second
+# let an ordinary window of that app summon this one. There is no other window now.
+
+[[permission]]
+identifier = "allow-colai-overlay"
+description = "Lets the overlay shape itself, read which application is in front, and give the screen back."
+commands.allow = [
+  "colai_shape",
+  "colai_frontmost",
+  "colai_screens",
+  "colai_take_keyboard",
+  "colai_sessions",
+  "colai_came_from",
+  "colai_capture_mark",
+  "colai_cut_recording",
+  "colai_send",
+  "colai_stop",
+  "colai_answer",
+  # Newly reachable from the page. A permission request has to be able to bring the rail
+  # back: a question nobody can see is a conversation that hangs with no sign of why, and
+  # the toolbar being put away is neither consent nor refusal.
+  "colai_summon",
+  "colai_allow_now",
+  "colai_undo",
+  # Put back an edit colai only watched (a mark handed to a terminal applies its edits directly, so
+  # Undo reverses them on disk rather than through an agent's rewind). See `colai_revert`.
+  "colai_revert_edits",
+  # Render an edited web page headlessly and screenshot it, so the review card shows the result
+  # rather than the raw code. See `colai_render`.
+  "colai_render_shot",
+  # Read Claude Code's own settings (plugins, skills, MCP servers) for the settings panel's Claude
+  # Code tab, and toggle a plugin on/off. See `colai_claude`.
+  "colai_claude_settings",
+  "colai_claude_toggle",
+  # Scheduled tasks: colai's own local scheduler. List / add / remove / pause tasks, run one out of
+  # turn, and open Claude Code's scheduled-tasks page for the cloud routines colai cannot read. See
+  # `colai_schedule`.
+  "colai_schedule_list",
+  "colai_schedule_add",
+  "colai_schedule_remove",
+  "colai_schedule_toggle",
+  "colai_schedule_run_now",
+  "colai_schedule_open_web",
+  "colai_said",
+  "colai_showing",
+  "colai_describe_files",
+  "colai_at_work",
+  "colai_in_front",
+  "colai_pick_files",
+  "colai_pick_folder",
+  "colai_search_files",
+  "colai_release",
+  # The Context map's local store: list saved contexts, save this conversation as one,
+  # resolve a set into a drop manifest, and clear the staged set.
+  "colai_contexts_list",
+  "colai_context_save_session",
+  "colai_context_resolve",
+  "colai_context_clear_staged",
+]

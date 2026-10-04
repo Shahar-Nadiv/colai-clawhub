@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-shape"
+description = "Enables the colai_shape command without any pre-configured scope."
+commands.allow = ["colai_shape"]
+
+[[permission]]
+identifier = "deny-colai-shape"
+description = "Denies the colai_shape command without any pre-configured scope."
+commands.deny = ["colai_shape"]

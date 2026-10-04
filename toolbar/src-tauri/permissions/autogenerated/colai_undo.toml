@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-undo"
+description = "Enables the colai_undo command without any pre-configured scope."
+commands.allow = ["colai_undo"]
+
+[[permission]]
+identifier = "deny-colai-undo"
+description = "Denies the colai_undo command without any pre-configured scope."
+commands.deny = ["colai_undo"]

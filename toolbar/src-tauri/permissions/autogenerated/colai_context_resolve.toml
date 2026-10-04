@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-context-resolve"
+description = "Enables the colai_context_resolve command without any pre-configured scope."
+commands.allow = ["colai_context_resolve"]
+
+[[permission]]
+identifier = "deny-colai-context-resolve"
+description = "Denies the colai_context_resolve command without any pre-configured scope."
+commands.deny = ["colai_context_resolve"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-summon"
+description = "Enables the colai_summon command without any pre-configured scope."
+commands.allow = ["colai_summon"]
+
+[[permission]]
+identifier = "deny-colai-summon"
+description = "Denies the colai_summon command without any pre-configured scope."
+commands.deny = ["colai_summon"]

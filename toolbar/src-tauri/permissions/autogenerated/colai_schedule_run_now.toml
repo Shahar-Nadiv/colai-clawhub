@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-schedule-run-now"
+description = "Enables the colai_schedule_run_now command without any pre-configured scope."
+commands.allow = ["colai_schedule_run_now"]
+
+[[permission]]
+identifier = "deny-colai-schedule-run-now"
+description = "Denies the colai_schedule_run_now command without any pre-configured scope."
+commands.deny = ["colai_schedule_run_now"]

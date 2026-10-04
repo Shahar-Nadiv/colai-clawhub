@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-screens"
+description = "Enables the colai_screens command without any pre-configured scope."
+commands.allow = ["colai_screens"]
+
+[[permission]]
+identifier = "deny-colai-screens"
+description = "Denies the colai_screens command without any pre-configured scope."
+commands.deny = ["colai_screens"]

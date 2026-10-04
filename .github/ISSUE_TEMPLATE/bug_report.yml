@@ -1,0 +1,54 @@
+name: Bug report
+description: Something in colai doesn't work the way it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. Please don't include secrets, private
+        screenshots or anything you wouldn't want public — and report security problems
+        privately, as described in SECURITY.md.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+      placeholder: I drew a box round a button and pressed Send; the response card stayed on "Working"…
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+        3. …
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - Linux (X11)
+        - macOS (Apple Silicon, preview)
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: colai version (see `.claude-plugin/plugin.json` or the release) and `claude --version`.
+      placeholder: colai 0.4.0, Claude Code 2.x
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Anything relevant the toolbar printed (run `colai-toolbar show` from a terminal to see its log). Remove anything private.
+      render: text

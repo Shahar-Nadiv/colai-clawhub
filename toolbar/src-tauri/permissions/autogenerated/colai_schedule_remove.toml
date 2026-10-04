@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-schedule-remove"
+description = "Enables the colai_schedule_remove command without any pre-configured scope."
+commands.allow = ["colai_schedule_remove"]
+
+[[permission]]
+identifier = "deny-colai-schedule-remove"
+description = "Denies the colai_schedule_remove command without any pre-configured scope."
+commands.deny = ["colai_schedule_remove"]

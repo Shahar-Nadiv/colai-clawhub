@@ -1,0 +1,690 @@
+//! Handing what was marked to whoever is receiving it.
+//!
+//! One kind of receiver: a conversation. OpenClaw offered three — an agent, a session it
+//! was holding, and a conversation held in another agent entirely — because it ran many
+//! agents on somebody's behalf. Claude Code has one Claude, so the only choice worth
+//! making is which conversation to carry on, and an empty one means start a new one.
+//!
+//! The message itself is composed in the page, not here. What an agent reads is a
+//! product decision that belongs next to the marks somebody made, and it is a pure
+//! function there with tests on it. This module's job is to resolve a receiver, attach
+//! the pictures, and say what happened.
+
+use base64::Engine as _;
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter, State, Manager};
+
+use crate::colai_capture::MarkShots;
+use crate::wire::{ChatAttachment, Point};
+
+/// Who is getting this, as the page knows them.
+///
+/// An id and nothing else. It carried a `kind` — `agent`, `session` or `thread` — and a
+/// `locator` for the thread case, and neither was ever read: there is one kind of
+/// receiver here, so the kind was a constant and the locator addressed a catalogue that
+/// does not exist on this host.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct Receiver {
+    pub id: String,
+}
+
+/// What the receipt gets to say.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct Sent {
+    pub session_key: String,
+    pub run_id: String,
+    /// The name of the prompt just sent, which is what "put it back to before I asked" is
+    /// addressed by. Nothing else knows it: it is minted at the moment of sending.
+    pub prompt: String,
+    /// How many pictures actually went. A mark whose picture has aged out of the store
+    /// is still described in the message; it just arrives without its picture, and the
+    /// receipt should not claim otherwise.
+    pub pictures: usize,
+    /// How many of the files somebody brought in actually went with it.
+    pub carried: usize,
+    /// Files the message named that did not travel, and why they are worth saying: the
+    /// agent has been told they are attached, so silence here is a conversation about a
+    /// file nobody sent.
+    pub refused: Vec<String>,
+    /// Whether the reply will find its way back to the screen.
+    ///
+    /// Said rather than swallowed. A subscription that quietly failed leaves a mark
+    /// waiting on an answer that is never coming, which looks exactly like an agent
+    /// thinking about it — the worst of both, since the answer did arrive, just
+    /// somewhere else.
+    pub watching: bool,
+    /// What the send could not do as asked, when it could not.
+    ///
+    /// It used to be the model or the effort failing to apply. Neither travels any more,
+    /// and what is left is the contact sheet: a recording somebody asked to arrive as one
+    /// picture that had to be sent as separate frames. Said rather than swallowed, because
+    /// they asked for one thing and got another — see `attach`.
+    pub settings_trouble: Option<String>,
+    /// The chat this was put straight into, when the relay reached it.
+    ///
+    /// `Some(name)` is the good case and the one worth saying plainly: the mark is in their
+    /// conversation now, with nothing for them to do. When this is `None` and `handed_to` is
+    /// not, the relay could not reach them and the mark is waiting for their next message.
+    pub sent_to: Option<String>,
+    /// The chat this was left for, when it was left rather than sent.
+    ///
+    /// `None` is the ordinary case: the toolbar's own agent has it and the answer will
+    /// come back to the Work panel. `Some(name)` means the conversation is open in a
+    /// terminal, so the mark is waiting for that session's next message — and the rail has
+    /// to say so, because "sent" and "will arrive when you next type there" are different
+    /// promises and only one of them is true.
+    pub handed_to: Option<String>,
+}
+
+/// Send the marked work to whoever was chosen.
+#[tauri::command]
+pub(crate) async fn colai_send(
+    // Here to reach the main thread. Laying a recording out as one picture is drawing,
+    // and drawing may only happen there — see `attach`.
+    app: AppHandle,
+    session: State<'_, crate::session::Session>,
+    shots: State<'_, MarkShots>,
+    receiver: Receiver,
+    message: String,
+    // Which marks would rather arrive as one contact sheet than as a run of frames.
+    sheets: Option<Vec<String>>,
+    accent: Option<String>,
+    // What goes with the message. Optional because nothing is a real answer for both:
+    // a reply to something an agent said carries neither, and requiring them turned
+    // that into "invalid args: missing required key `files`" the first time somebody
+    // pressed Accept — a sentence about this function's shape, put in front of somebody
+    // who was agreeing with a suggestion.
+    mark_ids: Option<Vec<String>>,
+    files: Option<Vec<String>>,
+) -> Result<Sent, String> {
+    let message = message.trim().to_string();
+    if message.is_empty() {
+        return Err("There is nothing to send.".to_string());
+    }
+    let mark_ids = mark_ids.unwrap_or_default();
+    /*
+     * Which conversation this belongs to.
+     *
+     * OpenClaw had three kinds of receiver — an agent, a session, a thread in somebody
+     * else's project — because it ran many agents and the toolbar had to say which. Claude
+     * Code has one Claude and a pile of conversations, so there is one kind and no field
+     * to say so: an id names a conversation, and an empty id means start a new one.
+     */
+    let key = (!receiver.id.trim().is_empty()).then(|| receiver.id.clone());
+
+    /*
+     * Nothing here chooses a model or an effort.
+     *
+     * The Gateway kept both on the conversation and had a method to patch it, and this
+     * command took them as arguments to pass along. Claude Code takes its model when the
+     * process starts and keeps its own thinking setting, so there is nothing to patch
+     * mid-conversation — the arguments arrived and were discarded, and the rail's pickers
+     * could only ever say "Claude Code chooses its own model". Both are gone rather than
+     * left as controls that move nothing.
+     *
+     * `settings_trouble` survives them, because it says one other thing: a recording that
+     * could not be laid out as one contact sheet and went as separate frames instead.
+     */
+    let mut settings_trouble: Option<String> = None;
+    let (mut attachments, sheet_trouble) = attach(
+        &app,
+        &shots,
+        &mark_ids,
+        &sheets.unwrap_or_default(),
+        &accent.unwrap_or_else(|| "#ff5c5c".to_string()),
+    )?;
+    if let Some(why) = sheet_trouble {
+        settings_trouble.get_or_insert(why);
+    }
+    let pictures = attachments.len();
+    // After the pictures, in the order the message describes them. The message has
+    // already decided which of these travel and which are only named; anything in this
+    // list is one that travels.
+    // What may be read is decided against the folders the Gateway says are worked in,
+    // never against a list the page supplied.
+    //
+    // Asked only when there is something to ask about. `work_roots` enumerates every
+    // catalog, host and session the Gateway knows, and it was doing that on every send —
+    // a Gateway round trip in front of every message, to decide what may be read out of
+    // an empty list of files. The gate is unchanged: with nothing to carry there is
+    // nothing for it to let through.
+    let files = files.unwrap_or_default();
+    let mut refused: Vec<String> = Vec::new();
+    if !files.is_empty() {
+        // Where this conversation is being had, which is what decides what may be read.
+        // The Gateway was asked; here it is the cwd Claude Code recorded for the session.
+        let roots = crate::session::work_roots(key.as_deref());
+        let roots: Vec<std::path::PathBuf> = roots.into_iter().map(Into::into).collect();
+        let brought = crate::colai_files::carry(&files, &roots);
+        attachments.extend(brought.travelling);
+        refused = brought.refused;
+    }
+    let carried = attachments.len() - pictures;
+    /*
+     * Pictures travel; named files do not.
+     *
+     * A screenshot exists nowhere but in memory, so it has to go as bytes. A file the
+     * person named is already on disk and Claude Code can open it — the message says where
+     * it is, and sending a copy would mean the agent reading one of two things that are
+     * supposed to be the same file.
+     */
+    // Moved out rather than cloned: `attachments` has nothing left to do, and each of
+    // these strings is a whole screenshot in base64.
+    let images: Vec<String> = attachments
+        .into_iter()
+        .filter(|one| one.mime_type.starts_with("image/"))
+        .map(|one| one.content)
+        .collect();
+    /*
+     * A conversation somebody is sitting in is handed over, not taken over.
+     *
+     * `session.send` starts a `claude --resume` of its own, and on a live chat that is a
+     * second process on one transcript — answering in the Work panel while the window the
+     * person is actually looking at says nothing. So when the receiver is a chat that is
+     * open in a terminal, the mark is left where that session's own hook will find it, and
+     * it arrives there on their next message.
+     */
+    if let Some(held) = key.as_deref().and_then(crate::session::already_open_in_a_chat) {
+        /*
+         * Somebody is sitting in this conversation, so it is handed over rather than taken
+         * over. Two ways to hand it over, and they are tried in that order:
+         *
+         *   1. `SendMessage`, through a small relay agent. It arrives in their chat straight
+         *      away, with nothing for them to do.
+         *   2. The outbox, which waits for their next message.
+         *
+         * The pictures are written to disk either way, because both routes carry a path
+         * rather than bytes — `SendMessage` takes text, and a hook's output is text. Under
+         * the conversation's own directory, which is the only place its session may read
+         * from without asking: measured, pictures left under `~/.config` came back "the read
+         * was denied", which is a mark delivered, described, and unopenable.
+         */
+        let theirs = crate::session::where_it_is_had(Some(held.session_id.as_str()));
+        let staged =
+            crate::outbox::stage(held.session_id.as_str(), theirs.as_deref(), &message, &images)?;
+
+        // How far the transcript has already been written, captured before the hand-off so the
+        // mirror below starts from here and sees only the turn this mark provokes — not the
+        // conversation the person already had.
+        let watermark = crate::session::transcript_len(&held.session_id);
+
+        // The pictures are on disk now (in the outbox), so the in-memory shots are no longer
+        // needed regardless of how delivery goes.
+        release_pictures(&shots, &mark_ids);
+
+        /*
+         * Deliver in the background, and return now.
+         *
+         * The hand-off used to be blocking: `colai_send` waited out a whole relay turn — a
+         * haiku agent cold-starting and running to completion — before it came back, so the
+         * send button sat spinning for the several seconds that took. Nothing about the send
+         * needs that wait any more. The reply comes back on its own through the mirror below,
+         * which is the real receipt now; the relay only has to get the mark there, and whether
+         * it did shows in whether an answer arrives. So it runs on its own thread and the send
+         * returns the instant the mark is staged. The outbox is the fallback either way: if the
+         * relay cannot reach the chat, the mark is still there for the person's next message.
+         */
+        let called = held.name.clone().unwrap_or_else(|| held.session_id.clone());
+        {
+            let app = app.clone();
+            let session_id = held.session_id.clone();
+            let hint = held.name.clone();
+            let said = staged.said.clone();
+            let staged_at = staged.at.clone();
+            std::thread::spawn(move || {
+                // `what_that_chat_is_called` asks `claude agents --json` for the name the relay
+                // sends to; `None` means that came back empty — see `describe_the_handoff`.
+                let attempt = crate::session::what_that_chat_is_called(&session_id).map(|named| {
+                    let outcome = match app.try_state::<crate::relay::Relay>() {
+                        Some(relay) => relay.hand_over(&named, &said),
+                        None => Err("there is no `claude` to relay through".to_string()),
+                    };
+                    (named, outcome)
+                });
+                let (how, _called, why_not) =
+                    describe_the_handoff(&session_id, hint.as_deref(), attempt);
+                if how.is_some() {
+                    // Delivered, so the copy left for the hook would arrive a second time on
+                    // their next message and be acted on twice.
+                    crate::outbox::forget(&staged_at);
+                } else if let Some(trouble) = why_not {
+                    // The relay could not reach the chat. Said out loud rather than swallowed —
+                    // the mark is in the outbox, so it is not lost, but "it will arrive when you
+                    // next type there" is a different promise than the card is making.
+                    eprintln!("[colai] could not put the mark in {session_id}: {trouble}");
+                    let _ = app.emit_to(
+                        crate::colai::OVERLAY_LABEL,
+                        "colai:trouble",
+                        serde_json::json!({ "said": format!(
+                            "Could not reach that chat right now — {trouble}. \
+                             The mark is waiting there for your next message."
+                        )}),
+                    );
+                }
+            });
+        }
+
+        // Watch for the answer: the mirror tails the transcript from the watermark and settles
+        // the card, so the reply lands here even though the turn is run in a terminal.
+        crate::session::mirror_handed_turn(app.clone(), held.session_id.clone(), watermark);
+
+        return Ok(Sent {
+            session_key: held.session_id,
+            run_id: String::new(),
+            prompt: String::new(),
+            pictures: staged.pictures,
+            carried,
+            refused,
+            // The mirror is watching, so the reply comes back to the card. That is the receipt
+            // now — shown instantly, confirmed when the answer arrives — rather than a delivery
+            // status the send had to block a whole relay turn to learn.
+            watching: true,
+            settings_trouble,
+            // Not known at return: delivery is happening in the background. The mirror is the
+            // confirmation, so `sent_to` stays empty and the UI leans on `watching`, not on a
+            // guessed status.
+            sent_to: None,
+            // Handed to that chat; always something true to call it.
+            handed_to: Some(called),
+        });
+    }
+
+    let cwd = crate::session::where_it_is_had(key.as_deref());
+    let prompt = session.send(&app, key.clone(), message, images, cwd)?;
+    let sent = Sent {
+        session_key: key.unwrap_or_default(),
+        // The Gateway gave a run id to correlate against. Nothing here does: one
+        // conversation, one turn at a time, and the reply carries the session it is for.
+        run_id: String::new(),
+        prompt,
+        pictures,
+        carried,
+        refused,
+        // See the note below: there is no second channel to miss.
+        watching: true,
+        settings_trouble,
+        // Answered here, by the toolbar's own agent, which is the ordinary case.
+        sent_to: None,
+        handed_to: None,
+    };
+    // Only once it has landed. A failed send that had already forgotten its pictures
+    // would leave the marks in the tray with nothing behind them.
+    //
+    // And its failure is not the send's. The message is delivered by this point, so
+    // returning an error here would tell somebody their send failed and invite them to
+    // send it twice.
+    release_pictures(&shots, &mark_ids);
+    /*
+     * Nothing to subscribe to.
+     *
+     * The Gateway delivered a conversation's messages only to subscribers, so a send was
+     * followed by a request to listen and `watching` said whether that worked. Here the
+     * answer comes back down the pipe the message went up — there is no second channel to
+     * miss, so `watching` is true whenever anything was sent at all.
+     */
+    Ok(sent)
+}
+
+/// Let go of the pictures a send no longer needs, once it has landed one way or another.
+///
+/// Shared by both routes out of `colai_send` — a conversation the toolbar's own agent is
+/// answering, and one handed over to a chat somebody has open — because both have the same
+/// answer to "is it safe yet": the mark is on its way (to the model directly, or to disk
+/// for the relay or the hook to point at), so nothing still needs these bytes in memory.
+/// Bug: the live-chat route used to return before reaching this, which cost nothing
+/// anybody could see (the store is bounded and evicts on its own, and the page clears its
+/// own marks regardless) but held picture bytes in `MarkShots` for longer than the send
+/// that used them.
+fn release_pictures(shots: &MarkShots, mark_ids: &[String]) {
+    if let Err(why) = shots.forget(mark_ids) {
+        eprintln!("[colai] the pictures could not be released after sending: {why}");
+    }
+}
+
+#[cfg(test)]
+mod letting_go_of_a_sent_picture {
+    use super::*;
+    use crate::colai_capture::Shot;
+
+    #[test]
+    fn a_sent_picture_is_no_longer_held() {
+        let shots = MarkShots::default();
+        shots
+            .keep(Shot { id: "mark-1".to_string(), frames: vec![vec![0u8]], width: 1, height: 1 })
+            .expect("a picture kept");
+        assert_eq!(shots.pick(&["mark-1".to_string()]).expect("a pick").len(), 1);
+
+        release_pictures(&shots, &["mark-1".to_string()]);
+
+        assert!(
+            shots.pick(&["mark-1".to_string()]).expect("a pick").is_empty(),
+            "a released picture must not still be held"
+        );
+    }
+}
+
+/// What to tell whoever is waiting, once a hand-over to a live chat has been tried.
+///
+/// A pure function of how it went, pulled out of `colai_send` so the branch this lives in
+/// — an `if let` chain that used to hide two bugs at once — can be driven by a test without
+/// starting a Tauri app or a `claude`. Returns `(sent_to, handed_to, why_not)`:
+///
+///   - `sent_to` is `Some(name)` only once `SendMessage` actually delivered.
+///   - `handed_to` is always something true to call this chat, never empty — see below.
+///   - `why_not` is `Some(reason)` whenever the relay was not even tried, or was tried and
+///     failed, and is always worth a line in the log.
+///
+/// `attempt` is `None` exactly when `what_that_chat_is_called` (which asks
+/// `claude agents --json`) came back with no name for this session — seen right after a
+/// session starts, before it has finished registering itself. That used to be the silent
+/// case: nothing set `why_not`, so nothing was logged, and if the registry's own record had
+/// no name either the receipt came back `sent_to: None, handed_to: None` — which
+/// `toolbar-send.js` reads as "the toolbar's own agent has this and the answer comes back
+/// here", the wrong branch entirely, for a mark that was actually left sitting in the
+/// outbox. `registry_name` (from the session's own record, a different source read
+/// separately by `already_open_in_a_chat`) is preferred when it exists because it is
+/// usually the friendlier of the two; the session id is the fallback of last resort, used
+/// only so `handed_to` is never `None` here and can never be mistaken for the other case.
+fn describe_the_handoff(
+    session_id: &str,
+    registry_name: Option<&str>,
+    attempt: Option<(String, Result<(), String>)>,
+) -> (Option<String>, String, Option<String>) {
+    match attempt {
+        None => (
+            None,
+            registry_name.unwrap_or(session_id).to_string(),
+            Some("the chat has no name yet to relay through".to_string()),
+        ),
+        Some((named, Ok(()))) => {
+            (Some(named.clone()), registry_name.unwrap_or(&named).to_string(), None)
+        }
+        Some((named, Err(trouble))) => {
+            (None, registry_name.unwrap_or(&named).to_string(), Some(trouble))
+        }
+    }
+}
+
+#[cfg(test)]
+mod what_to_say_about_a_handoff {
+    use super::*;
+
+    #[test]
+    fn a_delivery_names_the_chat_and_raises_nothing() {
+        let (sent_to, handed_to, why_not) = describe_the_handoff(
+            "sess-1",
+            Some("the-friendly-name"),
+            Some(("the-friendly-name".to_string(), Ok(()))),
+        );
+        assert_eq!(sent_to.as_deref(), Some("the-friendly-name"));
+        assert_eq!(handed_to, "the-friendly-name");
+        assert!(why_not.is_none());
+    }
+
+    #[test]
+    fn a_failed_relay_is_not_a_delivery_but_still_names_the_chat() {
+        let (sent_to, handed_to, why_not) = describe_the_handoff(
+            "sess-1",
+            Some("the-friendly-name"),
+            Some(("the-friendly-name".to_string(), Err("the relay is wedged".to_string()))),
+        );
+        assert!(sent_to.is_none());
+        assert_eq!(handed_to, "the-friendly-name");
+        assert_eq!(why_not.as_deref(), Some("the relay is wedged"));
+    }
+
+    #[test]
+    fn an_unresolved_name_is_logged_rather_than_silently_skipped() {
+        /*
+         * Bug: `claude agents --json` came back with nothing for this session, so the
+         * relay was never tried, and the old code set no `why_not` for it — the one path
+         * through this branch that logged nothing at all no matter what happened.
+         */
+        let (sent_to, handed_to, why_not) =
+            describe_the_handoff("sess-1", Some("the-friendly-name"), None);
+        assert!(sent_to.is_none());
+        assert_eq!(handed_to, "the-friendly-name");
+        assert!(why_not.is_some(), "a skipped relay attempt must say why");
+    }
+
+    #[test]
+    fn with_no_name_anywhere_the_receipt_still_says_something_true() {
+        /*
+         * Bug: with no name from the registry either, the old code returned
+         * `sent_to: None, handed_to: None` — and `toolbar-send.js` treats that combination
+         * as "the toolbar's own agent has this, the answer comes back here", which is not
+         * what happened: the mark was left waiting in the outbox. `handed_to` must never
+         * come back empty here, so the session id is the fallback of last resort.
+         */
+        let (sent_to, handed_to, why_not) = describe_the_handoff("sess-1", None, None);
+        assert!(sent_to.is_none());
+        assert_eq!(handed_to, "sess-1", "a name must be given even when nothing else has one");
+        assert!(why_not.is_some());
+    }
+
+    #[test]
+    fn a_missing_relay_names_the_chat_from_the_attempt_even_without_a_registry_name() {
+        let (sent_to, handed_to, why_not) = describe_the_handoff(
+            "sess-1",
+            None,
+            Some(("named-by-agents-json".to_string(), Err("there is no `claude` to relay through".to_string()))),
+        );
+        assert!(sent_to.is_none());
+        assert_eq!(handed_to, "named-by-agents-json");
+        assert!(why_not.is_some());
+    }
+}
+
+/// Lay a recording out as one picture, on the thread allowed to draw.
+///
+/// GDK may only be used from the thread that started it, and it does not decline when it
+/// is not: it aborts the process it is on. This runs inside `colai_send`, which is an
+/// async command and therefore on a tokio worker, so calling the drawing directly killed
+/// that worker mid-send. Tauri does not catch a panic across the command boundary, so the
+/// promise on the page never settled, its `finally` never ran, and `state.sending` stayed
+/// true for the life of the toolbar — one recording sent, and Send never worked again.
+///
+/// The frame capture beside it has always gone through here. Only the contact sheet did
+/// not, because it is assembled from bytes already in hand and did not look like drawing.
+#[cfg(target_os = "linux")]
+fn sheet_on_the_main_thread(
+    app: &AppHandle,
+    frames: &[std::sync::Arc<[u8]>],
+    accent: &str,
+) -> Result<crate::colai_capture::Sheet, String> {
+    let (done, wait) = std::sync::mpsc::channel();
+    // Each frame is an `Arc`, so this copies pointers into the closure, not pictures.
+    let (frames, accent) = (frames.to_vec(), accent.to_string());
+    app.run_on_main_thread(move || {
+        let _ = done.send(crate::colai_capture::contact_sheet(&frames, &accent));
+    })
+    .map_err(|error| format!("Could not reach the display: {error}"))?;
+    wait.recv()
+        .map_err(|_| "The display did not answer.".to_string())?
+}
+
+/// The pictures for these marks, named in the order the message describes them.
+///
+/// The names matter: the message says "mark 2" and the agent has to be able to tell
+/// which picture that is. A mark that photographed once keeps the plain name it always
+/// had; a recording numbers its frames after it, so a set of six is a sequence rather
+/// than six unrelated pictures of the same corner of a screen.
+// `app`, `accent` and the mutation of `trouble` all live in the Linux-only sheet block
+// below, so off Linux they would read as unused — true, but only because the drawing is.
+#[cfg_attr(not(target_os = "linux"), allow(unused_variables, unused_mut))]
+fn attach(
+    app: &AppHandle,
+    shots: &MarkShots,
+    mark_ids: &[String],
+    sheets: &[String],
+    accent: &str,
+) -> Result<(Vec<ChatAttachment>, Option<String>), String> {
+    let mut carried = Vec::new();
+    let mut trouble: Option<String> = None;
+    for picked in shots.pick(mark_ids)?.into_iter() {
+        // The position it was asked for at, not the position it survived at: a mark whose
+        // shot aged out leaves a gap, and closing it would rename everything after it.
+        let numbered = picked.asked_at + 1;
+        // Encoded straight from the store's own bytes, which are shared rather than
+        // copied — the base64 is the one copy a send has to make.
+        let one = |png: &[u8], name: String, size: (i32, i32)| ChatAttachment {
+            kind: "image".to_string(),
+            mime_type: "image/png".to_string(),
+            file_name: name,
+            content: base64::engine::general_purpose::STANDARD.encode(png),
+            width: size.0,
+            height: size.1,
+        };
+        // A run that would rather arrive as one picture. Eight frames of a screen cost
+        // about fifteen thousand image tokens sent separately and under a thousand laid
+        // out in a grid — and the grid reads better, because the sequence is visible
+        // instead of having to be reassembled from eight unrelated pictures.
+        //
+        // Which marks want it is the page's call, not this function's: what deserves a
+        // sheet is a question about what somebody meant, and this end only knows bytes.
+        if picked.frames.len() > 1 && sheets.contains(&picked.id) {
+            #[cfg(target_os = "linux")]
+            match sheet_on_the_main_thread(app, &picked.frames, accent) {
+                Ok(sheet) => {
+                    carried.push(one(
+                        &sheet.png,
+                        format!("mark-{numbered}.png"),
+                        (sheet.width, sheet.height),
+                    ));
+                    continue;
+                }
+                // Falling through sends every frame on its own, which costs about fifteen
+                // times the image tokens and reads worse. Somebody asked for a sheet and
+                // is getting something else, so it is said rather than absorbed.
+                Err(why) => {
+                    trouble.get_or_insert(format!("A recording could not be laid out as one picture, so its frames were sent separately: {why}"));
+                }
+            }
+        }
+        let many = picked.frames.len() > 1;
+        let size = (picked.width, picked.height);
+        for (frame, png) in picked.frames.iter().enumerate() {
+            let name = if many {
+                format!("mark-{numbered}-{}.png", frame + 1)
+            } else {
+                format!("mark-{numbered}.png")
+            };
+            carried.push(one(png, name, size));
+        }
+    }
+    Ok((carried, trouble))
+}
+
+/// What was said in a conversation, both halves of it.
+///
+/// The Work panel keeps its own record of what was sent from this toolbar, and that
+/// record survives a restart — but the answers do not, because they arrive long after
+/// the send and often while the toolbar is not running. This is where they come back
+/// from: the Gateway has the transcript, so the panel asks for it rather than being the
+/// only thing that ever knew.
+#[tauri::command]
+pub(crate) async fn colai_said(session_key: String) -> Result<Vec<Point>, String> {
+    // Off the transcript, which on this host is the only record there is.
+    // Each prompt carries the edits made answering it, so the panel can rewind to any one.
+    Ok(crate::session::what_was_said_and_changed(&session_key, POINTS_AT_MOST as usize)
+        .into_iter()
+        .map(|((id, said, mine, at), edits)| Point { id, said, at, mine, edits })
+        .collect())
+}
+
+/// How far back a conversation offers to go.
+///
+/// Not the whole transcript. What somebody is looking for is a message they remember
+/// sending in the last few minutes, and a list long enough to scroll is a list nobody
+/// reads to the end of — while the answer itself is a transcript coming down a socket.
+const POINTS_AT_MOST: u32 = 40;
+
+/// Stop a run that is underway.
+///
+/// The only thing on this rail that destroys work rather than describing it. It says
+/// what it stopped rather than going quiet, because a stop that produced no answer is
+/// indistinguishable from a stop that did not happen — and somebody who pressed it needs
+/// to know which.
+#[tauri::command]
+pub(crate) async fn colai_stop(
+    session: State<'_, crate::session::Session>,
+    session_key: String,
+) -> Result<(), String> {
+    /*
+     * A conversation open in a terminal is not colai's to stop.
+     *
+     * A mark handed to a live chat runs in that session's own process — colai only mirrors the
+     * turn off its transcript. It has no pipe to that process and cannot interrupt it, so the
+     * only honest thing is to say so and point at where the turn actually is. This used to fall
+     * through and interrupt colai's own (idle) child instead, then return Ok — so Stop reported
+     * "Stopped" while the terminal agent ran happily on, which is exactly what looked broken.
+     *
+     * colai still does the half it can: it stops *watching* (settles the mirror, lets the run
+     * go), so the toolbar stops showing a run the person has abandoned.
+     */
+    if let Some(held) = crate::session::already_open_in_a_chat(&session_key) {
+        crate::session::stop_mirror(&session_key);
+        let _ = held;
+        return Err(
+            "it runs in your terminal — colai can't interrupt it from here. Press Esc in that \
+             terminal to stop it. (colai has stopped watching it.)"
+                .to_string(),
+        );
+    }
+
+    /*
+     * colai's own turn: stop the turn, not the process.
+     *
+     * Killing the child throws away the result frame — and with it the cost of everything that
+     * had already happened, so a conversation somebody interrupted under-reported what it had
+     * spent. `interrupt` ends the turn and leaves the conversation standing. Killing remains the
+     * fallback: a child that has stopped reading its own pipe cannot be asked to do anything, and
+     * stop has to work then most of all.
+     */
+    if session.stop_turn().is_err() {
+        session.interrupt();
+    }
+    Ok(())
+}
+
+/// Answer the question the rail is showing.
+///
+/// The turn is stopped until this returns — `can_use_tool` is not news, it is a question,
+/// and Claude Code is waiting on the other end of the pipe.
+#[tauri::command]
+pub(crate) async fn colai_answer(
+    session: State<'_, crate::session::Session>,
+    id: String,
+    allow: bool,
+    message: Option<String>,
+) -> Result<(), String> {
+    // Whatever somebody typed as a reason goes to Claude, so it travels through the same
+    // fence as everything else that is not ours: it is about to become part of a prompt.
+    let said = crate::session::plainly(message.as_deref().unwrap_or_default());
+    session.answer(&id, allow, &said)
+}
+
+/// Change what may happen without being asked, from now on.
+#[tauri::command]
+pub(crate) async fn colai_allow_now(
+    session: State<'_, crate::session::Session>,
+    mode: String,
+) -> Result<(), String> {
+    session.allow_now(&mode)
+}
+
+/// Put every file back to how it was before the given prompt.
+///
+/// With `dry_run` it reports what would change and changes nothing, which is what the
+/// confirmation shows — rewinding also reverts anything a person edited by hand while the
+/// agent was working, and those are not the agent's to put back.
+#[tauri::command]
+pub(crate) async fn colai_undo(
+    session: State<'_, crate::session::Session>,
+    prompt: String,
+    dry_run: bool,
+) -> Result<(), String> {
+    session.undo_since(&prompt, dry_run)
+}

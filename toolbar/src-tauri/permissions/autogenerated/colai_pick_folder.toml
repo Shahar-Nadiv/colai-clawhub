@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-pick-folder"
+description = "Enables the colai_pick_folder command without any pre-configured scope."
+commands.allow = ["colai_pick_folder"]
+
+[[permission]]
+identifier = "deny-colai-pick-folder"
+description = "Denies the colai_pick_folder command without any pre-configured scope."
+commands.deny = ["colai_pick_folder"]

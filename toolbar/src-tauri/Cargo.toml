@@ -1,0 +1,117 @@
+[package]
+name = "colai-toolbar"
+version = "0.4.0"
+description = "colai — point at anything on screen and hand it to an agent"
+edition = "2021"
+rust-version = "1.97.1"
+
+[[bin]]
+name = "colai-toolbar"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+# The overlay shapes itself through GTK rather than raw X. A shape set behind GTK's
+# back is undone the next time GTK re-applies its own input region, so the call has to
+# be GTK's own. Versions match what Tauri already resolves.
+#
+# These live in the Linux target table below, not here. On Linux Tauri's webview *is* GTK,
+# so they cost nothing extra and let the overlay shape itself through the same toolkit. On
+# Windows and macOS the webview is WebView2 and WKWebView, GTK is not present, and a `-sys`
+# crate looking for `pkg-config` and GTK headers would fail the build before any code ran.
+base64 = "0.23.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+# `macos-private-api`: transparent windows on macOS go through a private WKWebView call;
+# Tauri gates it behind this feature and the matching `app.macOSPrivateApi` flag in
+# `tauri.conf.json`, and it does nothing anywhere else. It sits here rather than in a macOS
+# table because `tauri-build` checks the features of this one entry against the config and
+# fails the build when they disagree.
+tauri = { version = "2.11.5", features = ["image-png", "unstable", "macos-private-api"] }
+# The one binding that exists outside this window. Everything else the toolbar offers is
+# reachable only once it already has the keyboard, which it only takes when a panel opens
+# — so eleven advertised single-letter shortcuts were unreachable from the desktop.
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-opener = "2.5.5"
+tauri-plugin-single-instance = "2.4.4"
+tokio = { version = "1.53.1", features = ["macros", "sync", "time"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2.189"
+zbus = { version = "5.19.0", default-features = false, features = ["tokio"] }
+# The overlay shapes itself through GTK on Linux (see the note by `base64` above), so the
+# toolkit bindings are a Linux dependency and nothing else's.
+cairo-rs = "0.18.5"
+gdk = "0.18.2"
+gtk = "0.18.2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+# Win32 for the pieces Tauri does not expose: the pointer position for click-through
+# hit-testing (`GetCursorPos`), the monitor list and work areas for `colai_screens`
+# (`EnumDisplayMonitors`/`GetMonitorInfoW`), and the screen grab for captures (`BitBlt`).
+# Already in the tree via Tauri, so it costs nothing new.
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Threading",
+] }
+# Screen capture's encode/decode/resize, in place of Linux's gdk-pixbuf. PNG only — the
+# one format the marks travel as — so this does not drag in every codec `image` can build.
+# The pixels themselves come from GDI (`windows-sys`); this is only what turns them into a
+# PNG an agent will accept, and back.
+image = { version = "0.25", default-features = false, features = ["png"] }
+# The mark itself, drawn onto the capture — the box, arrow or stroke burnt in — where Linux
+# uses cairo. A pure-Rust rasterizer, so it adds no C library to find or ship on Windows.
+# Without its default `png-format`: the capture is encoded by `image` above and never by
+# tiny-skia, so a second way to write a PNG would only be weight.
+tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
+# The file and folder pickers, where Linux uses a GTK `FileChooserNative`. `rfd` is the
+# native Win32 common dialog — no GTK, no COM boilerplate here — parented to the overlay so
+# it does not open behind the always-on-top window.
+rfd = "0.15"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# AppKit and CoreGraphics for the pieces Tauri does not expose on a Mac: the pointer position
+# for click-through hit-testing, readable off the main thread (`CGEvent`); the frontmost
+# application and its window (`NSWorkspace`, `CGWindowListCopyWindowInfo`); the display list;
+# and the screen grab for captures. `libc` for `kill(pid, 0)` and the process path. Every one
+# is already in the tree via Tauri, so nothing new is fetched.
+libc = "0.2.189"
+core-graphics = "0.25"
+core-foundation = "0.10"
+foreign-types = "0.5"
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSURL"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+    "std",
+    "NSApplication",
+    "NSResponder",
+    "NSWindow",
+    "NSWorkspace",
+    "NSRunningApplication",
+] }
+# Encode, decode and draw the marks exactly as Windows does. Pure Rust, so everything in a
+# capture past the grab itself is shared code, and no C library has to be found on a Mac.
+image = { version = "0.25", default-features = false, features = ["png"] }
+tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
+# The file and folder pickers: `NSOpenPanel` on a Mac, through the same crate Windows uses.
+rfd = "0.15"
+
+# What gets published.
+#
+# The binary ships inside an npm package that anybody can download and unpack, so it is
+# stripped: the symbol table is nobody's business and it is most of the size. Paths are
+# remapped in the build script, because panic locations from dependencies otherwise carry
+# whoever built it home directory into a public artifact.
+[profile.release]
+strip = "symbols"
+# One codegen unit and fat LTO: this is built once at publish time, not in a loop, so the
+# minutes are cheap and the megabytes are not — every install pays for the size.
+codegen-units = 1
+lto = true
+# Unwinding stays. Aborting would save a little more, at the price of one panic anywhere
+# taking the whole toolbar off the screen instead of failing the thing that panicked —
+# the wrong trade for a window somebody leaves open all day.

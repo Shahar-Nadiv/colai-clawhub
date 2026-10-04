@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-render-shot"
+description = "Enables the colai_render_shot command without any pre-configured scope."
+commands.allow = ["colai_render_shot"]
+
+[[permission]]
+identifier = "deny-colai-render-shot"
+description = "Denies the colai_render_shot command without any pre-configured scope."
+commands.deny = ["colai_render_shot"]
