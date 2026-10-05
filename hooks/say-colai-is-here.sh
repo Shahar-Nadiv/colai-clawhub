@@ -61,11 +61,25 @@ fi
 ROOT="${CLAUDE_PLUGIN_ROOT:-$(CDPATH= cd "$(dirname "$0")/.." 2>/dev/null && pwd)}"
 LAUNCHER="$ROOT/bin/colai-toolbar"
 
+# Which conversation this is, so the toolbar opens pointed at it.
+#
+# Claude Code hands a hook its session as JSON on stdin — not in the environment, which is
+# where the toolbar used to read it when a slash command started it from the Bash tool. Without
+# this the rail opened on an empty receiver and asked a question the launch could have answered.
+# Read without a JSON parser (nothing may need a runtime here), and kept only if it looks like an
+# id: letters, digits and dashes, so nothing the input says can reach the command line as more.
+session=
+if [ ! -t 0 ]; then
+  session=$(cat | tr -d '\r\n' | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([A-Za-z0-9-]*\)".*/\1/p')
+fi
+
 if [ "$running" = yes ]; then
-  said="colai is up — $KEY shows the toolbar and hides it again."
+  title="Colai is running"
+  said="Press $KEY to show or hide the toolbar, then point at anything on screen and send it here."
 elif [ "${COLAI_AUTOSTART:-1}" = "0" ]; then
   # An explicit opt-out for anyone who would rather it not start itself.
-  said="colai is installed but autostart is off (COLAI_AUTOSTART=0). Run colai-toolbar show to start it; then $KEY shows and hides it."
+  title="Colai is installed, but autostart is off"
+  said="COLAI_AUTOSTART=0 is set. Run colai-toolbar show to start it; then $KEY shows and hides it."
 elif [ -f "$LAUNCHER" ]; then
   # Ask first, start second. The launch below is detached and silent, so a toolbar that cannot
   # start here — no build for this machine, a Wayland session, a missing library — would vanish
@@ -75,17 +89,33 @@ elif [ -f "$LAUNCHER" ]; then
   if why=$(sh "$LAUNCHER" check 2>&1 >/dev/null); then
     # Detached, so this hook returns at once (it has a few-second budget) and the toolbar
     # outlives the shell that launched it. The launcher self-derives its pidfile from `show`.
-    nohup sh "$LAUNCHER" show >/dev/null 2>&1 &
-    said="colai is starting — $KEY shows the toolbar and hides it again."
+    # `--in` names the conversation (see session.rs `came_from`); only on a fresh start, so a
+    # second session opening does not pull a toolbar somebody already pointed elsewhere.
+    if [ -n "$session" ]; then
+      nohup sh "$LAUNCHER" show --in "$session" >/dev/null 2>&1 &
+    else
+      nohup sh "$LAUNCHER" show >/dev/null 2>&1 &
+    fi
+    title="Colai is starting"
+    said="Press $KEY to show or hide the toolbar, then point at anything on screen and send it to this session."
   else
-    said="colai can't start on this machine yet: $why"
+    title="Colai can't start on this machine yet"
+    said=$why
   fi
 else
-  said="colai could not find its launcher to start the toolbar."
+  title="Colai could not find its launcher"
+  said="Reinstall it with: claude plugin install colai@colai"
 fi
 
 # JSON by hand, because this must not need a runtime installed to say one sentence. The reason
 # above is the launcher's own words, so it is made safe here: backslashes and quotes escaped,
-# control characters and line breaks folded into spaces, and the whole kept to one short line.
-said=$(printf '%s' "$said" | tr '\r\n\t' '   ' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/  */ /g' | cut -c1-600)
-printf '{"systemMessage":"%s"}\n' "$said"
+# control characters and line breaks folded into spaces, and each part kept short.
+#
+# Two lines on purpose. Claude Code prints this under its own "SessionStart says:" prefix, and a
+# single sentence there was easy to read straight past — so the headline stands alone, with the
+# jellyfish in front of it, and what to do comes on the line beneath. A hook cannot colour its
+# message; an emoji and a line break are what there is.
+safe() {
+  printf '%s' "$1" | tr '\r\n\t' '   ' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/  */ /g' | cut -c1-600
+}
+printf '{"systemMessage":"🪼 %s\\n   %s"}\n' "$(safe "$title")" "$(safe "$said")"

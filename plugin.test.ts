@@ -19,6 +19,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
@@ -280,14 +281,51 @@ describe("what a marketplace hands out", () => {
   }
 
   test.skipIf(!haveSh)("on Windows the hook finds a running toolbar by its native pid", () => {
-    expect(hookSays("16420")).toContain("colai is up");
+    expect(hookSays("16420")).toContain("Colai is running");
     // A row MSYS prefixed with a state letter shifts WINPID one column right.
-    expect(hookSays("7777"), "a state-prefixed row").toContain("colai is up");
+    expect(hookSays("7777"), "a state-prefixed row").toContain("Colai is running");
   });
 
   test.skipIf(!haveSh)("and does not mistake an MSYS pid, or a dead one, for the toolbar", () => {
-    expect(hookSays("3003"), "3003 is only an MSYS pid here").not.toContain("colai is up");
-    expect(hookSays("424242"), "nobody has this pid").not.toContain("colai is up");
+    expect(hookSays("3003"), "3003 is only an MSYS pid here").not.toContain("Colai is running");
+    expect(hookSays("424242"), "nobody has this pid").not.toContain("Colai is running");
+  });
+
+  test.skipIf(!haveSh)("the hook opens the toolbar on the session that started it", async () => {
+    /*
+     * Claude Code hands a SessionStart hook its session as JSON on stdin, not in the
+     * environment. The toolbar reads `--in <id>` (session.rs `came_from`), so the hook has to
+     * pass it — without that the rail opened on an empty receiver. A stand-in launcher records
+     * what it was asked; anything that does not look like an id must not reach it.
+     */
+    const plugin = mkdtempSync(join(tmpdir(), "colai-hook-in-"));
+    const asked = join(plugin, "asked");
+    mkdirSync(join(plugin, "bin"));
+    writeFileSync(
+      join(plugin, "bin", "colai-toolbar"),
+      `#!/bin/sh\n[ "$1" = check ] && exit 0\nprintf '%s\\n' "$*" > "${toPosix(asked)}"\n`,
+    );
+    const config = mkdtempSync(join(tmpdir(), "colai-hook-cfg-"));
+    const run = (input: string) => {
+      rmSync(asked, { force: true });
+      const env = { ...process.env, XDG_CONFIG_HOME: config, CLAUDE_PLUGIN_ROOT: toPosix(plugin), COLAI_AUTOSTART: "1" };
+      const hook = join(root, "hooks", "say-colai-is-here.sh");
+      const ran = onWindows
+        ? spawnSync(SH!.sh, [toPosix(hook)], { env: shEnv(env), input, encoding: "utf8" })
+        : spawnSync("sh", [hook], { env, input, encoding: "utf8" });
+      return ran.stdout;
+    };
+    const launched = async () => {
+      for (let i = 0; i < 50 && !existsSync(asked); i++) await new Promise((r) => setTimeout(r, 50));
+      return readFileSync(asked, "utf8").trim();
+    };
+
+    const said = JSON.parse(run('{"session_id":"4f1c-9a2e","hook_event_name":"SessionStart","source":"startup"}'));
+    expect(said.systemMessage, "a headline, then what to do").toMatch(/^🪼 Colai is starting\n {3}Press /);
+    expect(await launched()).toBe("show --in 4f1c-9a2e");
+
+    run('{"session_id":"x; rm -rf ~"}');
+    expect(await launched(), "not an id, so not passed").toBe("show");
   });
 });
 
