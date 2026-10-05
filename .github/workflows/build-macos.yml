@@ -1,0 +1,84 @@
+# Build the macOS toolbar on Apple's own hardware, and stage it.
+#
+# colai ships one prebuilt toolbar per platform under platforms/<os>/bin, staged only when a
+# release is cut. Linux is built in Docker and Windows on Windows; this is how the Apple
+# Silicon build is made without anyone needing a Mac: run it from the Actions tab
+# ("Build macOS toolbar" → Run workflow) and a macos-latest runner builds the toolbar, ad-hoc
+# signs it (Apple Silicon will not run unsigned arm64 code — see scripts/stage-macos.mjs),
+# uploads it as an artifact, and — unless told not to — commits
+# platforms/darwin-arm64/bin/{colai-toolbar.gz, .sha256, .build.json} to the branch it ran on.
+#
+# The binary embeds the runner's build path (/Users/runner/work/...), which names a CI
+# machine, not a person. Nothing here needs a secret beyond the workflow's own token.
+name: Build macOS toolbar
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Commit the staged binary to this branch (otherwise only upload it as an artifact)
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-macos-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build & stage (macos-latest, Apple Silicon)
+    runs-on: macos-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Set up the Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build the toolbar
+        shell: bash
+        run: npm run build:toolbar
+
+      - name: Stage it (ad-hoc signed)
+        shell: bash
+        run: npm run stage:macos
+
+      - name: Check the staged binary runs and matches its digest
+        shell: bash
+        run: |
+          dir=platforms/darwin-arm64/bin
+          unpacked=$(mktemp)
+          gzip -dc "$dir/colai-toolbar.gz" > "$unpacked"
+          [ "$(shasum -a 256 "$unpacked" | cut -d' ' -f1)" = "$(cut -d' ' -f1 "$dir/colai-toolbar.sha256")" ]
+          file "$unpacked" | grep -q "arm64"
+          codesign --verify "$unpacked"
+          echo "staged: $(file "$unpacked")"
+
+      - name: Upload the staged binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: colai-toolbar-darwin-arm64
+          path: platforms/darwin-arm64/bin/
+
+      - name: Commit the staged binary
+        if: ${{ inputs.commit }}
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add platforms/darwin-arm64/bin
+          if git diff --cached --quiet; then
+            echo "The staged binary is unchanged; nothing to commit."
+            exit 0
+          fi
+          git commit -m "chore(release): stage the macOS (Apple Silicon) toolbar" \
+            -m "Built and ad-hoc signed on a macos-latest runner by the Build macOS toolbar workflow."
+          git push

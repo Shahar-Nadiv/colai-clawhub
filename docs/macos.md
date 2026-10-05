@@ -117,6 +117,11 @@ natively on a `macos-latest` (Apple Silicon) runner.
 
 ## Shipping
 
+No Mac is needed: the **Build macOS toolbar** workflow (`.github/workflows/build-macos.yml`,
+run from the Actions tab) builds the Apple Silicon toolbar on a GitHub macOS runner, ad-hoc
+signs it, verifies it, and commits it to `platforms/darwin-arm64/bin/` so every Mac install
+picks it up automatically. It is the same as doing it by hand on a Mac:
+
 `npm run stage:macos`, on a Mac, after `npm run build:toolbar`. It reads the CPU out of the
 binary to pick `platforms/darwin-arm64/` or `platforms/darwin-x64/`, ad-hoc signs it (Apple
 Silicon will not run unsigned arm64 code), and writes the `.gz`, `.sha256` and

@@ -228,6 +228,12 @@ describe("what a marketplace hands out", () => {
     expect(hook, "backgrounded").toMatch(/&\s*$/m);
     expect(hook, "honours an opt-out").toContain("COLAI_AUTOSTART");
     expect(hook, "only launches when nothing is already running").toContain('running" = yes');
+    // And it asks before it promises: a toolbar that cannot start here (no build for this
+    // machine, Wayland, a missing library) must be explained, not announced as "starting".
+    const check = hook.indexOf('"$LAUNCHER" check');
+    expect(check, "it runs the launcher's check first").toBeGreaterThan(-1);
+    expect(check, "…before the launch").toBeLessThan(hook.indexOf('"$LAUNCHER" show'));
+    expect(hook, "and says why when it cannot start").toContain("can't start on this machine");
   });
 
   test("the hook leaves the binary to survive detaching, and only backgrounds for its timeout", () => {
@@ -354,6 +360,62 @@ describe("the launcher that stands in for the binary", () => {
     expect(ran.status, "a mismatch must not be a successful run").not.toBe(0);
     expect(ran.stdout, "nothing may be executed").not.toContain("the toolbar ran");
     expect(ran.stderr).toContain("not the one that was built");
+  });
+
+  /** A Linux x86-64 `uname` plus stand-in `xprop`/`xwininfo`, so `check` finds the X11 tools. */
+  function linuxWithX11Tools(): string {
+    const dir = machineShim("Linux", "x86_64");
+    for (const tool of ["xprop", "xwininfo"]) {
+      writeFileSync(join(dir, tool), "#!/bin/sh\nexit 0\n");
+      chmodSync(join(dir, tool), 0o755);
+    }
+    return dir;
+  }
+  const anX11Desktop = { DISPLAY: ":0", WAYLAND_DISPLAY: "", XDG_SESSION_TYPE: "x11" };
+
+  test.skipIf(!haveSh)("`check` says ok without running the toolbar", () => {
+    // The SessionStart hook asks this before it promises anything, so it must answer from the
+    // launcher's own logic — the build for this machine, unpacked and verified — and start nothing.
+    const { where, cache } = installedWith(A_TOOLBAR);
+    const ran = spawnLauncher(join(where, "bin", "colai-toolbar"), ["check"], {
+      env: { ...process.env, ...anX11Desktop, XDG_CACHE_HOME: cache, COLAI_TOOLBAR_BIN: "" },
+      encoding: "utf8",
+    }, linuxWithX11Tools());
+    expect(ran.status, ran.stderr).toBe(0);
+    expect(ran.stdout.trim()).toBe("ok");
+    expect(ran.stdout, "nothing is executed by a check").not.toContain("the toolbar ran");
+  });
+
+  test.skipIf(!haveSh)("`check` names a Wayland session instead of pretending", () => {
+    const { where, cache } = installedWith(A_TOOLBAR);
+    const ran = spawnLauncher(join(where, "bin", "colai-toolbar"), ["check"], {
+      env: { ...process.env, ...anX11Desktop, WAYLAND_DISPLAY: "wayland-0", XDG_CACHE_HOME: cache, COLAI_TOOLBAR_BIN: "" },
+      encoding: "utf8",
+    }, linuxWithX11Tools());
+    expect(ran.status).not.toBe(0);
+    expect(ran.stderr).toContain("Wayland");
+    expect(ran.stdout).not.toContain("the toolbar ran");
+  });
+
+  test.skipIf(!haveSh)("`check` says when there is no screen to draw on", () => {
+    const { where, cache } = installedWith(A_TOOLBAR);
+    const ran = spawnLauncher(join(where, "bin", "colai-toolbar"), ["check"], {
+      env: { ...process.env, ...anX11Desktop, DISPLAY: "", XDG_CACHE_HOME: cache, COLAI_TOOLBAR_BIN: "" },
+      encoding: "utf8",
+    }, linuxWithX11Tools());
+    expect(ran.status).not.toBe(0);
+    expect(ran.stderr).toContain("DISPLAY is not set");
+  });
+
+  test.skipIf(!haveSh)("`check` on a machine with no build explains why, and fails", () => {
+    // A Mac whose copy of colai carries no macOS toolbar: the hook must hear why, not "starting".
+    const { where, cache } = installedWith(A_TOOLBAR);
+    const ran = spawnLauncher(join(where, "bin", "colai-toolbar"), ["check"], {
+      env: { ...process.env, XDG_CACHE_HOME: cache, COLAI_TOOLBAR_BIN: "" },
+      encoding: "utf8",
+    }, machineShim("Darwin", "arm64"));
+    expect(ran.status).not.toBe(0);
+    expect(ran.stderr).toContain("no toolbar for darwin-arm64");
   });
 
   test("says which machine this is when there is no build for it", () => {

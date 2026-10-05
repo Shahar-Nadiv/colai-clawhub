@@ -2,8 +2,13 @@
 # The toolbar, from wherever this copy of colai happens to keep it.
 #
 # Claude Code puts a plugin's `bin/` on PATH and runs nothing at install time — there is no
-# `postinstall`, by design. So this file is what `/colai:show` actually reaches, and it has
-# to find or produce a runnable toolbar on its own, on first use, with no network.
+# `postinstall`, by design. So this file is what the SessionStart hook actually reaches, and
+# it has to find or produce a runnable toolbar on its own, on first use, with no network.
+#
+# `colai-toolbar check` asks the same questions without starting anything: is there a build
+# for this machine, does it verify, and (on Linux) is there an X11 screen with the libraries
+# and tools the toolbar needs. It prints `ok`, or says what is missing and exits non-zero —
+# so the hook can tell somebody the truth instead of "starting" a toolbar that never appears.
 #
 # It is a shell script rather than the binary itself for two reasons. The binary is 13 MB
 # and the archive is 5, and only one of those belongs in a repository people clone. And a
@@ -30,13 +35,16 @@ plugin=$(CDPATH= cd -- "$here/.." && pwd)
 
 say() { printf '%s\n' "$*" >&2; }
 
+checking=
+if [ "${1:-}" = check ]; then
+  checking=1
+  shift
+fi
+
 # Where the toolbar writes its pid, unless the caller named a place.
 #
-# Derived here rather than passed in, and that is a change with a reason. A slash command's
-# `!` line is permission-checked before it runs, and the check refuses any `$` expansion —
-# it cannot read what a variable will become, so it will not approve it. So `/colai:show`
-# cannot say `--pidfile "$HOME/..."`, and the only place left that knows both the home
-# directory and the convention is this script.
+# Derived here rather than passed in, so every caller — the hook, a terminal, a desktop
+# autostart entry — agrees on one place without each having to know the convention.
 #
 # The same expression as `hooks/say-colai-is-here.sh`, which reads the file to decide
 # whether to tell somebody the toolbar is already up. Two places deriving one path is the
@@ -52,6 +60,14 @@ esac
 # For working on the toolbar itself: point at any build and it is the one that runs, with
 # none of the machinery below consulted.
 if [ -n "${COLAI_TOOLBAR_BIN:-}" ]; then
+  if [ -n "$checking" ]; then
+    if [ ! -x "$COLAI_TOOLBAR_BIN" ]; then
+      say "COLAI_TOOLBAR_BIN points at $COLAI_TOOLBAR_BIN, which is not a runnable file."
+      exit 1
+    fi
+    printf 'ok\n'
+    exit 0
+  fi
   exec "$COLAI_TOOLBAR_BIN" "$@"
 fi
 
@@ -95,6 +111,56 @@ case "$system-$cpu" in
     ;;
 esac
 
+# ── would it start here ──────────────────────────────────────────────────────
+#
+# Only Linux has conditions a launcher can see in advance. The toolbar refuses Wayland and a
+# missing DISPLAY (the same checks, in the same order, as `screen.rs`), and it cannot start
+# at all when the dynamic loader cannot find WebKitGTK and friends — which, run blind, ends in
+# a loader error nobody sees. `ldd` names exactly the libraries that are missing.
+able_here() {
+  case $which in
+    linux-*)
+      session=$(printf '%s' "${XDG_SESSION_TYPE:-}" | tr 'A-Z' 'a-z')
+      if [ "$session" = wayland ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
+        say "This is a Wayland session, and the colai toolbar only works on X11. Log out and choose the X11 (Xorg) session at the login screen."
+        exit 1
+      fi
+      if [ -z "${DISPLAY:-}" ]; then
+        say "There is no screen to draw on here: DISPLAY is not set."
+        exit 1
+      fi
+      if command -v ldd >/dev/null 2>&1; then
+        missing=$(ldd "$1" 2>/dev/null | awk '/not found/ { printf "%s ", $1 }')
+        if [ -n "$missing" ]; then
+          say "The colai toolbar needs libraries this machine lacks: $missing"
+          say "Install them with: sudo apt install libwebkit2gtk-4.1-0 libsoup-3.0-0 libgtk-3-0 (Fedora: dnf install webkit2gtk4.1 libsoup3 gtk3; Arch: pacman -S webkit2gtk-4.1 libsoup3 gtk3)."
+          exit 1
+        fi
+      fi
+      gone=
+      for tool in xprop xwininfo; do
+        command -v "$tool" >/dev/null 2>&1 || gone="$gone $tool"
+      done
+      if [ -n "$gone" ]; then
+        say "The colai toolbar needs$gone. Install them with: sudo apt install x11-utils (Fedora: dnf install xprop xwininfo; Arch: pacman -S xorg-xprop xorg-xwininfo)."
+        exit 1
+      fi
+      ;;
+  esac
+}
+
+# Run the toolbar — or, for `check`, say whether it could run and stop there.
+start() {
+  if [ -n "$checking" ]; then
+    able_here "$1"
+    printf 'ok\n'
+    exit 0
+  fi
+  run=$1
+  shift
+  exec "$run" "$@"
+}
+
 # ── a build that is already lying around ─────────────────────────────────────
 #
 # In order: a local `npm run build:toolbar`, then a local `npm run build:release`. Both are
@@ -103,7 +169,7 @@ esac
 # one.
 for built in "$here/colai-toolbar.built$exe" "$plugin/platforms/$which/bin/colai-toolbar$exe"; do
   if [ -x "$built" ]; then
-    exec "$built" "$@"
+    start "$built" "$@"
   fi
 done
 
@@ -117,7 +183,7 @@ if [ ! -f "$archive" ] || [ ! -f "$promised" ]; then
   case $which in
     linux-*) say "Expected $archive — build one with: npm run build:release" ;;
     darwin-*) say "Expected $archive — build one on a Mac with: npm run build:toolbar && npm run stage:macos" ;;
-    windows-*) say "Expected $archive — build one with: npm run build:toolbar && npm run stage:windows" ;;
+    windows-*) say "Expected $archive — build one with: npm run build:release:windows" ;;
   esac
   exit 1
 fi
@@ -205,4 +271,4 @@ if [ ! -x "$binary" ] || [ "$(digest_of "$binary")" != "$expected" ]; then
   done
 fi
 
-exec "$binary" "$@"
+start "$binary" "$@"

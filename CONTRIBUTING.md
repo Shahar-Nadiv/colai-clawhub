@@ -56,6 +56,8 @@ should be green on all three before it is merged.
 2. Build and stage each platform's binary: Linux with `npm run build:release` (Docker, so the
    binary carries no build-machine paths), Windows with `npm run build:release:windows`
    (builds from a neutral directory and refuses to stage a binary that names its builder),
-   macOS on a Mac with `npm run build:toolbar` then `npm run stage:macos`.
+   macOS by running the **Build macOS toolbar** workflow from the Actions tab (it builds,
+   ad-hoc signs and commits the Apple Silicon binary on a GitHub macOS runner) — or on a Mac
+   with `npm run build:toolbar` then `npm run stage:macos`.
 3. Commit as `chore(release): vX.Y.Z`, tag `vX.Y.Z`, push, and publish a GitHub Release from
    the tag with the CHANGELOG entry as its notes.

@@ -67,14 +67,25 @@ elif [ "${COLAI_AUTOSTART:-1}" = "0" ]; then
   # An explicit opt-out for anyone who would rather it not start itself.
   said="colai is installed but autostart is off (COLAI_AUTOSTART=0). Run colai-toolbar show to start it; then $KEY shows and hides it."
 elif [ -f "$LAUNCHER" ]; then
-  # Start it detached, so this hook returns at once (it has a few-second budget) and the toolbar
-  # outlives the shell that launched it. The launcher self-derives its pidfile from `show`.
-  nohup sh "$LAUNCHER" show >/dev/null 2>&1 &
-  said="colai is starting — $KEY shows the toolbar and hides it again."
+  # Ask first, start second. The launch below is detached and silent, so a toolbar that cannot
+  # start here — no build for this machine, a Wayland session, a missing library — would vanish
+  # without a word while this line promised it was starting. `check` asks the launcher's own
+  # questions without running anything and says what is wrong; only `ok` earns a launch.
+  # (The first check also unpacks and verifies the binary, so the launch that follows is quick.)
+  if why=$(sh "$LAUNCHER" check 2>&1 >/dev/null); then
+    # Detached, so this hook returns at once (it has a few-second budget) and the toolbar
+    # outlives the shell that launched it. The launcher self-derives its pidfile from `show`.
+    nohup sh "$LAUNCHER" show >/dev/null 2>&1 &
+    said="colai is starting — $KEY shows the toolbar and hides it again."
+  else
+    said="colai can't start on this machine yet: $why"
+  fi
 else
   said="colai could not find its launcher to start the toolbar."
 fi
 
-# JSON by hand, because this must not need a runtime installed to say one sentence. The only
-# character that can appear here and break it is a quote; the opt-out line above has escaped ones.
+# JSON by hand, because this must not need a runtime installed to say one sentence. The reason
+# above is the launcher's own words, so it is made safe here: backslashes and quotes escaped,
+# control characters and line breaks folded into spaces, and the whole kept to one short line.
+said=$(printf '%s' "$said" | tr '\r\n\t' '   ' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/  */ /g' | cut -c1-600)
 printf '{"systemMessage":"%s"}\n' "$said"
