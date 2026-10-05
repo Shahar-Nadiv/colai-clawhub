@@ -3,12 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>colai — Visual Agents</title>
-<meta name="description" content="Point at it. Box it. Draw the path. colai turns whatever is on your screen into a prompt your coding agent understands. Available now as a Claude Code plugin.">
-<meta property="og:title" content="colai — some things can't be typed. Show it instead.">
-<meta property="og:description" content="Point at it. Box it. Draw the path. colai turns whatever is on your screen — any app, any window, the whole OS — into a prompt your coding agent understands. Available now as a Claude Code plugin.">
+<title>Colai — Visual Agents</title>
+<meta name="description" content="Point at it. Box it. Draw the path. Colai turns whatever is on your screen into a prompt your coding agent understands. Available now as a Claude Code plugin.">
+<meta property="og:title" content="Colai — some things can't be typed. Show it instead.">
+<meta property="og:description" content="Point at it. Box it. Draw the path. Colai turns whatever is on your screen — any app, any window, the whole OS — into a prompt your coding agent understands. Available now as a Claude Code plugin.">
 <meta property="og:type" content="website">
-<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://shahar-nadiv.github.io/colai-clawhub/jellyfish.png">
+<meta property="og:image:alt" content="The Colai jellyfish">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="icon" href="./jellyfish.png" type="image/png" sizes="1024x1024">
+<link rel="apple-touch-icon" href="./jellyfish.png">
 <meta name="theme-color" content="#07080b">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -43,6 +48,7 @@ img{max-width:100%}
 .wrap{position:relative;z-index:2;max-width:1160px;margin:0 auto;padding-inline:24px}
 
 header.bar{display:flex;align-items:center;gap:14px;padding-block:28px}
+.logo-mark{display:block;width:26px;height:26px;margin-right:-6px}
 .logo{font-size:18px;font-weight:700;letter-spacing:-0.04em;color:var(--head)}
 .logo-sub{font-family:var(--mono);font-size:11px;letter-spacing:0.22em;color:var(--mute)}
 .bar-cta{margin-left:auto;font-size:13px;font-weight:500;color:#bcbcc0;text-decoration:none;border:1px solid rgb(255 255 255 / 14%);border-radius:999px;padding:8px 16px}
@@ -233,7 +239,8 @@ footer .rights{font-family:var(--mono);font-size:11px;letter-spacing:0.16em}
 <div class="wrap">
 
 <header class="bar">
-  <span class="logo">colai</span>
+  <img class="logo-mark" src="./favicon.svg" alt="" width="26" height="26">
+  <span class="logo">Colai</span>
   <span class="logo-sub">TOOLBAR</span>
   <a class="bar-cta" href="#install">Install</a>
 </header>
@@ -274,7 +281,7 @@ claude plugin install colai@colai</pre>
   <div class="stage">
     <div class="film">
       <video id="film" poster="./colai-poster.jpg" muted loop playsinline preload="metadata"
-             aria-label="The colai toolbar, across a robotics simulation, a PCB, a game and a web app"></video>
+             aria-label="The Colai toolbar, across a robotics simulation, a PCB, a game and a web app"></video>
       <button class="play" id="play" type="button" hidden>Play</button>
       <button class="sound" id="sound" type="button" aria-pressed="false">Sound on</button>
     </div>
@@ -341,7 +348,7 @@ claude plugin install colai@colai</pre>
 </section>
 
 <footer>
-  <span class="mark">colai</span>
+  <span class="mark">Colai</span>
   <span class="tag">Point. Box. Draw. On whatever is on your screen.</span>
   <span class="rights">© 2026</span>
 </footer>
