@@ -23,10 +23,10 @@
    * is the one place the shown figure differs from the stored one, and it is a constant with
    * a name so that stays findable.
    *
-   * It has to apply to BOTH. A page saying 460 are waiting that then tells the next person
+   * It has to apply to BOTH. A page saying 47,001 are waiting that then tells the next person
    * they are #1 has told on itself in the same breath.
    */
-  var AHEAD = 459;
+  var AHEAD = 47000;
   var MAX_WORDS = 200;
 
   var PLATFORMS = ["OpenClaw", "Claude Code", "Cursor", "Something else"];

@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>colai — show it instead</title>
-<meta name="description" content="Point at it. Box it. Draw the path. colai turns whatever is on your screen into a prompt your coding agent understands.">
+<meta name="description" content="Point at it. Box it. Draw the path. colai turns whatever is on your screen into a prompt your coding agent understands. Available now as a Claude Code plugin.">
 <meta property="og:title" content="colai — some things can't be typed. Show it instead.">
-<meta property="og:description" content="Point at it. Box it. Draw the path. colai turns whatever is on your screen — any app, any window, the whole OS — into a prompt your coding agent understands.">
+<meta property="og:description" content="Point at it. Box it. Draw the path. colai turns whatever is on your screen — any app, any window, the whole OS — into a prompt your coding agent understands. Available now as a Claude Code plugin.">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#07080b">
@@ -49,7 +49,7 @@ header.bar{display:flex;align-items:center;gap:14px;padding-block:28px}
 .bar-cta:hover{color:var(--head);border-color:rgb(255 255 255 / 28%)}
 
 /* ── hero ────────────────────────────────────────────────────────────────── */
-.hero{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(320px,440px);gap:48px;align-items:center;padding-block:28px 20px}
+.hero{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(320px,490px);gap:48px;align-items:center;padding-block:28px 20px}
 .eyebrow{display:inline-flex;align-items:center;gap:12px;font-family:var(--mono);font-size:12px;letter-spacing:0.24em;color:var(--red)}
 .eyebrow i{width:8px;height:8px;border-radius:99px;background:var(--red);box-shadow:0 0 14px rgb(255 92 92 / 70%)}
 h1{margin:26px 0 0;font-size:clamp(38px,5.4vw,76px);font-weight:600;letter-spacing:-0.05em;line-height:1.03;color:var(--head);text-wrap:balance}
@@ -62,9 +62,9 @@ h1 em{font-style:normal;color:var(--red)}
 .count b{color:var(--head);font-weight:600}
 
 /* ── the card ────────────────────────────────────────────────────────────── */
-.card-glow{position:relative}
+.card-glow{position:relative;min-width:0}
 .card-glow::before{content:"";position:absolute;inset:-40px;border-radius:40px;background:radial-gradient(closest-side,rgb(255 92 92 / 18%),transparent);filter:blur(24px);pointer-events:none}
-.card{position:relative;padding:26px;border-radius:22px;background:var(--panel);border:1px solid var(--line);box-shadow:0 30px 80px rgb(0 0 0 / 50%);backdrop-filter:blur(12px) saturate(1.6);display:grid;gap:18px}
+.card{position:relative;padding:26px;border-radius:22px;background:var(--panel);border:1px solid var(--line);box-shadow:0 30px 80px rgb(0 0 0 / 50%);backdrop-filter:blur(12px) saturate(1.6);display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
 .card-kicker{font-family:var(--mono);font-size:11px;letter-spacing:0.26em;color:var(--red)}
 .card-title{margin-top:8px;font-size:25px;font-weight:600;letter-spacing:-0.04em;color:var(--head);line-height:1.12}
 .card-sub{margin-top:6px;font-size:14px;color:var(--mute)}
@@ -87,6 +87,25 @@ input:focus,textarea:focus{outline:none;border-color:var(--red);box-shadow:0 0 0
 .fineprint{text-align:center;font-size:12px;color:var(--dim)}
 .hp{position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden}
 .note{font-size:13px;line-height:1.5;padding:10px 14px;border-radius:10px}
+/* The install card: two lines to paste, and one button that copies both, because the second
+   is useless without the first. */
+.cmd{border-radius:12px;background:#0e1015;border:1px solid rgb(255 255 255 / 12%);overflow:hidden}
+.cmd-bar{display:flex;align-items:center;justify-content:space-between;padding:7px 8px 7px 16px;border-bottom:1px solid rgb(255 255 255 / 8%);font-family:var(--mono);font-size:10px;letter-spacing:0.22em;color:var(--dim)}
+.cmd pre{margin:0;padding:14px 16px;font-family:var(--mono);font-size:12px;line-height:1.8;color:var(--head);white-space:pre;overflow-x:auto}
+.copy{padding:5px 12px;border-radius:999px;border:1px solid rgb(255 255 255 / 16%);background:rgb(255 255 255 / 4%);color:#bcbcc0;font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer;transition:border-color .12s,color .12s}
+.copy:hover{border-color:var(--red);color:var(--head)}
+.copy[data-done="true"]{border-color:var(--green);color:var(--green)}
+.steps{margin:0;padding-left:20px;display:grid;gap:6px;font-size:14px;line-height:1.5;color:var(--body)}
+.steps b{color:var(--head);font-weight:500}
+kbd{font-family:var(--mono);font-size:12px;padding:1px 6px;border-radius:6px;border:1px solid rgb(255 255 255 / 16%);background:rgb(255 255 255 / 5%);color:var(--head)}
+.cta-ghost{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 22px;border-radius:999px;border:1px solid rgb(255 255 255 / 16%);color:var(--head);font-size:15px;font-weight:500;text-decoration:none;transition:border-color .12s}
+.cta-ghost:hover{border-color:var(--red);color:var(--head)}
+
+/* ── the macOS waitlist ──────────────────────────────────────────────────── */
+.mac{max-width:1000px;margin:0 auto;padding-block:72px 0;display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,440px);gap:48px;align-items:center}
+.mac-title{margin:18px 0 0;font-size:clamp(30px,3.6vw,46px);font-weight:600;letter-spacing:-0.045em;line-height:1.08;color:var(--head);text-wrap:balance}
+.mac-title em{font-style:normal;color:var(--red)}
+.mac-line{margin:16px 0 0;font-size:16px;line-height:1.6;color:var(--body);max-width:44ch}
 .note[data-kind="bad"]{background:rgb(255 92 92 / 10%);border:1px solid rgb(255 92 92 / 30%);color:#ffb0b0}
 .note[data-kind="ok"]{background:rgb(34 197 94 / 10%);border:1px solid rgb(34 197 94 / 30%);color:#9ae6b4}
 
@@ -117,10 +136,8 @@ input:focus,textarea:focus{outline:none;border-color:var(--red);box-shadow:0 0 0
 /* ── narrower than a laptop ───────────────────────────────────────────────── */
 /* ── where it runs ────────────────────────────────────────────────────────── */
 /*
- * Three facts, as a list, because that is what they are. The version before this was a flex
- * row with a shell command wedged into the end of it — which told somebody to install the
- * OpenClaw build on a page whose film says "a Claude Code plugin", and which is in any case
- * the wrong thing to ask of a reader whose next action is an email address.
+ * Three facts, as a list, because that is what they are. The install commands live in the
+ * hero card, where the reader's next action is; this row only says where it runs.
  */
 /* Its width is the film's, not its own. A 560px column under a 1000px video reads as an
    afterthought however well the rows are set — the rhythm of the page is the thing doing
@@ -138,7 +155,7 @@ input:focus,textarea:focus{outline:none;border-color:var(--red);box-shadow:0 0 0
 .dot.on{background:var(--green);animation:pulse 2.4s ease-out infinite}
 .dot.next{box-shadow:inset 0 0 0 1.5px var(--dim)}
 .when{flex:1 0 100%;margin-left:18px;font-family:var(--mono);font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:var(--dim)}
-.where-list li:first-child .when{color:var(--green)}
+.dot.on ~ .when{color:var(--green)}
 
 footer{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px;max-width:1000px;margin:0 auto;padding-block:44px 48px;border-top:1px solid rgb(255 255 255 / 6%);margin-top:56px;font-size:13px;color:var(--dim)}
 footer .mark{font-weight:600;letter-spacing:-0.03em;color:#bcbcc0}
@@ -147,21 +164,27 @@ footer .rights{font-family:var(--mono);font-size:11px;letter-spacing:0.16em}
 
 /* ── narrower than a laptop ───────────────────────────────────────────────── */
 @media (max-width:900px){
-  .hero{grid-template-columns:1fr;gap:28px;padding-block:16px 8px}
+  /* minmax(0,…), not 1fr: a bare 1fr column grows to its widest unbreakable content, and the
+     install command is exactly that — it pushed the whole page sideways on a phone. The
+     command scrolls inside its box instead. */
+  .hero{grid-template-columns:minmax(0,1fr);gap:28px;padding-block:16px 8px}
   /* The glow is drawn 40px outside the card, which on a narrow screen is 40px outside the
      viewport — and that is what was making the page scroll sideways. */
   .card-glow::before{display:none}
   .stage{padding:10px;border-radius:18px}
   .where{padding-block:44px 0}
+  .mac{grid-template-columns:minmax(0,1fr);gap:28px;padding-block:52px 0}
 }
 
 /* ── a phone ──────────────────────────────────────────────────────────────── */
 @media (max-width:640px){
   .wrap{padding-inline:16px}
   header.bar{padding-block:18px;gap:10px}
-  /* The header CTA and the form are the same action, and the form is right there. Keeping
-     both means a button that scrolls you six pixels. */
+  /* The header CTA and the install card are the same action, and the card is right there.
+     Keeping both means a button that scrolls you six pixels. */
   .bar-cta{display:none}
+  .cmd pre{font-size:11px;padding:12px 14px}
+  .mac{padding-block:40px 0}
   h1{font-size:clamp(32px,9vw,44px);line-height:1.06}
   .hero-foot{margin-top:22px;gap:14px}
   .card{padding:20px;gap:15px;border-radius:18px}
@@ -212,24 +235,77 @@ footer .rights{font-family:var(--mono);font-size:11px;letter-spacing:0.16em}
 <header class="bar">
   <span class="logo">colai</span>
   <span class="logo-sub">TOOLBAR</span>
-  <a class="bar-cta" href="#join">Join the waitlist</a>
+  <a class="bar-cta" href="#install">Install</a>
 </header>
 
-<section class="hero" id="join">
+<section class="hero" id="install">
   <div>
-    <div class="in eyebrow"><i></i>VISUAL PROMPTING FOR YOUR AGENT</div>
+    <div class="in eyebrow"><i></i>NOW AVAILABLE FOR CLAUDE CODE</div>
     <h1 class="in" style="animation-delay:.1s">Some things can't be typed. <em>Show it instead.</em></h1>
     <div class="in hero-foot" style="animation-delay:.3s">
       <a class="jump" href="#film-stage">Watch it — 1 min <span>↓</span></a>
-      <span class="count" id="wl-count-wrap" hidden><i></i><b id="wl-count">—</b> already waiting</span>
+      <a class="jump" href="#mac">On a Mac? <span>↓</span></a>
     </div>
   </div>
 
   <div class="in card-glow" style="animation-delay:.25s">
+    <div class="card">
+      <div>
+        <div class="card-kicker">AVAILABLE NOW · CLAUDE CODE</div>
+        <div class="card-title">Install in two lines</div>
+        <div class="card-sub">Windows and Linux. Free and open source.</div>
+      </div>
+      <div class="cmd">
+        <div class="cmd-bar"><span>TERMINAL</span><button class="copy" id="install-copy" type="button">Copy</button></div>
+        <pre>claude plugin marketplace add Shahar-Nadiv/colai-clawhub
+claude plugin install colai@colai</pre>
+      </div>
+      <ol class="steps">
+        <li>Run both lines in your terminal.</li>
+        <li>Open a new Claude Code session — <b>the toolbar starts itself.</b></li>
+        <li><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Space</kbd> shows it and hides it, from anywhere.</li>
+      </ol>
+      <a class="cta-ghost" href="https://github.com/Shahar-Nadiv/colai-clawhub">View on GitHub →</a>
+    </div>
+  </div>
+</section>
+
+<section class="stage-wrap" id="film-stage">
+  <div class="stage">
+    <div class="film">
+      <video id="film" poster="./colai-poster.jpg" muted loop playsinline preload="metadata"
+             aria-label="The colai toolbar, across a robotics simulation, a PCB, a game and a web app"></video>
+      <button class="play" id="play" type="button" hidden>Play</button>
+      <button class="sound" id="sound" type="button" aria-pressed="false">Sound on</button>
+    </div>
+    <div class="stage-cap">ONE TOOLBAR · ANYTHING ON YOUR SCREEN</div>
+  </div>
+</section>
+
+<section class="where">
+  <p class="where-kicker">WHERE IT RUNS</p>
+  <ul class="where-list">
+    <li><span class="dot on"></span><b>Claude Code</b><span class="when">Available now</span></li>
+    <li><span class="dot on"></span><b>OpenClaw</b><span class="when">Available now</span></li>
+    <li><span class="dot next"></span><b>Cursor</b><span class="when">Next</span></li>
+  </ul>
+</section>
+
+<section class="mac" id="mac">
+  <div>
+    <div class="eyebrow"><i></i>MACOS WAITLIST</div>
+    <h2 class="mac-title">Coming to the Mac. <em>Get in line.</em></h2>
+    <p class="mac-line">The Apple Silicon build is in preview. Leave your email and we'll write once, the day it's ready.</p>
+    <div class="hero-foot">
+      <span class="count" id="wl-count-wrap" hidden><i></i><b id="wl-count">—</b> already waiting</span>
+    </div>
+  </div>
+
+  <div class="card-glow">
     <form class="card" id="wl-form" novalidate>
       <div>
-        <div class="card-kicker">EARLY ACCESS</div>
-        <div class="card-title">Join the waitlist</div>
+        <div class="card-kicker">EARLY ACCESS · MACOS</div>
+        <div class="card-title">Join the macOS waitlist</div>
         <div class="card-sub">Tell us what you'd want it to do — the wish box shapes what ships first.</div>
       </div>
 
@@ -252,7 +328,7 @@ footer .rights{font-family:var(--mono);font-size:11px;letter-spacing:0.16em}
 
       <div class="note" id="wl-note" hidden></div>
       <button class="cta" id="wl-cta" type="submit">Join the waitlist</button>
-      <div class="fineprint">No spam. One email when your invite is ready.</div>
+      <div class="fineprint">No spam. One email when the Mac build is ready.</div>
     </form>
 
     <div class="done" id="wl-done" hidden>
@@ -263,27 +339,6 @@ footer .rights{font-family:var(--mono);font-size:11px;letter-spacing:0.16em}
       <button class="again" id="wl-again" type="button">Add another address</button>
     </div>
   </div>
-</section>
-
-<section class="stage-wrap" id="film-stage">
-  <div class="stage">
-    <div class="film">
-      <video id="film" poster="./colai-poster.jpg" muted loop playsinline preload="metadata"
-             aria-label="The colai toolbar, across a robotics simulation, a PCB, a game and a web app"></video>
-      <button class="play" id="play" type="button" hidden>Play</button>
-      <button class="sound" id="sound" type="button" aria-pressed="false">Sound on</button>
-    </div>
-    <div class="stage-cap">ONE TOOLBAR · ANYTHING ON YOUR SCREEN</div>
-  </div>
-</section>
-
-<section class="where">
-  <p class="where-kicker">WHERE IT RUNS</p>
-  <ul class="where-list">
-    <li><span class="dot on"></span><b>OpenClaw</b><span class="when">Available now</span></li>
-    <li><span class="dot next"></span><b>Claude Code</b><span class="when">Next</span></li>
-    <li><span class="dot next"></span><b>Cursor</b><span class="when">Next</span></li>
-  </ul>
 </section>
 
 <footer>
@@ -297,6 +352,40 @@ footer .rights{font-family:var(--mono);font-size:11px;letter-spacing:0.16em}
 <script src="./config.js"></script>
 <script src="./waitlist.js"></script>
 <script>
+  // Copy both install lines at once: the second is useless without the first.
+  (function () {
+    var button = document.getElementById("install-copy");
+    if (!button) return;
+    var text =
+      "claude plugin marketplace add Shahar-Nadiv/colai-clawhub\nclaude plugin install colai@colai";
+    function copied() {
+      button.textContent = "Copied";
+      button.dataset.done = "true";
+      setTimeout(function () {
+        button.textContent = "Copy";
+        button.dataset.done = "";
+      }, 1600);
+    }
+    function fallback() {
+      var area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      try { if (document.execCommand("copy")) copied(); } catch (e) {}
+      area.remove();
+    }
+    button.addEventListener("click", function () {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(copied, fallback);
+      } else {
+        fallback();
+      }
+    });
+  })();
+
   /*
    * Getting a video to start on a phone.
    *
