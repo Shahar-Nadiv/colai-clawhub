@@ -7,6 +7,11 @@ is not a record of anything.
 
 ## Unreleased
 
+## 0.4.4 — 2026-10-05
+
+- **The close key closes on one press.** It took two, the first arming it, which read as a button
+  that did not work.
+
 ## 0.4.3 — 2026-10-05
 
 - **No more dead rail after showing it again.** Showing (or focusing) the toolbar made the window
