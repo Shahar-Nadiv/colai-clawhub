@@ -7,6 +7,12 @@ is not a record of anything.
 
 ## Unreleased
 
+## 0.4.2 — 2026-10-05
+
+- **The rail can be pressed after Ctrl+Alt+Space hides and shows it again.** Hiding forgot where
+  the rail was drawn and nothing told the toolbar again, so on Windows every click fell through a
+  rail that was plainly on screen.
+
 ## 0.4.1 — 2026-10-05
 
 Fixes from the first clean-machine install.
