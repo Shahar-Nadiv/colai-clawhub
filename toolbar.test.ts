@@ -4933,6 +4933,18 @@ describe("the way back when the toolbar is put away", () => {
     expect(rail).toContain("dividers[5].after(clock, send, chat, stop, home, quit)");
   });
 
+  test("putting the toolbar away keeps its shape, so it can be pressed when it comes back", () => {
+    /*
+     * Hiding used to clear the shape "so the next summon re-applies" — and nothing did: the
+     * page only sends a shape that changed, and hide-then-show changes nothing. On Windows
+     * the click-through watcher hit-tests that state, found no rectangles, and let every click
+     * fall through a rail that was plainly on screen.
+     */
+    const release = overlay.slice(overlay.indexOf("pub(crate) fn colai_release"), overlay.indexOf("/// One screen, in the overlay"));
+    expect(release).toContain("window");
+    expect(release, "the shape is not forgotten on hide").not.toMatch(/ShapeState[\s\S]*=\s*None/);
+  });
+
   test("closing is a key at the end of the rail, and it takes two presses", () => {
     /*
      * Not the × above coming back: that one hid the toolbar, which the keyboard already does.

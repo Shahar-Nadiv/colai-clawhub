@@ -1283,13 +1283,17 @@ pub(crate) fn colai_release(app: AppHandle) -> Result<(), String> {
             .hide()
             .map_err(|error| format!("Could not hide the overlay: {error}"))?;
     }
-    if let Some(state) = app.try_state::<ShapeState>() {
-        if let Ok(mut held) = state.0.lock() {
-            // Forgotten, so the next summon re-applies rather than believing a shape
-            // that belonged to a window which is no longer on screen.
-            *held = None;
-        }
-    }
+    /*
+     * The shape is kept, not forgotten.
+     *
+     * It used to be cleared here "so the next summon re-applies" — but nothing re-applied it.
+     * The page only sends its shape when the shape changes, and putting the toolbar away and
+     * bringing it back changes nothing on the page. On Windows and macOS the click-through
+     * watcher hit-tests against exactly this state, so after a hide and a show it found no
+     * rectangles and let every click fall through: a rail on screen that nothing could press.
+     * The rectangles are the page's own coordinates and still true when it comes back; while
+     * the window is hidden they catch nothing, because there is nothing to catch with.
+     */
     Ok(())
 }
 
