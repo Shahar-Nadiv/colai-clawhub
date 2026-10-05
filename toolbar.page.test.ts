@@ -1616,7 +1616,8 @@ describe("the rail groups", () => {
     expect(groups[5][0], "work leads with the clock, to the left of Work").toMatch(/^Scheduled tasks/);
     expect(groups[5].some((t) => t.startsWith("Work")), "the Work key is in the group").toBe(true);
     expect(groups[5], "work holds the conversation key").toContain("Who receives this?");
-    expect(groups[5].length, "clock, send, conversation, stop and the critter").toBe(5);
+    expect(groups[5].length, "clock, send, conversation, stop, the critter and close").toBe(6);
+    expect(groups[5][5], "close is the last key on the rail").toBe("Close Colai");
   });
 });
 

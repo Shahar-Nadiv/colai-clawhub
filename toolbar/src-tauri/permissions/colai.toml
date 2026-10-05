@@ -58,6 +58,9 @@ commands.allow = [
   "colai_pick_folder",
   "colai_search_files",
   "colai_release",
+  # The rail's close key. The toolbar outlives the session that started it, so it needs a way to
+  # be done with it that is not a command somebody has to know.
+  "colai_quit",
   # The Context map's local store: list saved contexts, save this conversation as one,
   # resolve a set into a drop manifest, and clear the staged set.
   "colai_contexts_list",

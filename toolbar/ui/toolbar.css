@@ -494,6 +494,18 @@ body {
   color: var(--text-strong);
 }
 
+/* Close: quiet at rest, red on hover, and filled red once armed — the second press closes. */
+.quit-key {
+  color: var(--muted);
+}
+.quit-key:hover:not([disabled]) {
+  color: rgb(255 132 132);
+}
+.quit-key[data-armed="true"] {
+  color: var(--card);
+  background: var(--danger);
+}
+
 .caret {
   font-size: 9px;
   opacity: 0.6;

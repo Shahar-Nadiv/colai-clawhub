@@ -229,7 +229,7 @@ function drawPopup() {
    */
   const whom = document.createElement("span");
   whom.className = "popup-to-name";
-  whom.textContent = state.receiving.name || "Choose who receives";
+  whom.textContent = state.receiving.name || "Session";
   to.append(whom);
   to.title = "Who receives this?";
   to.addEventListener("click", () => {
@@ -953,7 +953,7 @@ function drawComposer(into) {
   lit.dataset.up = String(Boolean(state.receiving.name));
   const named = document.createElement("span");
   named.className = "popup-to-name";
-  named.textContent = state.receiving.name || "Choose who receives";
+  named.textContent = state.receiving.name || "Session";
   const stack = document.createElement("span");
   stack.className = "popup-to-stack";
   stack.append(named);

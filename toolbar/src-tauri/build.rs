@@ -20,6 +20,7 @@ fn main() {
         "colai_in_front",
         "colai_pick_files",
         "colai_pick_folder",
+        "colai_quit",
         "colai_release",
         "colai_render_shot",
         "colai_revert_edits",

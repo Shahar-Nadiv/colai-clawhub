@@ -47,6 +47,7 @@ const GLYPHS = {
   // Scheduled tasks: a clock. The hands point to the top-right, the way a clock face is drawn
   // when it is standing in for "later" rather than telling a particular time.
   clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3.4 2"/>',
+  close: '<path d="M7 7l10 10M17 7L7 17"/>',
   folder:
     '<path d="M3 7.5a2 2 0 0 1 2-2h3.6l2 2.4H19a2 2 0 0 1 2 2v7.6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   stop: '<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/>',
@@ -272,9 +273,31 @@ function buildRail() {
   // and `hidden` set once here would have outlived it — nothing clears it any more.
   stop.dataset.folded = "true";
 
+  /*
+   * Close: the end of the rail, and the end of the toolbar.
+   *
+   * The toolbar outlives the session that started it — closing a terminal leaves it on screen,
+   * which is the point — so being done with it needs a key, not a command somebody has to know.
+   * Two presses, because it is the one key that takes the whole rail away: the first arms it and
+   * says so, the second within a few seconds closes. A stray click costs nothing.
+   */
+  const quit = key("quit", "Close Colai", "close", () => {
+    if (quit.dataset.armed === "true") {
+      void invoke("colai_quit").catch(() => {});
+      return;
+    }
+    quit.dataset.armed = "true";
+    quit.title = "Click again to close Colai";
+    setTimeout(() => {
+      quit.dataset.armed = "";
+      quit.title = "Close Colai";
+    }, 3000);
+  });
+  quit.classList.add("quit-key");
+
   // Work: schedule it for later, say what you want done now, who is on it, stop it, and the light
   // that shows how it goes. The clock sits to the left of Work — later and now, side by side.
-  dividers[5].after(clock, send, chat, stop, home);
+  dividers[5].after(clock, send, chat, stop, home, quit);
 
   row(el.flyShape, "box", "Box", "box", "B");
   row(el.flyShape, "circle", "Circle", "circle", "O");
@@ -599,7 +622,11 @@ async function watchEverything() {
    * asked again for the rest of the session. This ticker already runs forever, which is
    * the property the retry actually needed.
    */
-  if (state.whoTrouble) {
+  //
+  // Or while a launch named a conversation the list does not have yet. A session that has
+  // said nothing has no transcript on disk, so the one that started the toolbar is usually
+  // missing from the first list — and nothing else reloads it until somebody opens the menu.
+  if (state.whoTrouble || mustFollow) {
     void loadWho();
   }
   // And the conversations, which move without this toolbar: an agent answers, somebody

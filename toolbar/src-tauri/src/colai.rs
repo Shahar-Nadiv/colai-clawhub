@@ -1229,6 +1229,16 @@ pub(crate) fn asked_for(app: &AppHandle, args: &[String]) -> Result<(), String> 
     }
 }
 
+/// The rail's close key: go, the same way `colai-toolbar quit` does.
+///
+/// The toolbar outlives the session that started it, on purpose — so closing the terminal
+/// leaves it on screen, and until now the only way to stop it was a command somebody had to
+/// know. Hiding is the shortcut; this is for being done with it.
+#[tauri::command]
+pub(crate) fn colai_quit(app: AppHandle) {
+    app.exit(0);
+}
+
 /// Somebody asked for the toolbar.
 #[tauri::command]
 pub(crate) fn colai_summon(app: AppHandle) -> Result<(), String> {

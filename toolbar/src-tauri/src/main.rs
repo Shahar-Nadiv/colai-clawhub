@@ -430,6 +430,7 @@ fn main() {
             colai_receivers::colai_at_work,
             colai_receivers::colai_sessions,
             colai::colai_came_from,
+            colai::colai_quit,
             colai_send::colai_said,
             colai_send::colai_send,
             colai_send::colai_stop,

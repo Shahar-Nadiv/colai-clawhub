@@ -568,7 +568,7 @@ function render() {
   buttons.chat.querySelector(".chat-who").textContent = who
     ? who.name
     : talking()
-      ? "Choose who receives"
+      ? "Session"
       : "Conversation";
   /*
    * Under the name: what is happening, or what it has cost.
