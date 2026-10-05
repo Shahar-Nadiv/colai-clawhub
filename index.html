@@ -136,7 +136,7 @@ kbd{font-family:var(--mono);font-size:12px;padding:1px 6px;border-radius:6px;bor
 /* ── narrower than a laptop ───────────────────────────────────────────────── */
 /* ── where it runs ────────────────────────────────────────────────────────── */
 /*
- * Three facts, as a list, because that is what they are. The install commands live in the
+ * Two facts, as a list, because that is what they are. The install commands live in the
  * hero card, where the reader's next action is; this row only says where it runs.
  */
 /* Its width is the film's, not its own. A 560px column under a 1000px video reads as an
@@ -144,7 +144,7 @@ kbd{font-family:var(--mono);font-size:12px;padding:1px 6px;border-radius:6px;bor
    the work, and three rows stacked is a phone's answer to a question desktop is not asking. */
 .where{max-width:1000px;margin:0 auto;padding-block:64px 0}
 .where-kicker{margin:0 0 20px;text-align:center;font-family:var(--mono);font-size:10px;letter-spacing:0.28em;color:var(--dim)}
-.where-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgb(255 255 255 / 7%);border:1px solid rgb(255 255 255 / 7%);border-radius:16px;overflow:hidden}
+.where-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:rgb(255 255 255 / 7%);border:1px solid rgb(255 255 255 / 7%);border-radius:16px;overflow:hidden}
 /* The name on one line and its state under it, rather than the two fighting for a third of
    a row. The status hangs under the name and not the dot, so the three left edges agree. */
 .where-list li{display:flex;flex-wrap:wrap;align-items:center;gap:5px 11px;padding:22px 24px;background:#0b0c10;color:var(--head)}
@@ -286,7 +286,6 @@ claude plugin install colai@colai</pre>
   <p class="where-kicker">WHERE IT RUNS</p>
   <ul class="where-list">
     <li><span class="dot on"></span><b>Claude Code</b><span class="when">Available now</span></li>
-    <li><span class="dot on"></span><b>OpenClaw</b><span class="when">Available now</span></li>
     <li><span class="dot next"></span><b>Cursor</b><span class="when">Next</span></li>
   </ul>
 </section>
