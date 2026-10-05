@@ -576,7 +576,17 @@ pub(crate) fn watch_clickthrough(app: &AppHandle) {
             .and_then(|window| window.scale_factor().ok())
             .unwrap_or(1.0);
 
-        let mut ignoring: Option<bool> = None;
+        /*
+         * The window's own style is the record, read every tick — not a copy of what this
+         * loop last wrote.
+         *
+         * It kept a copy, and the copy went stale: showing the window makes tao recompute its
+         * extended style from its own flags, and its flags still say "ignore the cursor" from
+         * the moment the overlay was created — so every show put `WS_EX_TRANSPARENT` back.
+         * This loop, believing it had already cleared the bit, wrote nothing, and every click
+         * on the rail fell through until the pointer left it and came back. Reading the style
+         * is a cached attribute read, no messages, so it is as safe in this loop as the write.
+         */
         loop {
             std::thread::sleep(std::time::Duration::from_millis(16));
             let mut point = POINT { x: 0, y: 0 };
@@ -587,12 +597,13 @@ pub(crate) fn watch_clickthrough(app: &AppHandle) {
             let over_rail = over_rail_win(&app, hwnd, scale, point.x, point.y);
             // Over the rail: take the mouse. Anywhere else: let it fall to the desktop.
             let ignore = !over_rail;
-            if ignoring != Some(ignore) {
-                // SAFETY: reading and writing this window's own extended style. The
-                // `WS_EX_TRANSPARENT` bit alone is toggled; every other bit (notably
-                // `WS_EX_LAYERED`, which the transparency depends on) is preserved.
-                unsafe {
-                    let style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+            // SAFETY: reading and writing this window's own extended style. The
+            // `WS_EX_TRANSPARENT` bit alone is toggled; every other bit (notably
+            // `WS_EX_LAYERED`, which the transparency depends on) is preserved.
+            unsafe {
+                let style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+                let ignoring = style & (WS_EX_TRANSPARENT as isize) != 0;
+                if ignoring != ignore {
                     let next = if ignore {
                         style | (WS_EX_TRANSPARENT as isize)
                     } else {
@@ -600,7 +611,6 @@ pub(crate) fn watch_clickthrough(app: &AppHandle) {
                     };
                     SetWindowLongPtrW(hwnd, GWL_EXSTYLE, next);
                 }
-                ignoring = Some(ignore);
             }
         }
     });

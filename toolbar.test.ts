@@ -4945,6 +4945,34 @@ describe("the way back when the toolbar is put away", () => {
     expect(release, "the shape is not forgotten on hide").not.toMatch(/ShapeState[\s\S]*=\s*None/);
   });
 
+  test("every claude the toolbar starts is windowless on Windows", () => {
+    /*
+     * `claude` is a console program, and a GUI process that starts one without
+     * CREATE_NO_WINDOW gets a terminal flashing up on the desktop. Two at launch did — the
+     * version probe and the slash-command probe in commands.rs — so every file that starts a
+     * `claude` must hide it as many times as it starts one.
+     */
+    for (const file of ["commands.rs", "session.rs", "relay.rs", "colai_schedule.rs", "wrap.rs"]) {
+      const source = readFileSync(new URL(file, dir), "utf8").split("#[cfg(test)]")[0];
+      const started = (source.match(/Command::new\((?:&?self\.claude|&?claude|"claude")\)/g) || []).length;
+      const hidden = (source.match(/no_console_window\(&mut \w+\)/g) || []).length;
+      expect(hidden, `${file}: each claude it starts is windowless`).toBeGreaterThanOrEqual(started);
+    }
+  });
+
+  test("on Windows the click-through watcher reads the window's real style, not a copy", () => {
+    /*
+     * Showing the window (and focusing it) makes tao recompute the extended style from its own
+     * flags, which still say "ignore the cursor" — so WS_EX_TRANSPARENT came back behind the
+     * watcher's cached answer, and clicks on the rail fell through until the pointer left and
+     * returned. The watcher must compare against the style itself on every tick.
+     */
+    const at = overlay.indexOf("#[cfg(target_os = \"windows\")]\npub(crate) fn watch_clickthrough");
+    const watcher = overlay.slice(at, overlay.indexOf("fn over_rail_win", at));
+    expect(watcher, "no cached copy of the bit").not.toContain("let mut ignoring");
+    expect(watcher).toMatch(/let style = GetWindowLongPtrW\(hwnd, GWL_EXSTYLE\);\s*let ignoring = style & \(WS_EX_TRANSPARENT as isize\) != 0;/);
+  });
+
   test("closing is a key at the end of the rail, and it takes two presses", () => {
     /*
      * Not the × above coming back: that one hid the toolbar, which the keyboard already does.

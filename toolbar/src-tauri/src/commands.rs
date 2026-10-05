@@ -86,7 +86,8 @@ pub(crate) fn learn_what_slash_offers(app: &AppHandle, claude: PathBuf) {
 fn ask_claude(claude: &Path) -> Option<WhatSlashOffers> {
     use std::io::{BufRead, BufReader, Write};
 
-    let mut child = Command::new(claude)
+    let mut asking = Command::new(claude);
+    asking
         .args([
             "--print",
             "--input-format",
@@ -97,9 +98,11 @@ fn ask_claude(claude: &Path) -> Option<WhatSlashOffers> {
         ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
+        .stderr(Stdio::null());
+    // This runs when the toolbar starts, and without it Windows gave the console program its
+    // own window: a terminal flashing up and away on every launch.
+    crate::session::no_console_window(&mut asking);
+    let mut child = asking.spawn().ok()?;
 
     let mut saying = child.stdin.take()?;
     let asked = json!({
@@ -161,11 +164,11 @@ fn named(said: Option<&Value>) -> Vec<String> {
 /// command added — and a cache that outlived the thing it described would have `/` offering
 /// commands that no longer exist, which is worse than offering too few.
 fn kept_at(claude: &Path) -> Option<PathBuf> {
-    let version = Command::new(claude)
-        .arg("--version")
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
+    let mut asking = Command::new(claude);
+    asking.arg("--version").stderr(Stdio::null());
+    // Windowless, for the same reason as `ask_claude`: this runs at every launch.
+    crate::session::no_console_window(&mut asking);
+    let version = asking.output().ok()?;
     let version: String = String::from_utf8_lossy(&version.stdout)
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '.')
