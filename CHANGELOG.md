@@ -7,6 +7,16 @@ is not a record of anything.
 
 ## Unreleased
 
+## 0.4.3 — 2026-10-05
+
+- **No more dead rail after showing it again.** Showing (or focusing) the toolbar made the window
+  library put "let clicks through" back on, behind the click-through watcher's cached answer, so
+  the rail ignored clicks until the pointer left it and came back. The watcher now reads the
+  window's real style every tick and corrects it within one frame.
+- **No terminal flashing at startup.** Two `claude` probes the toolbar runs when it starts (its
+  version, and which slash commands exist) opened a console window on Windows; they are now
+  windowless like every other `claude` it starts.
+
 ## 0.4.2 — 2026-10-05
 
 - **The rail can be pressed after Ctrl+Alt+Space hides and shows it again.** Hiding forgot where
