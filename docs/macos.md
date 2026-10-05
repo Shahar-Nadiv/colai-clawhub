@@ -4,7 +4,9 @@ colai started on Linux, then Windows. This is the macOS port: what it does, what
 has watched it do yet, and what is still to come before it can be handed to strangers.
 
 The code is written and type-checked for `aarch64-apple-darwin` on every change (see
-[Checking without a Mac](#checking-without-a-mac)), but type-checked is not tested. Until
+[Checking without a Mac](#checking-without-a-mac)), built and tested by CI on a real Mac, and
+shipped prebuilt under `platforms/darwin-arm64/` (see [Shipping](#shipping)) — but CI never
+sees the screen. Until
 the checklist below has been walked on a real Mac, treat every macOS behaviour here as a
 claim.
 

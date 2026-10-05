@@ -22,8 +22,9 @@ It belongs to no application. There is no plugin to install in your editor, no b
 extension, no SDK. If it is on the screen, you can point at it — a canvas game, a PCB in a
 3D viewer, a native desktop app, a PDF, a video call.
 
-> **Windows (x86-64) and Linux/X11 today. macOS (Apple Silicon) is in preview:** it builds
-> and passes CI on a real Mac, but ships no prebuilt binary yet — see [docs/macos.md](docs/macos.md).
+> **Windows (x86-64) and Linux/X11 today. macOS (Apple Silicon) is in preview:** it is built,
+> signed and tested in CI on a real Mac and installs like the others, but nobody has walked
+> its checklist by hand yet — see [docs/macos.md](docs/macos.md).
 > See [Requirements](#requirements) before installing. On Linux it refuses to start on Wayland
 > rather than working badly, and it tells you how to switch.
 
@@ -34,7 +35,7 @@ claude plugin marketplace add Shahar-Nadiv/colai-clawhub
 claude plugin install colai@colai
 ```
 
-The same two lines work on Windows and on Linux. On Windows they run inside Git for
+The same two lines work on Windows, Linux and macOS. On Windows they run inside Git for
 Windows, which Claude Code already requires, so nothing extra is needed to install.
 
 That is the whole setup. **The toolbar then starts itself** the next time you open a
@@ -74,16 +75,16 @@ the rail and streams the replies back into the Work panel.
 Claude Code. The rail shows what the conversation has cost so far.
 
 The toolbar ships already built, so nothing compiles on your machine and no Rust toolchain
-is needed. Today there are two builds, **Windows on x86-64** and **Linux on x86-64**; macOS
-builds from source for now ([docs/macos.md](docs/macos.md)), and any other machine is told so
-by name rather than left with a broken install. It travels compressed, unpacks itself into a per-user cache the first time you ask
+is needed. Today there are three builds, **Windows on x86-64**, **Linux on x86-64** and
+**macOS on Apple Silicon** (preview, [docs/macos.md](docs/macos.md)), and any other machine
+is told so by name rather than left with a broken install. It travels compressed, unpacks itself into a per-user cache the first time you ask
 for it, and is checked against the digest shipped beside it before it is ever run.
 
 ## Requirements
 
 |                    |                                                                                              |
 | ------------------ | -------------------------------------------------------------------------------------------- |
-| **OS**             | Windows 10 or 11, x86-64 — or Linux, x86-64 (glibc 2.35 or newer: Ubuntu 22.04, Debian 12, Fedora 38, and anything later). macOS 11+ on Apple Silicon in preview, built from source. |
+| **OS**             | Windows 10 or 11, x86-64 — or Linux, x86-64 (glibc 2.35 or newer: Ubuntu 22.04, Debian 12, Fedora 38, and anything later). macOS 11+ on Apple Silicon in preview. |
 | **Display server** | Linux only: **X11.** Not Wayland — see below. (Windows has no equivalent.)                   |
 | **Libraries**      | Linux: WebKitGTK 4.1, libsoup 3, GTK 3. Windows: the Microsoft Edge WebView2 runtime — preinstalled on Windows 11; on older Windows 10 install it from Microsoft if the overlay doesn't render. |
 | **Tools**          | Linux: `xprop` and `xwininfo`, from `x11-utils`                                              |

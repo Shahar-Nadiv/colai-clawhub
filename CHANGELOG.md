@@ -7,6 +7,13 @@ is not a record of anything.
 
 ## Unreleased
 
+- **macOS ships prebuilt.** The Apple Silicon toolbar is now built and ad-hoc signed on a
+  GitHub macOS runner and staged under `platforms/darwin-arm64/`, so a Mac installs it the
+  same way as Windows and Linux. Still a preview: not yet walked through by hand on a Mac.
+- **The startup message says why, when it can't start.** The `SessionStart` hook asks the
+  launcher (`colai-toolbar check`) first, and names the missing build, Wayland or missing
+  library instead of announcing a toolbar that never appears.
+
 ## 0.4.0 — 2026-10-04
 
 Windows, a preview of macOS, and a toolbar that starts itself.
