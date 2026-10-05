@@ -1,6 +1,6 @@
 {
   "image": "x86_64-pc-windows-msvc",
   "glibc": null,
-  "at": "2026-10-04",
-  "sha256": "4529d6a51b811121fd2007f4fdc8f0b9e3029a36d40502f1863d8a232f799bad"
+  "at": "2026-10-05",
+  "sha256": "86dea99e404b03e3840208304d6d53805bf9a4adb2ff5ce287c66f85149120e7"
 }

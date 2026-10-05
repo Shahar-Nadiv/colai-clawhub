@@ -1,7 +1,7 @@
 {
   "name": "colai",
   "description": "Point at anything on your screen and hand it to Claude Code. A toolbar that floats over every application: box it, measure it, sample a colour, record a few seconds — then say what you want and send it with a picture of exactly what you meant. Runs on Windows and Linux; macOS in preview.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "author": {
     "name": "Shahar Nadiv",
     "url": "https://github.com/Shahar-Nadiv"

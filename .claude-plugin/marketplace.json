@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "The colai toolbar: point at anything on your screen and hand it to Claude Code.",
-    "version": "0.4.0"
+    "version": "0.4.1"
   },
   "plugins": [
     {
       "name": "colai",
       "source": "./",
       "description": "A toolbar that floats over every application. Box something, measure it, sample a colour off it, record a few seconds of it — then say what you want and send it to Claude Code with a picture of exactly what you meant. Runs on Windows and Linux; macOS in preview.",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "author": { "name": "Shahar Nadiv", "url": "https://github.com/Shahar-Nadiv" },
       "homepage": "https://github.com/Shahar-Nadiv/colai-clawhub",
       "repository": "https://github.com/Shahar-Nadiv/colai-clawhub",

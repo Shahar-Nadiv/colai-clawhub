@@ -7,6 +7,23 @@ is not a record of anything.
 
 ## Unreleased
 
+## 0.4.1 — 2026-10-05
+
+Fixes from the first clean-machine install.
+
+- **The toolbar opens on the session that started it.** The `SessionStart` hook now reads the
+  session id Claude Code hands it on stdin and passes it as `--in`; before, the rail opened on
+  an empty receiver. A brand-new session has no transcript until its first message, so the rail
+  keeps looking until that session appears and then points at it.
+- **A close key.** The toolbar outlives the session that started it, on purpose. An × at the end
+  of the rail now closes it — two presses, the first arms it — instead of only
+  `colai-toolbar quit`.
+- **"Session"** labels an unchosen receiver, instead of "Choose who receives" or "Conversation".
+- **Windows: the session list is no longer empty when started outside Git Bash.** The toolbar
+  looked for conversations under `HOME`, which Windows does not set; it now falls back to
+  `USERPROFILE`.
+- **A startup message you notice.** It is now a headline with the jellyfish in front and what to
+  do on the line beneath, rather than one sentence easy to read past.
 - **macOS ships prebuilt.** The Apple Silicon toolbar is now built and ad-hoc signed on a
   GitHub macOS runner and staged under `platforms/darwin-arm64/`, so a Mac installs it the
   same way as Windows and Linux. Still a preview: not yet walked through by hand on a Mac.
