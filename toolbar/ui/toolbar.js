@@ -565,11 +565,9 @@ function render() {
   // conversation has no face, so the first letter of its name is the whole of it.
   mark.textContent = who ? who.name.slice(0, 1).toUpperCase() : "";
   mark.hidden = !who;
-  buttons.chat.querySelector(".chat-who").textContent = who
-    ? who.name
-    : talking()
-      ? "Session"
-      : "Conversation";
+  // "Session", whether or not any exist yet: the word Claude Code itself uses for what this
+  // key picks, and short enough to read at a glance on the rail.
+  buttons.chat.querySelector(".chat-who").textContent = who ? who.name : "Session";
   /*
    * Under the name: what is happening, or what it has cost.
    *

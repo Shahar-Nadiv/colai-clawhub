@@ -247,8 +247,25 @@ fn detach(command: &mut std::process::Command) {
     command.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
 }
 
+/// Make sure `HOME` names the home directory, on Windows too.
+///
+/// The toolbar finds Claude Code's conversations, its own config and its cache under `HOME`.
+/// Windows does not set it — `USERPROFILE` is its name for the same place — and the toolbar
+/// only had it when Git Bash launched it, because Git Bash exports one. Started any other way
+/// (a shortcut, PowerShell, a later launch) the conversation list came back empty, and the
+/// rail had nobody to send to. Set once, first, before any thread exists to read it.
+fn home_is_known() {
+    #[cfg(windows)]
+    if std::env::var_os("HOME").map_or(true, |home| home.is_empty()) {
+        if let Some(profile) = std::env::var_os("USERPROFILE") {
+            std::env::set_var("HOME", profile);
+        }
+    }
+}
+
 fn main() {
     without_somebody_elses_libraries();
+    home_is_known();
 
     /*
      * `colai claude` is a terminal, not a window.
