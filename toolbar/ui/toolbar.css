@@ -494,14 +494,11 @@ body {
   color: var(--text-strong);
 }
 
-/* Close: quiet at rest, red on hover, and filled red once armed — the second press closes. */
+/* Close: quiet at rest, filled red on hover — one press closes. */
 .quit-key {
   color: var(--muted);
 }
 .quit-key:hover:not([disabled]) {
-  color: rgb(255 132 132);
-}
-.quit-key[data-armed="true"] {
   color: var(--card);
   background: var(--danger);
 }

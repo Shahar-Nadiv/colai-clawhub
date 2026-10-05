@@ -278,21 +278,10 @@ function buildRail() {
    *
    * The toolbar outlives the session that started it — closing a terminal leaves it on screen,
    * which is the point — so being done with it needs a key, not a command somebody has to know.
-   * Two presses, because it is the one key that takes the whole rail away: the first arms it and
-   * says so, the second within a few seconds closes. A stray click costs nothing.
+   * One press. It was two, the first arming it, and a close button that needs pressing twice
+   * reads as one that did not work.
    */
-  const quit = key("quit", "Close Colai", "close", () => {
-    if (quit.dataset.armed === "true") {
-      void invoke("colai_quit").catch(() => {});
-      return;
-    }
-    quit.dataset.armed = "true";
-    quit.title = "Click again to close Colai";
-    setTimeout(() => {
-      quit.dataset.armed = "";
-      quit.title = "Close Colai";
-    }, 3000);
-  });
+  const quit = key("quit", "Close Colai", "close", () => void invoke("colai_quit").catch(() => {}));
   quit.classList.add("quit-key");
 
   // Work: schedule it for later, say what you want done now, who is on it, stop it, and the light

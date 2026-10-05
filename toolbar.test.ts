@@ -4973,18 +4973,17 @@ describe("the way back when the toolbar is put away", () => {
     expect(watcher).toMatch(/let style = GetWindowLongPtrW\(hwnd, GWL_EXSTYLE\);\s*let ignoring = style & \(WS_EX_TRANSPARENT as isize\) != 0;/);
   });
 
-  test("closing is a key at the end of the rail, and it takes two presses", () => {
+  test("closing is a key at the end of the rail, and one press closes", () => {
     /*
      * Not the × above coming back: that one hid the toolbar, which the keyboard already does.
      * This one ends it. The toolbar outlives the session that started it, so without a key the
-     * only way to be done with it was `colai-toolbar quit`, which nobody is told about. Two
-     * presses answer the reason the × went — a single stray click on it costs nothing.
+     * only way to be done with it was `colai-toolbar quit`, which nobody is told about. It took
+     * two presses for a while, and a close button that needs two reads as a broken one.
      */
     const rail = readFileSync(new URL("./toolbar/ui/toolbar-rail.js", import.meta.url), "utf8");
     const closing = rail.slice(rail.indexOf('const quit = key("quit"'), rail.indexOf('quit.classList.add("quit-key")'));
-    expect(closing).toContain('quit.dataset.armed === "true"');
     expect(closing).toContain('invoke("colai_quit")');
-    expect(closing.indexOf('invoke("colai_quit")')).toBeLessThan(closing.indexOf('quit.dataset.armed = "true"'));
+    expect(closing, "no arming step").not.toContain("armed");
     expect(overlay).toMatch(/pub\(crate\) fn colai_quit\(app: AppHandle\) \{\s*app\.exit\(0\);/);
     expect(main).toContain("colai::colai_quit,");
   });
