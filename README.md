@@ -35,8 +35,13 @@ claude plugin marketplace add Shahar-Nadiv/colai-clawhub
 claude plugin install colai@colai
 ```
 
-The same two lines work on Windows, Linux and macOS. On Windows they run inside Git for
-Windows, which Claude Code already requires, so nothing extra is needed to install.
+The same two lines work on Windows, Linux and macOS, and colai works the same from a terminal
+or from the Claude desktop app's Code tab. On Windows they run inside Git for Windows, which
+Claude Code already requires, so nothing extra is needed to install.
+
+**Using the desktop app?** colai does its work through the `claude` command, and the desktop
+app keeps its own sign-in that `claude` cannot use. Sign the command in once with
+`claude auth login`. Until then a mark still reaches your chat, but only with your next message.
 
 That is the whole setup. **The toolbar then starts itself** the next time you open a
 Claude Code session — there is no command to run. It is a desktop overlay, not a subprocess
@@ -88,7 +93,7 @@ for it, and is checked against the digest shipped beside it before it is ever ru
 | **Display server** | Linux only: **X11.** Not Wayland — see below. (Windows has no equivalent.)                   |
 | **Libraries**      | Linux: WebKitGTK 4.1, libsoup 3, GTK 3. Windows: the Microsoft Edge WebView2 runtime — preinstalled on Windows 11; on older Windows 10 install it from Microsoft if the overlay doesn't render. |
 | **Tools**          | Linux: `xprop` and `xwininfo`, from `x11-utils`                                              |
-| **Claude Code**    | Signed in. Anything colai sends is billed to that account.                                   |
+| **Claude Code**    | The `claude` command signed in (`claude auth login`), even if you work in the desktop app. Anything colai sends is billed to that account. |
 
 ```bash
 # Debian / Ubuntu

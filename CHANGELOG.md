@@ -7,6 +7,23 @@ is not a record of anything.
 
 ## Unreleased
 
+## 0.4.5 — 2026-10-15
+
+Works from the Claude desktop app.
+
+- **A mark sent to a desktop chat arrives in that chat.** colai only counted a terminal
+  (`entrypoint: cli`) as somebody sitting in a conversation, so a desktop chat looked empty and
+  colai resumed it in a process of its own: the reply went to the Work panel, nothing appeared in
+  the chat, and two processes wrote one transcript. Every session but colai's own children
+  (`sdk-*`) is now handed over, as a terminal one always was.
+- **The toolbar no longer carries the identity of the session that started it.** Launched from a
+  desktop chat's hook, it inherited that chat's variables, including the one telling a session
+  its host refreshes its sign-in, and passed them to every `claude` it ran, which then failed with
+  "OAuth session expired". Only the session-identity variables are dropped; your own settings stay.
+- **The `claude` command must be signed in** (`claude auth login`) even if you only use the
+  desktop app, which keeps its own sign-in. The README says so now.
+- **One-press close** reaches Linux, whose 0.4.4 build had failed.
+
 ## 0.4.4 — 2026-10-05
 
 - **The close key closes on one press.** It took two, the first arming it, which read as a button
