@@ -2238,7 +2238,11 @@ pub(crate) fn came_from(args: &[String]) -> Option<String> {
         });
     let said = match flagged {
         Some(said) => said.to_string(),
-        None => std::env::var("CLAUDE_CODE_SESSION_ID").ok()?,
+        // `COLAI_CAME_FROM` is the same id, moved there at startup by
+        // `not_part_of_that_session` so the toolbar's own children do not inherit it.
+        None => std::env::var("CLAUDE_CODE_SESSION_ID")
+            .or_else(|_| std::env::var("COLAI_CAME_FROM"))
+            .ok()?,
     };
     let said = said.trim();
     // A shell that substituted nothing leaves the literal text behind, and `show.md` is
@@ -3233,6 +3237,18 @@ mod which_conversation {
     }
 
     #[test]
+    fn the_id_moved_aside_at_startup_still_counts() {
+        // `not_part_of_that_session` moves the id to COLAI_CAME_FROM so children do not
+        // inherit it; the toolbar itself must still know where it came from.
+        let _held = crate::hold_the_environment();
+        std::env::remove_var("CLAUDE_CODE_SESSION_ID");
+        std::env::set_var("COLAI_CAME_FROM", "moved-aside-1");
+        let found = came_from(&["show".to_string()]);
+        std::env::remove_var("COLAI_CAME_FROM");
+        assert_eq!(found, Some("moved-aside-1".into()));
+    }
+
+    #[test]
     fn a_flag_beats_the_environment() {
         // `show.md` passes it explicitly, and a file somebody can read should win over a
         // variable they cannot see.
@@ -3353,7 +3369,8 @@ pub(crate) struct LiveSession {
     #[allow(dead_code)]
     pub pid: i32,
     pub session_id: String,
-    /// What started it. `cli` is a person at a terminal; `sdk-cli` is one the toolbar ran.
+    /// What started it. `cli` is a person at a terminal, `claude-desktop` a person in the
+    /// desktop app's Code tab; `sdk-cli` is one the toolbar ran.
     pub entrypoint: String,
     /// What it calls itself, for saying which chat is in the way.
     pub name: Option<String>,
@@ -3363,11 +3380,15 @@ impl LiveSession {
     /// Whether this is somebody's own session rather than one the toolbar started.
     ///
     /// The distinction is `entrypoint`, not `kind` — both say `interactive`, which is what
-    /// made this confusing to read the first time. A toolbar child is `sdk-cli`; a person's
-    /// terminal is `cli`. Resuming a `cli` session is the collision. Resuming one of our own
-    /// is not, because it is ours and we are the only one sending to it.
+    /// made this confusing to read the first time. A toolbar child is `sdk-cli`. Everything
+    /// else is a person's: a terminal says `cli`, the desktop app's Code tab `claude-desktop`,
+    /// and an editor its own name. It was `== "cli"`, which left every desktop chat looking
+    /// unoccupied — so a mark sent to one was not handed over but taken over: a `--resume` of
+    /// our own on a transcript the app was still writing, the reply going to the Work panel and
+    /// nothing at all appearing in the chat the person was looking at. Resuming one of our own
+    /// is not a collision, because it is ours and we are the only one sending to it.
     pub fn is_somebodys_own(&self) -> bool {
-        self.entrypoint == "cli"
+        !self.entrypoint.starts_with("sdk-")
     }
 }
 
@@ -3530,6 +3551,13 @@ mod who_else_is_in_here {
         let _home = registry(&[("abc", us(), "cli", "the-one-they-are-typing-in")]);
         let held = already_open_in_a_chat("abc").expect("the live chat");
         assert_eq!(held.name.as_deref(), Some("the-one-they-are-typing-in"));
+    }
+
+    #[test]
+    fn a_chat_open_in_the_desktop_app_is_found_too() {
+        let _home = registry(&[("abc", us(), "claude-desktop", "a desktop chat")]);
+        let found = already_open_in_a_chat("abc").expect("a desktop chat is somebody's own");
+        assert_eq!(found.name.as_deref(), Some("a desktop chat"));
     }
 
     #[test]

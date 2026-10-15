@@ -263,9 +263,66 @@ fn home_is_known() {
     }
 }
 
+/// Stop carrying the identity of the Claude Code session that started the toolbar.
+///
+/// The toolbar is started by a session's hook, so it inherits that session's environment,
+/// and every `claude` it starts in turn — the relay, its own conversations, scheduled tasks —
+/// inherited it from the toolbar. From a terminal that mostly went unnoticed. From the desktop
+/// app it broke everything: the app tells its own sessions that the *host* refreshes their
+/// sign-in (`CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH`), and a standalone `claude` told that has
+/// no host to ask, so it failed with "OAuth session expired" on every call. And a child told
+/// `CLAUDE_CODE_ENTRYPOINT=claude-desktop` registers as somebody's desktop chat, which is the
+/// one thing `is_somebodys_own` must never mistake one of ours for.
+///
+/// Only the variables that say which session this is or how its host runs it — the same idea
+/// as `wrap.rs`, plus what the desktop app adds. Anybody's own configuration (a git-bash path,
+/// Bedrock, a token limit) is theirs and stays. The session id is kept under another name
+/// first, because it is how a toolbar launched without `--in` knows which chat it came from.
+fn not_part_of_that_session() {
+    if let Some(id) = std::env::var_os("CLAUDE_CODE_SESSION_ID") {
+        std::env::set_var("COLAI_CAME_FROM", id);
+    }
+    for said in [
+        "CLAUDECODE",
+        "CLAUDE_CODE_SESSION_ID",
+        "CLAUDE_CODE_CHILD_SESSION",
+        "CLAUDE_CODE_ENTRYPOINT",
+        "CLAUDE_CODE_MESSAGING_SOCKET",
+        "CLAUDE_CODE_MESSAGING_TOKEN",
+        "CLAUDE_CODE_BRIDGE_SESSION_ID",
+        "CLAUDE_CODE_SESSION_ATTENDED",
+        "CLAUDE_CODE_SSE_PORT",
+        "CLAUDE_PID",
+        "CLAUDE_EFFORT",
+        // What the desktop app sets for the sessions it hosts.
+        "CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH",
+        "CLAUDE_CODE_HOST_SESSION_ID",
+        "CLAUDE_CODE_OAUTH_SCOPES",
+        "CLAUDE_CODE_EXECPATH",
+        "CLAUDE_CODE_DESKTOP_APP_VERSION",
+        "CLAUDE_CODE_ACCOUNT_UUID",
+        "CLAUDE_CODE_ORGANIZATION_UUID",
+        "CLAUDE_CODE_USER_EMAIL",
+        "CLAUDE_CODE_EAGER_FLUSH",
+        "CLAUDE_CODE_SIMPLE",
+        "CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES",
+        "CLAUDE_CODE_TERMINAL_MCP_TOOLS",
+        "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING",
+        "CLAUDE_CODE_ENABLE_ASK_USER_QUESTION_TOOL",
+        "CLAUDE_CODE_DISABLE_TERMINAL_TITLE",
+        "CLAUDE_CODE_DISABLE_CRON",
+        "CLAUDE_AGENT_SDK_VERSION",
+        "CLAUDE_AGENT_SDK_MCP_NO_PREFIX",
+        "CLAUDE_PREVIEW_CLASSIFIER_FLOOR",
+    ] {
+        std::env::remove_var(said);
+    }
+}
+
 fn main() {
     without_somebody_elses_libraries();
     home_is_known();
+    not_part_of_that_session();
 
     /*
      * `colai claude` is a terminal, not a window.
