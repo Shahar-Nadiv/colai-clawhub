@@ -7,6 +7,16 @@ is not a record of anything.
 
 ## Unreleased
 
+## 0.4.6 — 2026-10-15
+
+- **A mark sent to an open chat arrives once.** In the desktop app the relay's message starts a
+  turn at once, and that turn's prompt hook found the copy staged for "your next message" still
+  there and delivered the mark a second time. The staged copy is now hidden from the hook while
+  the relay works, deleted when it delivers, and put back if it cannot.
+- **Stop says where to stop a turn colai cannot.** A mark handed to your own chat runs in that
+  chat's process, which colai cannot interrupt; Stop stops watching it and now points at the
+  right place: the stop button in a Claude Desktop chat, Esc in a terminal.
+
 ## 0.4.5 — 2026-10-15
 
 Works from the Claude desktop app.
