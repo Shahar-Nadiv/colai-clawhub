@@ -1101,6 +1101,79 @@ describe("the receiver's name cannot push Send out of the popup", () => {
  * default, that turning Review on actually makes the session ask, and that a change with no
  * picture to show opens the code on its own rather than showing nothing.
  */
+describe("approvals, the way Claude Code asks", () => {
+  const RUNNING = (alwaysFor: string | null) => `
+    state.asking = {
+      id: "ask-cmd", tool: "Bash",
+      input: { command: "npm test -- --run" },
+      title: "Run the tests",
+      alwaysFor: ${alwaysFor === null ? "null" : JSON.stringify(alwaysFor)},
+    };
+    render();
+  `;
+  const choices = (page: ReturnType<typeof openTheToolbar>) =>
+    [...page.dom.document.querySelectorAll("#fly-ask .appr-choice")].map((b) => b.textContent);
+
+  test("the exact command is shown, not only Claude's description of it", async () => {
+    const page = openTheToolbar();
+    await settle();
+    page.run(RUNNING(null));
+    expect(page.dom.document.querySelector("#fly-ask .ask-cmd")?.textContent).toBe("npm test -- --run");
+    expect(page.dom.document.querySelector("#fly-ask .appr-said")?.textContent).toBe("Run the tests");
+  });
+
+  test("the answers are Claude Code's, and 'don't ask again' only when it offered a rule", async () => {
+    const page = openTheToolbar();
+    await settle();
+    page.run(RUNNING(null));
+    expect(choices(page)).toEqual(["Yes", "No, and tell Claude what to do differently"]);
+    page.run(RUNNING("npm test:*"));
+    expect(choices(page)).toEqual([
+      "Yes",
+      "Yes, and don't ask again for npm test:*",
+      "No, and tell Claude what to do differently",
+    ]);
+  });
+
+  test("yes-always asks Rust to apply the offered rule; plain yes does not", async () => {
+    const page = openTheToolbar();
+    await settle();
+    page.run(RUNNING("npm test:*"));
+    const always = [...page.dom.document.querySelectorAll("#fly-ask .appr-choice")][1] as unknown as {
+      dispatchEvent: (e: unknown) => void;
+    };
+    always.dispatchEvent(new page.dom.window.Event("click"));
+    await settle();
+    const sent = page.askedWith.find(([name]) => name === "colai_answer")?.[1] as Record<string, unknown>;
+    expect(sent).toMatchObject({ id: "ask-cmd", allow: true, always: true });
+  });
+
+  test("no opens a box, and what is typed there is what Claude is told", async () => {
+    const page = openTheToolbar();
+    await settle();
+    page.run(RUNNING(null));
+    const no = [...page.dom.document.querySelectorAll("#fly-ask .appr-choice")].pop() as unknown as {
+      dispatchEvent: (e: unknown) => void;
+    };
+    no.dispatchEvent(new page.dom.window.Event("click"));
+    const box = page.dom.document.querySelector("#fly-ask .appr-deny") as unknown as {
+      value: string;
+      dispatchEvent: (e: unknown) => void;
+    };
+    expect(box, "a reason box opens instead of refusing outright").toBeTruthy();
+    expect(page.asked, "nothing is answered yet").not.toContain("colai_answer");
+    box.value = "run only the unit tests";
+    box.dispatchEvent(new page.dom.window.Event("input"));
+    const tell = [...page.dom.document.querySelectorAll("#fly-ask .appr-choice")].find(
+      (b) => b.textContent === "Tell Claude",
+    ) as unknown as { dispatchEvent: (e: unknown) => void };
+    tell.dispatchEvent(new page.dom.window.Event("click"));
+    await settle();
+    const sent = page.askedWith.find(([name]) => name === "colai_answer")?.[1] as Record<string, unknown>;
+    expect(sent).toMatchObject({ id: "ask-cmd", allow: false, always: false, message: "No — run only the unit tests" });
+  });
+});
+
 describe("Review changes before they are applied", () => {
   /** A `can_use_tool` for an Edit, the shape the approval card is drawn from. */
   const EDITING = `

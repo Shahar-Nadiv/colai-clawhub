@@ -699,12 +699,15 @@ pub(crate) async fn colai_answer(
     session: State<'_, crate::session::Session>,
     id: String,
     allow: bool,
+    always: Option<bool>,
     message: Option<String>,
 ) -> Result<(), String> {
     // Whatever somebody typed as a reason goes to Claude, so it travels through the same
     // fence as everything else that is not ours: it is about to become part of a prompt.
     let said = crate::session::plainly(message.as_deref().unwrap_or_default());
-    session.answer(&id, allow, &said)
+    // `always` only ever applies the rules Claude Code offered for this request — see
+    // `Session::answer`. Older pages that do not send it answer yes-once, as before.
+    session.answer(&id, allow, always.unwrap_or(false), &said)
 }
 
 /// Change what may happen without being asked, from now on.

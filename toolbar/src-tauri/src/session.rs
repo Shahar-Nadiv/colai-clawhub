@@ -1204,15 +1204,112 @@ mod following {
     }
 }
 
+/// Claude Code's suggested "don't ask again" rules for each open permission request, by id.
+///
+/// Held on this side because they are permissions: the page shows their wording and answers
+/// yes-always, and only rules Claude Code itself offered for that request can be applied.
+fn asked_rules() -> &'static Mutex<std::collections::HashMap<String, Value>> {
+    static RULES: std::sync::OnceLock<Mutex<std::collections::HashMap<String, Value>>> =
+        std::sync::OnceLock::new();
+    RULES.get_or_init(|| Mutex::new(std::collections::HashMap::new()))
+}
+
+fn remember_rules(id: &str, rules: Value) {
+    if let Ok(mut held) = asked_rules().lock() {
+        // A request is answered or the turn ends; a handful at most are ever open. The bound
+        // only stops a session that never answers from growing this without end.
+        if held.len() > 64 {
+            held.clear();
+        }
+        held.insert(id.to_string(), rules);
+    }
+}
+
+fn take_rules(id: &str) -> Option<Value> {
+    asked_rules().lock().ok()?.remove(id)
+}
+
+/// How Claude Code's suggested rules read on the "Yes, and don't ask again" button.
+///
+/// `None` when there is nothing to offer, and then the button is not drawn: a "don't ask
+/// again" that has no rule behind it would be a promise the next prompt breaks.
+fn rule_said(suggestions: &Value) -> Option<String> {
+    let mut said: Vec<String> = Vec::new();
+    for one in suggestions.as_array()? {
+        match one.get("type").and_then(Value::as_str) {
+            Some("addRules") => {
+                for rule in one.get("rules").and_then(Value::as_array).into_iter().flatten() {
+                    let tool = rule.get("toolName").and_then(Value::as_str).unwrap_or("this");
+                    match rule.get("ruleContent").and_then(Value::as_str) {
+                        Some(content) if !content.is_empty() => said.push(plainly(content)),
+                        _ => said.push(tool.to_string()),
+                    }
+                }
+            }
+            Some("setMode") if one.get("mode").and_then(Value::as_str) == Some("acceptEdits") => {
+                said.push("edits this session".to_string());
+            }
+            Some("addDirectories") => {
+                for dir in one.get("directories").and_then(Value::as_array).into_iter().flatten() {
+                    if let Some(dir) = dir.as_str() {
+                        said.push(plainly(dir));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    (!said.is_empty()).then(|| said.join(", "))
+}
+
+#[cfg(test)]
+mod dont_ask_again {
+    use super::*;
+
+    #[test]
+    fn a_command_rule_reads_as_the_command() {
+        let s = json!([{"type": "addRules", "behavior": "allow", "destination": "localSettings",
+            "rules": [{"toolName": "Bash", "ruleContent": "npm test:*"}]}]);
+        assert_eq!(rule_said(&s).as_deref(), Some("npm test:*"));
+    }
+
+    #[test]
+    fn an_edit_mode_reads_as_edits_this_session() {
+        let s = json!([{"type": "setMode", "mode": "acceptEdits", "destination": "session"}]);
+        assert_eq!(rule_said(&s).as_deref(), Some("edits this session"));
+    }
+
+    #[test]
+    fn nothing_offered_is_no_button() {
+        assert_eq!(rule_said(&json!([])), None);
+        assert_eq!(rule_said(&json!({"not": "a list"})), None);
+    }
+
+    #[test]
+    fn only_the_rules_offered_for_that_request_are_applied_once() {
+        remember_rules("req-1", json!([{"type": "setMode", "mode": "acceptEdits"}]));
+        assert!(take_rules("req-1").is_some());
+        assert!(take_rules("req-1").is_none(), "used once, then gone");
+        assert!(take_rules("never-asked").is_none());
+    }
+}
+
 impl Session {
     /// Answer a `can_use_tool` the page has just shown somebody.
     ///
     /// Nothing happens in the conversation until this is sent — the turn is stopped, waiting.
     /// That is why a refusal carries words: `message` is what Claude is told, so it can try
     /// something else rather than stall, and a person who says no gets to say why.
-    pub fn answer(&self, id: &str, allow: bool, message: &str) -> Result<(), String> {
+    pub fn answer(&self, id: &str, allow: bool, always: bool, message: &str) -> Result<(), String> {
+        // Taken either way, so an answered request leaves nothing behind.
+        let rules = take_rules(id);
         let decided = if allow {
-            json!({ "behavior": "allow" })
+            // "Yes, and don't ask again" applies Claude Code's own suggested rules — exactly the
+            // ones it offered for this request, never anything the page made up.
+            match rules.filter(|_| always) {
+                Some(rules) => json!({ "behavior": "allow", "updatedPermissions": rules }),
+                None => json!({ "behavior": "allow" }),
+            }
         } else {
             json!({
                 "behavior": "deny",
@@ -1478,6 +1575,16 @@ fn what_it_said(frame: &Value) -> Vec<(&'static str, Value)> {
                 if frame.pointer("/request/subtype").and_then(Value::as_str)
                     == Some("can_use_tool") =>
             {
+                // Claude Code's own "don't ask again" rules for this request, kept here and not
+                // handed to the page: the page only learns their wording, and a page that could
+                // send rules back could grant itself anything. See `asked_rules`.
+                let always = frame.pointer("/request/permission_suggestions");
+                let always_for = always.and_then(rule_said);
+                if let (Some(id), Some(rules)) =
+                    (frame.get("request_id").and_then(Value::as_str), always)
+                {
+                    remember_rules(id, rules.clone());
+                }
                 to!(
                     ASKS_EVENT,
                     json!({
@@ -1488,6 +1595,7 @@ fn what_it_said(frame: &Value) -> Vec<(&'static str, Value)> {
                         "description": frame.pointer("/request/description"),
                         "why": frame.pointer("/request/decision_reason"),
                         "defaultNo": frame.pointer("/request/default_to_no"),
+                        "alwaysFor": always_for,
                         "sessionKey": session,
                     })
                 );

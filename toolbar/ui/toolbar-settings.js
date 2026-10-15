@@ -21,8 +21,8 @@ const TIPS = [
 
 /** What may happen without being asked — the two the toolbar can honestly offer here. */
 const ALLOW_CHOICES = [
-  ["default", "Ask me first"],
-  ["acceptEdits", "Edit freely here"],
+  ["default", "Ask before edits"],
+  ["acceptEdits", "Accept edits"],
 ];
 
 function openSettings() {

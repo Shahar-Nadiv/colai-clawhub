@@ -4026,6 +4026,46 @@ body {
   gap: 8px;
   margin-top: 12px;
 }
+/* Claude Code's answers are sentences, not words — stacked, so each reads whole. */
+.appr-choices[data-list="true"] {
+  flex-direction: column;
+}
+.appr-choices[data-list="true"] .appr-choice {
+  flex: none;
+  text-align: left;
+}
+/* What will run, exactly as it will run. */
+.ask-cmd {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  max-height: 160px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+.appr-deny {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  resize: vertical;
+}
+.appr-deny:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
 .appr-choice {
   flex: 1 1 0;
   padding: 9px 12px;
@@ -4042,7 +4082,8 @@ body {
 }
 /* The approving one is the one that does something irreversible, so it is the one that
    looks like a decision rather than a dismissal. */
-.appr-choice[data-yes="true"] {
+.appr-choice[data-yes="true"],
+.appr-choice[data-primary="true"] {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--on-accent, #fff);

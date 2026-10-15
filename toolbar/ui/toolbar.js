@@ -239,6 +239,10 @@ const state = {
    * rail can be brought back to it if somebody put the toolbar away mid-turn.
    */
   asking: null,
+  // "No, and tell Claude what to do differently" is open for this request id, and what has
+  // been typed into it so far — kept across renders so the box does not empty itself.
+  denying: null,
+  denyWords: "",
   /*
    * The prompt the live turn came from, and the confirmation for putting its files back.
    *

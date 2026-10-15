@@ -1733,17 +1733,17 @@ const NEVER_RAN = {
  * toolbar never passes, so offering it would be offering something that cannot be done.
  */
 const MODES_ALLOWING = {
-  default: "Ask me first",
-  acceptEdits: "Edit freely here",
-  auto: "Decide for me",
-  plan: "Plan only",
+  default: "Ask before edits",
+  acceptEdits: "Accept edits",
+  auto: "Auto",
+  plan: "Plan mode",
 };
 /** The short form, for the chip on a card where the words are already crowded. */
 const MODE_SAID = {
-  default: "Manual",
+  default: "Ask before edits",
   acceptEdits: "Accept edits",
   auto: "Auto",
-  plan: "Plan",
+  plan: "Plan mode",
   dontAsk: "Don't ask",
 };
 
@@ -1761,8 +1761,17 @@ function askedFor(request) {
   // escapes, which is not something to put on a rail unexamined.
   const said = observed(request.title || request.description || "");
 
+  // Yes-and-don't-ask-again's wording, from Claude Code's own suggested rules. The rules stay
+  // on the Rust side; only what they say comes here.
+  const alwaysFor = request.alwaysFor ? observed(String(request.alwaysFor)) : "";
+
   if (!SHOWS_A_CHANGE[tool]) {
-    return { tool, where, said, lines: [], whole: false };
+    // What will actually run, the way Claude Code shows it: the command, the address, the
+    // pattern — not only Claude's description of it. Approving "Run the tests" is approving
+    // whatever command came with it, so the command is what has to be in front of somebody.
+    const exact =
+      input.command || input.url || input.query || input.pattern || input.path || "";
+    return { tool, where, said, detail: exact ? asGiven(String(exact)) : "", alwaysFor, lines: [], whole: false };
   }
 
   // Write has no "before" — the whole content is the change.
@@ -1788,6 +1797,8 @@ function askedFor(request) {
     tool,
     where,
     said,
+    detail: "",
+    alwaysFor,
     // Trimmed, and the trimming is admitted rather than silent: a diff that stops without
     // saying so invites somebody to approve the part they can see.
     lines: lines.slice(0, DIFF_MOST),

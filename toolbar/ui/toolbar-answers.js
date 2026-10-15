@@ -178,6 +178,14 @@ function drawApproval() {
   head.append(who, mode);
   bits.push(head);
 
+  // What will run, exactly, in monospace — then Claude's description of it as the caption.
+  // The command is what is being approved; the description is only Claude's account of it.
+  if (shown.detail) {
+    const exact = document.createElement("pre");
+    exact.className = "ask-cmd";
+    exact.textContent = shown.detail;
+    bits.push(exact);
+  }
   if (shown.said) {
     const said = document.createElement("p");
     said.className = "appr-said";
@@ -287,22 +295,85 @@ function drawApproval() {
     bits.push(undo);
   }
 
-  const row = document.createElement("div");
-  row.className = "appr-choices";
-  // Ordered so the safe answer is the easy one when Claude Code says it should be.
-  const choices = asking.defaultNo
-    ? [["Skip this", false], ["Approve", true]]
-    : [["Approve", true], ["Skip this", false]];
-  for (const [label, allow] of choices) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "appr-choice";
-    button.dataset.yes = String(allow);
-    button.textContent = label;
-    button.addEventListener("click", () => answerAsking(allow));
-    row.append(button);
+  /*
+   * Claude Code's three answers, in its words.
+   *
+   * Yes; yes and don't ask again — only when Claude Code offered a rule for it, and named by
+   * that rule, so "again" means something; and no, with room to say what to do instead, because
+   * a bare refusal leaves Claude guessing and a redirected one lets it carry on.
+   */
+  if (state.denying === asking.id) {
+    const box = document.createElement("textarea");
+    box.className = "appr-deny";
+    box.rows = 3;
+    box.placeholder = "What should Claude do instead? (optional)";
+    box.value = state.denyWords || "";
+    box.addEventListener("input", () => {
+      state.denyWords = box.value;
+    });
+    box.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        answerAsking(false, false, box.value);
+      }
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        state.denying = null;
+        render();
+      }
+    });
+    const send = document.createElement("button");
+    send.type = "button";
+    send.className = "appr-choice";
+    send.textContent = "Tell Claude";
+    send.dataset.primary = "true";
+    send.addEventListener("click", () => answerAsking(false, false, box.value));
+    const back = document.createElement("button");
+    back.type = "button";
+    back.className = "appr-choice";
+    back.textContent = "Back";
+    back.addEventListener("click", () => {
+      state.denying = null;
+      render();
+    });
+    const row = document.createElement("div");
+    row.className = "appr-choices";
+    row.append(back, send);
+    bits.push(box, row);
+    setTimeout(() => box.focus(), 0);
+  } else {
+    const yes = ["Yes", () => answerAsking(true, false), true];
+    const always = shown.alwaysFor
+      ? [`Yes, and don't ask again for ${shown.alwaysFor}`, () => answerAsking(true, true), "always"]
+      : null;
+    const no = [
+      "No, and tell Claude what to do differently",
+      () => {
+        state.denying = asking.id;
+        state.denyWords = "";
+        render();
+      },
+      false,
+    ];
+    // Ordered so the safe answer is the easy one when Claude Code says it should be.
+    const choices = (asking.defaultNo ? [no, yes, always] : [yes, always, no]).filter(Boolean);
+    const row = document.createElement("div");
+    row.className = "appr-choices";
+    row.dataset.list = "true";
+    for (const [label, act, isYes] of choices) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "appr-choice";
+      // Only the one-time yes is the filled, primary answer; a standing rule is a bigger
+      // decision and should not look like the easy one.
+      button.dataset.yes = String(isYes === true);
+      if (isYes === "always") button.dataset.always = "true";
+      button.textContent = label;
+      button.addEventListener("click", act);
+      row.append(button);
+    }
+    bits.push(row);
   }
-  bits.push(row);
 
   el.flyAsk.hidden = false;
   el.flyAsk.replaceChildren(...bits);
@@ -430,12 +501,16 @@ function allowNext() {
 }
 
 /** Send the answer, and stop showing the question whatever happens to it. */
-function answerAsking(allow) {
+function answerAsking(allow, always, words) {
   const asking = state.asking;
   if (!asking || !asking.id) return;
   state.asking = null;
+  state.denying = null;
+  state.denyWords = "";
   render();
-  void invoke("colai_answer", { id: asking.id, allow, message: allow ? "" : "You turned this down." })
+  const instead = typeof words === "string" ? words.trim() : "";
+  const message = allow ? "" : instead ? `No — ${instead}` : "You turned this down.";
+  void invoke("colai_answer", { id: asking.id, allow: allow, always: Boolean(allow && always), message: message })
     .catch((trouble) => {
       // The turn is stopped on the other end. Saying nothing here would leave somebody
       // watching a conversation that never moves, with no idea they are the reason.

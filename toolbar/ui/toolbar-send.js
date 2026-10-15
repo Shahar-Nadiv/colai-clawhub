@@ -169,8 +169,8 @@ async function sendMarks(ids) {
       state.reviewPending = true;
     }
   } else if (state.allowDefault === "default" && state.allowing !== "default") {
-    // Not reviewing, but the person set "Ask me first" as their default in settings — so hold
-    // edits on this send too. Only this stricter choice is enforced; "Edit freely here" is the
+    // Not reviewing, but the person set "Ask before edits" as their default in settings — so hold
+    // edits on this send too. Only this stricter choice is enforced; "Accept edits" is the
     // session's own baseline, so it needs no nudge and an ordinary send stays untouched.
     // Fire-and-forget: a preference, not a gate — a send must not fail if the mode change lags.
     void invoke("colai_allow_now", { mode: "default" }).catch(() => {});
