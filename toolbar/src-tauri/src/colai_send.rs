@@ -610,6 +610,43 @@ pub(crate) async fn colai_said(session_key: String) -> Result<Vec<Point>, String
 /// reads to the end of — while the answer itself is a transcript coming down a socket.
 const POINTS_AT_MOST: u32 = 40;
 
+/// What to tell somebody who pressed Stop on a turn running in their own chat.
+///
+/// It said "Press Esc in that terminal" whatever the chat was, and for a chat in the desktop
+/// app that is advice about a terminal nobody has open. Named by where the session says it
+/// was started.
+fn where_to_stop_it(entrypoint: &str) -> String {
+    let (where_it_runs, how) = match entrypoint {
+        "claude-desktop" => (
+            "your Claude Desktop chat",
+            "Press the stop button in that chat to stop it.",
+        ),
+        "cli" => ("your terminal", "Press Esc in that terminal to stop it."),
+        _ => ("your own Claude Code session", "Stop it there."),
+    };
+    format!(
+        "it runs in {where_it_runs} — colai can't interrupt it from here. {how} \
+         (colai has stopped watching it.)"
+    )
+}
+
+#[cfg(test)]
+mod stopping_somebody_elses_turn {
+    use super::where_to_stop_it;
+
+    #[test]
+    fn a_desktop_chat_is_not_sent_to_a_terminal() {
+        let said = where_to_stop_it("claude-desktop");
+        assert!(said.contains("Claude Desktop") && said.contains("stop button"), "{said}");
+        assert!(!said.contains("terminal"), "{said}");
+    }
+
+    #[test]
+    fn a_terminal_is_still_told_esc() {
+        assert!(where_to_stop_it("cli").contains("Press Esc in that terminal"));
+    }
+}
+
 /// Stop a run that is underway.
 ///
 /// The only thing on this rail that destroys work rather than describing it. It says
@@ -635,12 +672,7 @@ pub(crate) async fn colai_stop(
      */
     if let Some(held) = crate::session::already_open_in_a_chat(&session_key) {
         crate::session::stop_mirror(&session_key);
-        let _ = held;
-        return Err(
-            "it runs in your terminal — colai can't interrupt it from here. Press Esc in that \
-             terminal to stop it. (colai has stopped watching it.)"
-                .to_string(),
-        );
+        return Err(where_to_stop_it(&held.entrypoint));
     }
 
     /*
