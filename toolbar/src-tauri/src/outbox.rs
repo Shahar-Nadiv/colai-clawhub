@@ -197,7 +197,7 @@ pub(crate) fn waiting_for(session_key: &str) -> usize {
 #[allow(dead_code)]
 fn is_a_finished_mark(path: &Path) -> bool {
     path.is_dir()
-        && path.extension().and_then(|e| e.to_str()) != Some("part")
+        && !matches!(path.extension().and_then(|e| e.to_str()), Some("part" | "relaying"))
         && path.join(SAY).is_file()
 }
 
@@ -412,6 +412,30 @@ mod leaving_a_mark {
     }
 
     #[test]
+    fn a_mark_the_relay_is_delivering_is_hidden_from_the_hook_until_it_fails() {
+        /*
+         * The relay's message starts a turn in a desktop chat at once, and that turn's prompt
+         * hook would hand the staged copy over a second time. Set aside, it is not waiting;
+         * put back after a failed relay, it is again.
+         */
+        let bench = bench();
+        let project = bench.project.to_string_lossy().to_string();
+        let staged = stage("a-chat", Some(&project), "what is this", &[a_picture()]).expect("a mark");
+        assert_eq!(waiting_for("a-chat"), 1);
+
+        let aside = set_aside(&staged.at).expect("moved aside");
+        assert_eq!(waiting_for("a-chat"), 0, "the hook must not see it while the relay works");
+
+        put_back(&aside, &staged.at);
+        assert_eq!(waiting_for("a-chat"), 1, "a failed relay leaves it for the next message");
+
+        let aside = set_aside(&staged.at).expect("moved aside again");
+        forget(&aside);
+        assert_eq!(waiting_for("a-chat"), 0, "a delivered one is gone");
+        assert!(!aside.exists() && !staged.at.exists());
+    }
+
+    #[test]
     fn the_message_reaches_the_model_as_the_person_wrote_it() {
         let bench = bench();
         let project = bench.project.to_string_lossy().to_string();
@@ -503,4 +527,24 @@ mod leaving_a_mark {
 /// that has just been handed a screenshot may well want to look at it again.
 pub(crate) fn forget(at: &Path) {
     let _ = fs::remove_dir_all(at);
+}
+
+/// Hide a staged mark from the hook while the relay is delivering it.
+///
+/// Taking it back only after the relay finished was too late. The relay's `SendMessage` lands
+/// in the chat mid-turn, and a desktop chat answers it at once — a turn whose prompt hook found
+/// the staged copy still there and handed the mark over a second time, seconds before `forget`
+/// ran. Renamed to `.relaying`, which the hook skips the same way it skips `.part`. Returns
+/// where it went, for `put_back` if the relay fails, or `None` if it could not be moved — and
+/// then the old order stands: the copy stays visible and is forgotten after a delivery.
+pub(crate) fn set_aside(at: &Path) -> Option<PathBuf> {
+    let mut aside = at.as_os_str().to_owned();
+    aside.push(".relaying");
+    let aside = PathBuf::from(aside);
+    fs::rename(at, &aside).ok().map(|()| aside)
+}
+
+/// The relay did not deliver it, so let the hook have it after all.
+pub(crate) fn put_back(aside: &Path, at: &Path) {
+    let _ = fs::rename(aside, at);
 }

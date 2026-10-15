@@ -234,6 +234,9 @@ pub(crate) async fn colai_send(
             let said = staged.said.clone();
             let staged_at = staged.at.clone();
             std::thread::spawn(move || {
+                // Out of the hook's sight while the relay works, so the turn the relay's message
+                // starts cannot pick the same mark up from the outbox — see `outbox::set_aside`.
+                let aside = crate::outbox::set_aside(&staged_at);
                 // `what_that_chat_is_called` asks `claude agents --json` for the name the relay
                 // sends to; `None` means that came back empty — see `describe_the_handoff`.
                 let attempt = crate::session::what_that_chat_is_called(&session_id).map(|named| {
@@ -248,8 +251,14 @@ pub(crate) async fn colai_send(
                 if how.is_some() {
                     // Delivered, so the copy left for the hook would arrive a second time on
                     // their next message and be acted on twice.
-                    crate::outbox::forget(&staged_at);
-                } else if let Some(trouble) = why_not {
+                    crate::outbox::forget(aside.as_deref().unwrap_or(&staged_at));
+                    return;
+                }
+                // Not delivered: the hook gets it on their next message after all.
+                if let Some(aside) = &aside {
+                    crate::outbox::put_back(aside, &staged_at);
+                }
+                if let Some(trouble) = why_not {
                     // The relay could not reach the chat. Said out loud rather than swallowed —
                     // the mark is in the outbox, so it is not lost, but "it will arrive when you
                     // next type there" is a different promise than the card is making.

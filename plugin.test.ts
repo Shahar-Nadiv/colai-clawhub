@@ -744,7 +744,7 @@ describe("a mark left for a chat somebody is sitting in", () => {
   test("a half-written mark is skipped, and a handed-over one does not come again", () => {
     // The hook can run at any instant, including between the picture being written and the
     // question being written.
-    expect(hook).toContain("*.part) continue");
+    expect(hook).toContain("*.part | *.relaying) continue");
     // And context the model acts on must not be re-delivered, or it acts on it twice.
     expect(hook).toContain('rm -rf "$at"');
   });

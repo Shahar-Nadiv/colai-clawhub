@@ -31,7 +31,7 @@ WAITING="${XDG_CONFIG_HOME:-$HOME/.config}/ai.colai.toolbar/outbox/$CLAUDE_CODE_
 handed=0
 for mark in $(ls -1 "$WAITING" 2>/dev/null | sort); do
   at="$WAITING/$mark"
-  case "$mark" in *.part) continue ;; esac
+  case "$mark" in *.part | *.relaying) continue ;; esac
   [ -f "$at/say.txt" ] || continue
 
   cat "$at/say.txt"
