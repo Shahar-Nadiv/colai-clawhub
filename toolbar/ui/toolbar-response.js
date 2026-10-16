@@ -14,6 +14,10 @@
 // follow-up in the same turn.
 
 /** The kind badge text. */
+/** What a signed-out `claude` means for the person, and what to do about it. */
+const SIGNED_OUT_SAID =
+  "Colai needs the claude command signed in. Claude Desktop's sign-in is separate, so run this once in a terminal, then send again.";
+
 const KIND_SAID = {
   answer: "Answer",
   question: "Question",
@@ -185,14 +189,20 @@ function respHead(kind, turn, active) {
   const badge = document.createElement("span");
   badge.className = "resp-badge";
   const settled = turn.state === "done" || turn.state === "failed";
-  // Say the state in a word, not just a colour — "Working" / "Done" / "Couldn't".
+  const delivery = (state.delivery || {})[String(active.turnId)];
+  // Say the state in a word, not just a colour. A mark handed to a chat says where it has got to
+  // — handing over, waiting for you — rather than "Working" from the moment Send was pressed.
   badge.textContent = turn.state === "failed"
-    ? "Couldn't"
+    ? "Failed"
     : settled
       ? "Done"
-      : KIND_SAID[kind] === "Answer"
-        ? "Working"
-        : KIND_SAID[kind] || "Working";
+      : delivery && delivery.step === "handing"
+        ? "Handing over"
+        : delivery && delivery.step === "queued"
+          ? "Waiting for you"
+          : KIND_SAID[kind] === "Answer"
+            ? "Working"
+            : KIND_SAID[kind] || "Working";
   const who = document.createElement("span");
   who.className = "resp-who";
   who.textContent = active.who || "";
@@ -273,6 +283,40 @@ function respOutcome(turn) {
   return wrap;
 }
 
+/**
+ * Signed out, said plainly, with the one command that fixes it and a button that copies it.
+ *
+ * The desktop app's sign-in is its own and colai's `claude` cannot borrow it, so somebody who
+ * only ever used the app meets this first. "OAuth session expired" told them nothing they could do.
+ */
+function respSignIn() {
+  const wrap = document.createElement("div");
+  wrap.className = "resp-signin";
+  const said = document.createElement("p");
+  said.className = "resp-signin-said";
+  said.textContent = SIGNED_OUT_SAID;
+  const row = document.createElement("div");
+  row.className = "resp-signin-row";
+  const command = document.createElement("code");
+  command.className = "resp-signin-cmd";
+  command.textContent = "claude auth login";
+  const copy = document.createElement("button");
+  copy.type = "button";
+  copy.className = "resp-signin-copy";
+  copy.textContent = "Copy";
+  copy.addEventListener("click", () => {
+    void navigator.clipboard
+      .writeText("claude auth login")
+      .then(() => {
+        copy.textContent = "Copied";
+      })
+      .catch(() => {});
+  });
+  row.append(command, copy);
+  wrap.append(said, row);
+  return wrap;
+}
+
 /** The agent's own words, folded to a few lines with a reveal when they run long. */
 function respAnswer(turn, active) {
   const text = (turn.body || "").trim();
@@ -317,7 +361,26 @@ function drawResponse() {
   el.response.dataset.kind = kind;
   el.response.dataset.state = turn.state || "working";
 
+  const delivery = (state.delivery || {})[String(active.turnId)];
+  el.response.dataset.delivery = (!settled && delivery && delivery.step) || "";
+
   const bits = [respHead(kind, turn, active)];
+
+  // Where the mark is, in one plain line, for a mark handed to a chat the person has open.
+  if (!settled && delivery) {
+    const where = document.createElement("p");
+    where.className = "resp-where";
+    const chat = active.who || "that chat";
+    where.textContent =
+      delivery.step === "handing"
+        ? `Handing it to ${chat}…`
+        : delivery.step === "queued"
+          ? `Couldn't reach ${chat} directly. It goes in with your next message there.`
+          : delivery.via === "bridge"
+            ? `In ${chat}, as your message.`
+            : `In ${chat}, sent by Colai.`;
+    bits.push(where);
+  }
 
   // The prompt, collapsed to a one-line quote so the question stays above its answer.
   const quote = document.createElement("p");
@@ -327,7 +390,9 @@ function drawResponse() {
 
   if (!settled) {
     // While it runs: the plain-language checklist, never the streaming prose.
-    bits.push(respSteps(turn));
+    // A queued mark has not started anywhere yet; a progress row under "Waiting for you" would
+    // contradict the badge above it.
+    if (!(delivery && delivery.step === "queued")) bits.push(respSteps(turn));
   } else {
     // Finished: lead with what changed, then the answer folded short. A failure shows its reason
     // as the answer and skips the outcome line (nothing was changed to report).
@@ -340,7 +405,7 @@ function drawResponse() {
       const review = respReview(turn, active);
       if (review) bits.push(review);
     }
-    const answer = respAnswer(turn, active);
+    const answer = turn.signin ? respSignIn() : respAnswer(turn, active);
     if (answer) bits.push(answer);
 
     // Follow-up chips: up to three suggested next steps that send as the next prompt.

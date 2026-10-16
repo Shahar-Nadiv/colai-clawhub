@@ -239,6 +239,10 @@ const state = {
    * rail can be brought back to it if somebody put the toolbar away mid-turn.
    */
   asking: null,
+  // Where each handed-over mark has got to, by chat: `{ step, via, why }` from `colai:delivery`.
+  delivery: {},
+  // Set once a `claude` call came back signed out; the card says how to sign in.
+  signedOut: false,
   // "No, and tell Claude what to do differently" is open for this request id, and what has
   // been typed into it so far — kept across renders so the box does not empty itself.
   denying: null,
@@ -1677,10 +1681,43 @@ async function start() {
     scheduleRender();
   }).catch(() => {});
 
+  // Where a mark handed to a chat has got to: handing → delivered (by the bridge or the relay), or
+  // queued for the person's next message there. The card says it rather than "Working" throughout.
+  void listen("colai:delivery", (event) => {
+    const said = event && event.payload;
+    if (!said || !said.sessionKey) return;
+    state.delivery[String(said.sessionKey)] = { step: said.step, via: said.via || "", why: said.why || "" };
+    scheduleRender();
+  }).catch(() => {});
+
+  // The `claude` command is not signed in. One plain sentence and the one command that fixes it,
+  // instead of the raw "OAuth session expired" each call used to fail with.
+  void listen("colai:signin", () => {
+    state.signedOut = true;
+    if (state.responding) {
+      const key = String(state.responding.turnId);
+      const turn = state.turns[key];
+      if (turn && turn.state !== "done") {
+        state.turns[key] = { ...turn, state: "failed", body: SIGNED_OUT_SAID, signin: true };
+      }
+    }
+    scheduleRender();
+  }).catch(() => {});
+
   void listen("colai:trouble", (event) => {
     const said = event && event.payload;
     if (!said || !said.said) return;
     state.trouble = String(said.said);
+    // A warning is a notice, not a failure: only a line that reads as one may fail a card, and
+    // only the card of the session it came from.
+    if (said.fatal === false) {
+      scheduleRender();
+      return;
+    }
+    if (said.sessionKey && state.responding && String(state.responding.turnId) !== String(said.sessionKey)) {
+      scheduleRender();
+      return;
+    }
     // Settle the response card if a turn errored before it ever finished. A failed spawn (a bad
     // --resume, say) emits no `result` frame, so the card would otherwise shimmer on "working"
     // for ever while the trouble strip alone carried the news. Mark the active turn failed so the

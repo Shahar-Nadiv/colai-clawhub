@@ -1322,8 +1322,10 @@ body {
   border-radius: 14px;
   padding: 14px;
   background: var(--card);
-  border: 1px solid color-mix(in srgb, var(--fg) 16%, transparent);
-  box-shadow: 0 18px 44px rgb(0 0 0 / 55%);
+  border: 1px solid color-mix(in srgb, var(--fg) 14%, transparent);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 18%),
+    0 10px 32px rgb(0 0 0 / 30%);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1364,7 +1366,7 @@ body {
 }
 .response-card[data-state="working"] .resp-dot,
 .response-card[data-state="streaming"] .resp-dot {
-  background: var(--warn);
+  background: var(--accent);
 }
 .response-card[data-state="asking"] .resp-dot {
   background: var(--accent);
@@ -1382,8 +1384,18 @@ body {
   text-transform: uppercase;
   padding: 1px 6px;
   border-radius: 5px;
+  /* Working is quiet, the way Claude shows work in progress; colour is kept for what needs the
+     person (waiting, asking) and for how it ended (done, failed). */
+  color: var(--muted);
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+}
+.response-card[data-delivery="queued"] .resp-badge {
   color: var(--warn);
   background: color-mix(in srgb, var(--warn) 14%, transparent);
+}
+.response-card[data-delivery="queued"] .resp-dot {
+  background: var(--warn);
+  animation: none;
 }
 .response-card[data-state="asking"] .resp-badge {
   color: var(--accent);
@@ -4426,4 +4438,54 @@ body {
   overflow: hidden;
   -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent);
   mask-image: linear-gradient(to bottom, #000 72%, transparent);
+}
+
+/* Where a handed-over mark has got to, in one line under the header. */
+.resp-where {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.response-card[data-delivery="queued"] .resp-where {
+  color: var(--text);
+}
+
+/* Signed out: the sentence, then the one command with a Copy button. */
+.resp-signin {
+  margin-top: 10px;
+}
+.resp-signin-said {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.resp-signin-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.resp-signin-cmd {
+  flex: 1 1 auto;
+  padding: 6px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-strong);
+}
+.resp-signin-copy {
+  all: unset;
+  cursor: pointer;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-foreground);
+  background: var(--accent-fill);
+}
+.resp-signin-copy:hover {
+  background: var(--accent-hover);
 }

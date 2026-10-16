@@ -243,11 +243,20 @@ pub(crate) async fn colai_send(
                  * its receipt says it took the mark. Without a receipt in time, the relay below
                  * is still the next try and the next message the last.
                  */
+                let tell = |step: &str, via: &str, why: Option<&str>| {
+                    let _ = app.emit_to(
+                        crate::colai::OVERLAY_LABEL,
+                        DELIVERY_EVENT,
+                        serde_json::json!({ "sessionKey": session_id, "step": step, "via": via, "why": why }),
+                    );
+                };
+                tell("handing", "", None);
                 if crate::outbox::bridge_listening(&session_id) {
                     let began = std::time::Instant::now();
                     while began.elapsed() < BRIDGE_TAKES_AT_MOST {
                         if crate::outbox::delivered(&staged_at) {
                             crate::outbox::forget(&staged_at);
+                            tell("delivered", "bridge", None);
                             return;
                         }
                         std::thread::sleep(std::time::Duration::from_millis(200));
@@ -260,6 +269,7 @@ pub(crate) async fn colai_send(
                 let here = aside.clone().unwrap_or_else(|| staged_at.clone());
                 if crate::outbox::delivered(&here) {
                     crate::outbox::forget(&here);
+                    tell("delivered", "bridge", None);
                     return;
                 }
                 // `what_that_chat_is_called` asks `claude agents --json` for the name the relay
@@ -277,26 +287,29 @@ pub(crate) async fn colai_send(
                     // Delivered, so the copy left for the hook would arrive a second time on
                     // their next message and be acted on twice.
                     crate::outbox::forget(aside.as_deref().unwrap_or(&staged_at));
+                    tell("delivered", "relay", None);
                     return;
                 }
                 // Not delivered: the hook gets it on their next message after all.
                 if let Some(aside) = &aside {
                     crate::outbox::put_back(aside, &staged_at);
                 }
-                if let Some(trouble) = why_not {
-                    // The relay could not reach the chat. Said out loud rather than swallowed —
-                    // the mark is in the outbox, so it is not lost, but "it will arrive when you
-                    // next type there" is a different promise than the card is making.
-                    eprintln!("[colai] could not put the mark in {session_id}: {trouble}");
+                /*
+                 * Queued, not failed. The mark is safe in the outbox and goes in with the person's
+                 * next message in that chat, so the card says that — amber, "waiting for you" —
+                 * rather than the red failure this used to be. Why the direct routes did not take
+                 * it stays available, and a signed-out `claude` is named as such: it has a fix.
+                 */
+                let why = why_not.unwrap_or_default();
+                eprintln!("[colai] could not put the mark in {session_id} directly: {why}");
+                if crate::session::signed_out(&why) {
                     let _ = app.emit_to(
                         crate::colai::OVERLAY_LABEL,
-                        "colai:trouble",
-                        serde_json::json!({ "said": format!(
-                            "Could not reach that chat right now — {trouble}. \
-                             The mark is waiting there for your next message."
-                        )}),
+                        crate::session::SIGNIN_EVENT,
+                        serde_json::json!({ "said": why }),
                     );
                 }
+                tell("queued", "next-message", Some(&why));
             });
         }
 
@@ -634,6 +647,10 @@ pub(crate) async fn colai_said(session_key: String) -> Result<Vec<Point>, String
 /// sending in the last few minutes, and a list long enough to scroll is a list nobody
 /// reads to the end of — while the answer itself is a transcript coming down a socket.
 const POINTS_AT_MOST: u32 = 40;
+
+/// What the page hears about a mark handed to a chat: `handing`, then `delivered` (by the bridge or
+/// the relay) or `queued` for the person's next message in that chat.
+pub(crate) const DELIVERY_EVENT: &str = "colai:delivery";
 
 /// How long to wait for the bridge's receipt before trying the relay instead. It looks every
 /// second and a half, so a listening bridge answers in well under this; the margin is for a

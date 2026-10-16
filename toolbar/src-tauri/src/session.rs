@@ -2282,11 +2282,68 @@ fn complain(app: AppHandle, trouble: std::process::ChildStderr) {
         if line.is_empty() {
             continue;
         }
+        // Signed out is its own news with its own fix, not one more error line.
+        if signed_out(line) {
+            let _ = app.emit_to(crate::colai::OVERLAY_LABEL, SIGNIN_EVENT, json!({ "said": briefly(line) }));
+            continue;
+        }
+        // Every stderr line used to fail whatever card was showing — a deprecation warning
+        // included. Only a line that reads as a failure may; the rest is a notice.
         let _ = app.emit_to(
             crate::colai::OVERLAY_LABEL,
             "colai:trouble",
-            json!({ "said": briefly(line) }),
+            json!({ "said": briefly(line), "fatal": reads_as_a_failure(line) }),
         );
+    }
+}
+
+/// What the page hears when the `claude` command is not signed in.
+pub(crate) const SIGNIN_EVENT: &str = "colai:signin";
+
+/// Whether something `claude` said means it is not signed in.
+///
+/// The desktop app's sign-in is its own; the `claude` command colai runs needs one of its own
+/// (`claude auth login`), and without it every call fails with words like these.
+pub(crate) fn signed_out(said: &str) -> bool {
+    let said = said.to_ascii_lowercase();
+    [
+        "oauth session expired",
+        "not logged in",
+        "please run /login",
+        "claude auth login",
+        "invalid api key",
+        "failed to authenticate",
+        "authentication_error",
+    ]
+    .iter()
+    .any(|sign| said.contains(sign))
+}
+
+/// Whether a stderr line is a failure rather than a warning or a note.
+fn reads_as_a_failure(said: &str) -> bool {
+    let said = said.to_ascii_lowercase();
+    !said.starts_with("warning")
+        && ["error", "failed", "fatal", "unknown option", "not found", "panicked", "exception"]
+            .iter()
+            .any(|sign| said.contains(sign))
+}
+
+#[cfg(test)]
+mod what_stderr_means {
+    use super::*;
+
+    #[test]
+    fn a_signed_out_claude_is_recognised() {
+        assert!(signed_out("Failed to authenticate: OAuth session expired and could not be refreshed"));
+        assert!(signed_out("Not logged in · Please run /login"));
+        assert!(!signed_out("Error: unknown option '--frobnicate'"));
+    }
+
+    #[test]
+    fn a_warning_does_not_fail_the_card() {
+        assert!(!reads_as_a_failure("Warning: the --foo flag is deprecated"));
+        assert!(!reads_as_a_failure("Using model claude-sonnet"));
+        assert!(reads_as_a_failure("Error: unknown option '--frobnicate'"));
     }
 }
 

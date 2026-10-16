@@ -1101,6 +1101,66 @@ describe("the receiver's name cannot push Send out of the popup", () => {
  * default, that turning Review on actually makes the session ask, and that a change with no
  * picture to show opens the code on its own rather than showing nothing.
  */
+describe("the card says where a handed-over mark has got to", () => {
+  const CARD = `
+    state.responding = { turnId: "s1", who: "fix-login-page", said: "make it blue", marks: [] };
+    state.turns.s1 = { kind: "answer", state: "working", steps: [] };
+    render();
+  `;
+  const card = (page: ReturnType<typeof openTheToolbar>) => ({
+    badge: page.dom.document.querySelector("#response .resp-badge")?.textContent,
+    where: page.dom.document.querySelector("#response .resp-where")?.textContent,
+    state: page.dom.document.querySelector("#response")?.getAttribute("data-state"),
+    delivery: page.dom.document.querySelector("#response")?.getAttribute("data-delivery"),
+  });
+
+  test("handing over, then delivered as the person's own message", async () => {
+    const page = openTheToolbar();
+    await settle();
+    page.run(CARD);
+    page.heard["colai:delivery"]({ payload: { sessionKey: "s1", step: "handing", via: "" } });
+    await settle();
+    expect(card(page)).toMatchObject({ badge: "Handing over", where: "Handing it to fix-login-page…" });
+    page.heard["colai:delivery"]({ payload: { sessionKey: "s1", step: "delivered", via: "bridge" } });
+    await settle();
+    expect(card(page)).toMatchObject({ badge: "Working", where: "In fix-login-page, as your message." });
+  });
+
+  test("queued is waiting for you, never a failure", async () => {
+    const page = openTheToolbar();
+    await settle();
+    page.run(CARD);
+    page.heard["colai:delivery"]({ payload: { sessionKey: "s1", step: "queued", via: "next-message", why: "relay timed out" } });
+    await settle();
+    expect(card(page)).toMatchObject({ badge: "Waiting for you", state: "working", delivery: "queued" });
+    expect(card(page).where).toContain("It goes in with your next message there.");
+  });
+
+  test("a warning, or another chat's trouble, does not fail this card", async () => {
+    const page = openTheToolbar();
+    await settle();
+    page.run(CARD);
+    page.heard["colai:trouble"]({ payload: { said: "Warning: something is deprecated", fatal: false } });
+    page.heard["colai:trouble"]({ payload: { said: "Error: other chat broke", sessionKey: "s2" } });
+    await settle();
+    expect(card(page).state).toBe("working");
+    page.heard["colai:trouble"]({ payload: { said: "Error: this one broke" } });
+    await settle();
+    expect(card(page)).toMatchObject({ state: "failed", badge: "Failed" });
+  });
+
+  test("signed out names the fix and offers to copy it", async () => {
+    const page = openTheToolbar();
+    await settle();
+    page.run(CARD);
+    page.heard["colai:signin"]({ payload: { said: "Failed to authenticate: OAuth session expired" } });
+    await settle();
+    expect(card(page).state).toBe("failed");
+    expect(page.dom.document.querySelector("#response .resp-signin-cmd")?.textContent).toBe("claude auth login");
+    expect(page.dom.document.querySelector("#response .resp-signin-said")?.textContent).toContain("Claude Desktop's sign-in is separate");
+  });
+});
+
 describe("approvals, the way Claude Code asks", () => {
   const RUNNING = (alwaysFor: string | null) => `
     state.asking = {
