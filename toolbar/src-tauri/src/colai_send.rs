@@ -234,9 +234,34 @@ pub(crate) async fn colai_send(
             let said = staged.said.clone();
             let staged_at = staged.at.clone();
             std::thread::spawn(move || {
+                /*
+                 * The bridge first, when the chat has one.
+                 *
+                 * colai's bridge (hooks/bridge.ts) runs inside the session itself and puts the
+                 * mark in as the person's own prompt — the session's front door, where the relay
+                 * is a second `claude` knocking from outside. A fresh heartbeat says it is there;
+                 * its receipt says it took the mark. Without a receipt in time, the relay below
+                 * is still the next try and the next message the last.
+                 */
+                if crate::outbox::bridge_listening(&session_id) {
+                    let began = std::time::Instant::now();
+                    while began.elapsed() < BRIDGE_TAKES_AT_MOST {
+                        if crate::outbox::delivered(&staged_at) {
+                            crate::outbox::forget(&staged_at);
+                            return;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(200));
+                    }
+                }
                 // Out of the hook's sight while the relay works, so the turn the relay's message
                 // starts cannot pick the same mark up from the outbox — see `outbox::set_aside`.
                 let aside = crate::outbox::set_aside(&staged_at);
+                // A bridge that took it at the last moment has it: never a second delivery.
+                let here = aside.clone().unwrap_or_else(|| staged_at.clone());
+                if crate::outbox::delivered(&here) {
+                    crate::outbox::forget(&here);
+                    return;
+                }
                 // `what_that_chat_is_called` asks `claude agents --json` for the name the relay
                 // sends to; `None` means that came back empty — see `describe_the_handoff`.
                 let attempt = crate::session::what_that_chat_is_called(&session_id).map(|named| {
@@ -609,6 +634,11 @@ pub(crate) async fn colai_said(session_key: String) -> Result<Vec<Point>, String
 /// sending in the last few minutes, and a list long enough to scroll is a list nobody
 /// reads to the end of — while the answer itself is a transcript coming down a socket.
 const POINTS_AT_MOST: u32 = 40;
+
+/// How long to wait for the bridge's receipt before trying the relay instead. It looks every
+/// second and a half, so a listening bridge answers in well under this; the margin is for a
+/// session busy enough that its clock runs late.
+const BRIDGE_TAKES_AT_MOST: std::time::Duration = std::time::Duration::from_secs(12);
 
 /// What to tell somebody who pressed Stop on a turn running in their own chat.
 ///

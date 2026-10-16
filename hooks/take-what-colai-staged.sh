@@ -32,6 +32,12 @@ handed=0
 for mark in $(ls -1 "$WAITING" 2>/dev/null | sort); do
   at="$WAITING/$mark"
   case "$mark" in *.part | *.relaying) continue ;; esac
+  # The bridge (hooks/bridge.ts) already put this one in as a prompt — quite possibly the very
+  # prompt this hook is running for. Cleared, never handed over a second time.
+  if [ -f "$at/delivered" ]; then
+    rm -rf "$at"
+    continue
+  fi
   [ -f "$at/say.txt" ] || continue
 
   cat "$at/say.txt"

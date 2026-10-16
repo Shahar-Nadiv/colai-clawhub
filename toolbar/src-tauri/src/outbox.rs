@@ -412,6 +412,33 @@ mod leaving_a_mark {
     }
 
     #[test]
+    fn a_bridge_is_listening_only_while_its_heartbeat_is_fresh() {
+        let _bench = bench();
+        assert!(!bridge_listening("a-chat"), "no heartbeat, no bridge");
+        let room = outbox().expect("an outbox").join("a-chat");
+        fs::create_dir_all(&room).expect("a room");
+        fs::write(room.join(".bridge"), "1").expect("a heartbeat");
+        assert!(bridge_listening("a-chat"), "a fresh beat is a bridge listening");
+        let stale = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+        fs::File::options()
+            .write(true)
+            .open(room.join(".bridge"))
+            .and_then(|file| file.set_modified(stale))
+            .expect("aged");
+        assert!(!bridge_listening("a-chat"), "a stale beat is nobody");
+    }
+
+    #[test]
+    fn a_receipt_marks_a_mark_as_the_sessions_own() {
+        let bench = bench();
+        let project = bench.project.to_string_lossy().to_string();
+        let staged = stage("a-chat", Some(&project), "what is this", &[a_picture()]).expect("a mark");
+        assert!(!delivered(&staged.at));
+        fs::write(staged.at.join("delivered"), r#"{"state":"submitting"}"#).expect("a receipt");
+        assert!(delivered(&staged.at), "claimed even before the submit finished");
+    }
+
+    #[test]
     fn a_mark_the_relay_is_delivering_is_hidden_from_the_hook_until_it_fails() {
         /*
          * The relay's message starts a turn in a desktop chat at once, and that turn's prompt
@@ -547,4 +574,32 @@ pub(crate) fn set_aside(at: &Path) -> Option<PathBuf> {
 /// The relay did not deliver it, so let the hook have it after all.
 pub(crate) fn put_back(aside: &Path, at: &Path) {
     let _ = fs::rename(aside, at);
+}
+
+/// How recent the bridge's heartbeat must be to count as someone listening.
+///
+/// It beats every few seconds (hooks/bridge.ts); three missed beats is a session that has gone,
+/// or a bridge that stopped, and then the relay is the better bet than waiting on nobody.
+const BRIDGE_FRESH: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Whether colai's bridge is running inside this conversation's own session right now.
+///
+/// The bridge (hooks/bridge.ts, a module of this plugin) writes `.bridge` beside the marks for
+/// its session every few seconds. Fresh means a mark staged here will be put in as the person's
+/// own prompt by the session itself — no relay, no second sign-in, no wait for their next message.
+pub(crate) fn bridge_listening(session_key: &str) -> bool {
+    let Some(outbox) = outbox() else {
+        return false;
+    };
+    fs::metadata(outbox.join(session_key).join(".bridge"))
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(|at| at.elapsed().ok())
+        .is_some_and(|since| since < BRIDGE_FRESH)
+}
+
+/// Whether the bridge has taken this mark. Written by the bridge before it submits, so a
+/// receipt in any state means the mark is the session's now and must not be sent another way.
+pub(crate) fn delivered(at: &Path) -> bool {
+    at.join("delivered").exists()
 }

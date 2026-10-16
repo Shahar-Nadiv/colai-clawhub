@@ -749,6 +749,43 @@ describe("a mark left for a chat somebody is sitting in", () => {
     expect(hook).toContain('rm -rf "$at"');
   });
 
+  test.skipIf(!haveSh)("a mark the bridge already put in is cleared, never handed over again", () => {
+    /*
+     * The bridge (hooks/bridge.ts) submits a mark as the person's prompt — and that prompt runs
+     * this very hook. A mark carrying the bridge's receipt must not be printed a second time.
+     */
+    const config = mkdtempSync(join(tmpdir(), "colai-bridge-hook-"));
+    const room = join(config, "ai.colai.toolbar", "outbox", "chat-7");
+    mkdirSync(join(room, "1-taken"), { recursive: true });
+    writeFileSync(join(room, "1-taken", "say.txt"), "ALREADY-IN");
+    writeFileSync(join(room, "1-taken", "delivered"), '{"state":"delivered"}');
+    mkdirSync(join(room, "2-waiting"), { recursive: true });
+    writeFileSync(join(room, "2-waiting", "say.txt"), "STILL-WAITING");
+    const env = { ...process.env, XDG_CONFIG_HOME: onWindows ? toPosix(config) : config, CLAUDE_CODE_SESSION_ID: "chat-7" };
+    const at = join(root, "hooks", "take-what-colai-staged.sh");
+    const ran = onWindows
+      ? spawnSync(SH!.sh, [toPosix(at)], { env: shEnv(env), encoding: "utf8" })
+      : spawnSync("sh", [at], { env, encoding: "utf8" });
+    expect(ran.stdout).toContain("STILL-WAITING");
+    expect(ran.stdout, "the bridge's mark is not handed over twice").not.toContain("ALREADY-IN");
+    expect(existsSync(join(room, "1-taken")), "and it is cleared").toBe(false);
+  });
+
+  test("the bridge is wired beside the command hooks, and claims a mark before it submits", () => {
+    const wired = JSON.parse(readFileSync(new URL("./hooks/hooks.json", import.meta.url), "utf8")) as {
+      modules?: string[];
+    };
+    expect(wired.modules).toEqual(["./bridge.ts"]);
+    const bridge = readFileSync(new URL("./hooks/bridge.ts", import.meta.url), "utf8");
+    const claim = bridge.indexOf("/delivered`, JSON.stringify({ at: Date.now(), state: 'submitting' })");
+    const submit = bridge.indexOf("$.prompt.submit({ text, asUser: true })");
+    expect(claim, "a receipt is written").toBeGreaterThan(-1);
+    expect(submit, "the mark goes in as the person's own words").toBeGreaterThan(-1);
+    expect(claim, "claimed first, so a reload can never send it twice").toBeLessThan(submit);
+    // It reads the same outbox the toolbar stages into and the hook drains.
+    expect(bridge).toContain("ai.colai.toolbar/outbox/");
+  });
+
   test("nothing waiting says nothing at all", () => {
     // This runs in front of every message the person sends. A hook that announced its own
     // emptiness would put a line of noise before every turn of every conversation.

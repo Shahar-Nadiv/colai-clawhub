@@ -1,5 +1,5 @@
 {
-  "description": "Say that colai is here, and hand over anything it left for this conversation.",
+  "description": "Say that colai is here, hand over anything it left for this conversation, and deliver marks into the session as they arrive.",
   "hooks": {
     "SessionStart": [
       {
@@ -23,5 +23,8 @@
         ]
       }
     ]
-  }
+  },
+  "modules": [
+    "./bridge.ts"
+  ]
 }

@@ -56,16 +56,18 @@ somewhere to go — and you can hand a mark to any other conversation from the t
 conversation menu.
 
 **A mark you send goes into that chat.** Not into a second window and not into a copy of
-the conversation — into the session you are sitting in, while you are sitting in it. Claude
-Code has a `SendMessage` tool for one session to reach another, and colai passes the mark
-through a small agent that does nothing else, so it arrives with no keystroke from you. It
-shows up as a message from a teammate rather than as something you typed, because that is
-what it is: it was made in another window.
+the conversation — into the session you are sitting in, while you are sitting in it, in a
+terminal or in the Claude desktop app's Code tab.
 
-That relay is a turn on your own account — about 2¢ a mark on top of the mark itself. If
-the chat cannot be reached, the mark waits on disk and arrives with your next message
-instead, and the toolbar says which of the two happened rather than saying "sent" either
-way.
+The plugin carries a small bridge that runs inside each session (a Claude Code hooks module,
+`hooks/bridge.ts`). It puts your mark in through the session's own front door, as your own
+message: straight away when the chat is idle, right after the current turn when it is busy.
+No second agent, no extra cost, and nothing for you to type.
+
+Where the bridge is not running, colai falls back to Claude Code's `SendMessage`: a small
+agent passes the mark along, about 2¢ a mark on your own account, and it shows up as a
+message from another session. If the chat cannot be reached at all, the mark waits on disk
+and arrives with your next message instead.
 
 colai starts from a `SessionStart` hook — a line Claude Code runs when a session begins,
 before anything reaches the model — so the toolbar is simply there, with no command to
@@ -137,7 +139,8 @@ This matters, so it is written down rather than left to be discovered.
 When you send a mark, the agent receives:
 
 - **A picture** of what you marked — the region you drew, or a little around the point you
-  pointed at. Pictures are held in memory and never written to disk.
+  pointed at. A mark sent to a chat you have open is written to `.colai/marks/` in that
+  project, because a chat can only read pictures from files; nothing is sent anywhere else.
 - **What you typed**, if you typed anything.
 - **The address of the window you marked on**: which application, its working directory,
   the document it has open, its title, and its size.
