@@ -7,6 +7,22 @@ is not a record of anything.
 
 ## Unreleased
 
+## 0.4.8 — 2026-10-16
+
+Colai looks like part of Claude Desktop, and the reply card tells the truth.
+
+- **Claude's look.** The toolbar now uses Claude's own design tokens instead of the coral and
+  blue-grey it was born with: warm neutral surfaces, Claude's clay kept for the one primary
+  action, a rounded-rectangle rail like the composer, quiet selection, Claude's fonts with their
+  system fallbacks. It follows the system's light or dark theme the way the app does.
+- **Honest card states.** A mark handed to a chat shows where it is: Handing over, then In
+  <chat>, as your message (or sent by Colai, through the relay), or Waiting for you when it will
+  go in with your next message there, in amber and never as a failure.
+- **Failures belong to their own card.** A warning from `claude` is a notice, not a failure, and
+  one chat's trouble no longer fails another chat's card.
+- **Sign-in, explained.** A signed-out `claude` is recognised, and the card says so in one
+  sentence with `claude auth login` and a Copy button.
+
 ## 0.4.7 — 2026-10-16
 
 Marks go into a Claude Desktop chat as your own message, and approvals ask the way Claude Code
