@@ -7,6 +7,20 @@ is not a record of anything.
 
 ## Unreleased
 
+## 0.4.9 — 2026-10-16
+
+The toolbar and Claude Desktop, side by side.
+
+- **The desk stays clickable.** A marking tool used to stay in hand after the mark, and the
+  overlay caught every press on every screen until the mark was sent, so Claude Desktop could
+  not be clicked or typed in meanwhile. A mark now puts the tool down. Hold Shift as you finish
+  a mark to keep the tool for the next one.
+- **The conversation goes on in Claude Desktop.** When a mark reaches a chat open in the desktop
+  app, the app is brought forward, and the toolbar's card becomes a receipt (where the mark went,
+  whether it has been answered) with Open in Claude Desktop, instead of a smaller copy of the
+  reply. Artifacts, diffs and the whole thread are where they belong. Later replies in that chat
+  no longer raise toasts or an unread count in the toolbar.
+
 ## 0.4.8 — 2026-10-16
 
 Colai looks like part of Claude Desktop, and the reply card tells the truth.
