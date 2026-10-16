@@ -7,6 +7,11 @@ is not a record of anything.
 
 ## Unreleased
 
+## 0.5.1 — 2026-10-16
+
+- **Remove a tool you made, from its tile.** Hover a tool you made in the tools grid and press ×;
+  it asks once (Remove / Keep) before it goes. Colai's own tools cannot be removed.
+
 ## 0.5.0 — 2026-10-16
 
 Tools you make yourself.
