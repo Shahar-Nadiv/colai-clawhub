@@ -7,6 +7,25 @@ is not a record of anything.
 
 ## Unreleased
 
+## 0.4.7 — 2026-10-16
+
+Marks go into a Claude Desktop chat as your own message, and approvals ask the way Claude Code
+does.
+
+- **The bridge.** A hooks module (`hooks/bridge.ts`) now runs inside each Claude Code session,
+  terminal or desktop, and puts a mark addressed to it in as your own prompt: at once when the
+  chat is idle, right after the current turn when it is busy. It replaces the relay agent for
+  any chat it runs in: no extra turn or cost, no second sign-in, no "message from another
+  session". The relay and the next-message hook remain as fallbacks, and a mark the bridge
+  delivered is never handed over again.
+- **Approvals match Claude Code.** A permission request shows exactly what will run (the
+  command, address, query or pattern) with Claude's description beneath, and answers in
+  Claude Code's words: Yes; Yes, and don't ask again for <rule> (only when Claude Code offered
+  one, and only that rule); No, and tell Claude what to do differently, with a box for what to do
+  instead. The modes use Claude Code's names: Ask before edits, Accept edits, Plan mode, Auto.
+- **The README no longer promises pictures are never written to disk.** A mark handed to a chat
+  you have open is written to `.colai/marks/` in that project, which is how the chat reads it.
+
 ## 0.4.6 — 2026-10-15
 
 - **A mark sent to an open chat arrives once.** In the desktop app the relay's message starts a
