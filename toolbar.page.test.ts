@@ -33,7 +33,7 @@ const { parseHTML } = require("linkedom");
 const UI = new URL("./toolbar/ui/", import.meta.url);
 const read = (name: string) => readFileSync(new URL(name, UI), "utf8");
 
-const ORDER = ["toolbar-tools.js","toolbar-markdown.js","toolbar-jelly.js","toolbar-rail.js","toolbar-mark.js","toolbar-live.js",
+const ORDER = ["toolbar-tools.js","toolbar-markdown.js","toolbar-jelly.js","toolbar-rail.js","toolbar-kit.js","toolbar-mark.js","toolbar-live.js",
   "toolbar-answers.js","toolbar-compose.js","toolbar-work.js",
   "toolbar-toast.js","toolbar-send.js","toolbar-dock.js","toolbar-shell.js","toolbar-context.js","toolbar-settings.js","toolbar-schedule.js","toolbar-response.js","toolbar.js"];
 
@@ -1101,6 +1101,64 @@ describe("the receiver's name cannot push Send out of the popup", () => {
  * default, that turning Review on actually makes the session ask, and that a change with no
  * picture to show opens the code on its own rather than showing nothing.
  */
+describe("the tools grid, and tools people make", () => {
+  const click = (page: ReturnType<typeof openTheToolbar>, selector: string) =>
+    (page.dom.document.querySelector(selector) as unknown as { dispatchEvent: (e: unknown) => void }).dispatchEvent(
+      new page.dom.window.Event("click"),
+    );
+
+  test("the ⋯ key opens a grid that starts with New tool, then the exact tools", async () => {
+    const page = openTheToolbar();
+    await settle();
+    page.run("openKit()");
+    const grid = page.dom.document.querySelector("#fly-tools");
+    expect(grid?.hasAttribute("hidden")).toBe(false);
+    const names = [...page.dom.document.querySelectorAll("#fly-tools .kit-name")].map((n) => n.textContent);
+    expect(names).toEqual(["New tool", "Measure", "Colour", "Record", "Screenshot"]);
+  });
+
+  test("a tool is made from a name, a pointer, a prompt and an icon, and kept", async () => {
+    const page = openTheToolbar();
+    await settle();
+    // The harness store forgets everything; this one remembers, as a real one does.
+    page.run(`(() => { const mem = {}; const store = { getItem: (k) => (k in mem ? mem[k] : null),
+      setItem: (k, v) => { mem[k] = String(v); }, removeItem: (k) => { delete mem[k]; } };
+      window.localStorage = store; globalThis.localStorage = store; })()`);
+    page.run("openKit()");
+    click(page, "#fly-tools .kit-add");
+    page.run(`Object.assign(state.kitEditing, { name: "Explain error", pointer: "box", prompt: "Explain this error and fix it.", icon: { glyph: "inspect" } }); saveKitTool()`);
+    await settle();
+    const names = [...page.dom.document.querySelectorAll("#fly-tools .kit-name")].map((n) => n.textContent);
+    expect(names).toContain("Explain error");
+    expect(JSON.parse(page.run(`localStorage.getItem("colai-custom-tools")`) as string)).toMatchObject([
+      { name: "Explain error", pointer: "box", prompt: "Explain this error and fix it." },
+    ]);
+  });
+
+  test("a tool needs a name and a prompt before it is made", async () => {
+    const page = openTheToolbar();
+    await settle();
+    page.run(`openKit(); editKitTool(null); state.kitEditing.name = "No prompt"; saveKitTool()`);
+    expect(page.run("state.kit.length")).toBe(0);
+    expect(page.run("state.kitTrouble")).toContain("Claude should do");
+  });
+
+  test("using a made tool marks with its pointer, and its prompt goes with the mark", async () => {
+    const page = openTheToolbar();
+    await settle();
+    page.run(`state.kit = [{ id: "t1", name: "Explain error", pointer: "box", prompt: "Explain this error and fix it.", icon: { glyph: "inspect" } }]; useKitTool("t1")`);
+    expect(page.run("state.tool")).toBe("box");
+    expect(page.run("state.kitTool")).toBe("t1");
+    page.run(`keepingTheTool = false; addMark({ tool: "box", region: { shape: "box", box: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 } }, points: [] })`);
+    await settle();
+    expect(page.run("state.marks[0].kit")).toMatchObject({ name: "Explain error", prompt: "Explain this error and fix it." });
+    expect(page.run("state.kitTool"), "put down with the tool").toBe(null);
+    const said = page.run(`summaryFor(state.marks, "")`) as string;
+    expect(said).toContain("Mark 1 (Explain error): Explain this error and fix it.");
+    expect(said).toContain("Explain error");
+  });
+});
+
 describe("the desk stays usable beside the toolbar", () => {
   test("a mark puts the tool down, so the screen is clickable again", async () => {
     // A tool left in hand kept the overlay catching every press on every screen, which made the

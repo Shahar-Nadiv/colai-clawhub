@@ -21,6 +21,7 @@ const el = {
   rail: document.getElementById("rail"),
   grip: document.getElementById("grip"),
   flyShape: document.getElementById("fly-shape"),
+  flyTools: document.getElementById("fly-tools"),
   flyDesign: document.getElementById("fly-design"),
   flyGit: document.getElementById("fly-git"),
   flyRecord: document.getElementById("fly-record"),
@@ -178,7 +179,14 @@ const state = {
   // Whether the exact tools are folded shut. Open to begin with — the rail is what
   // this toolbar is, and a first look at it should be the whole thing. Remembered with
   // the dock, because it is the same kind of fact: how somebody wants this to sit.
-  tucked: false,
+  // The exact tools live in the tools grid now, never on the rail. Kept as state for the
+  // fold the rail still animates.
+  tucked: true,
+  // Tools people made (toolbar-kit.js), the one in hand, and the one being made or changed.
+  kit: [],
+  kitTool: null,
+  kitEditing: null,
+  kitTrouble: "",
   // Whether a picture is being taken right now.
   //
   // The overlay makes itself invisible to photograph what is behind it, which briefly
@@ -479,12 +487,12 @@ function render() {
     } else if (id === "exact") {
       // Lit while the tool in your hand is one of the folded ones, because a folded
       // rail has no other way of saying which tool is out.
-      button.setAttribute("aria-pressed", String(state.tucked && EXACT.includes(state.tool)));
-      button.title = state.tucked ? "Show measure, colour, record…" : "Fold these away";
-      button.setAttribute("aria-expanded", String(!state.tucked));
-      // One mark that turns says "this opens and closes". Two different marks would say
-      // "these are two different buttons".
-      button.dataset.turn = String(!state.tucked);
+      // Lit while the grid is open, or while a tool from it is in hand: the rail has no other
+      // way of saying which of them is out.
+      button.setAttribute("aria-pressed", String(state.open === "tools" || EXACT.includes(state.tool) || Boolean(kitInHand())));
+      const held = kitInHand();
+      button.title = held ? `Tools · ${held.name}` : "Tools: measure, colour, record, screenshot, and your own";
+      button.setAttribute("aria-expanded", String(state.open === "tools"));
     } else if (id === "draw") {
       button.setAttribute("aria-pressed", String(state.tool === "draw" || state.open === "draw"));
       button.title = `Draw · ${(PENS[state.pen] || PENS[PEN_FIRST]).label} · D`;
@@ -617,6 +625,7 @@ function render() {
   else unreadBadge.removeAttribute("aria-label");
 
   el.flyShape.hidden = state.open !== "shape";
+  drawKit();
   el.flyDesign.hidden = state.open !== "design";
   el.flyGit.hidden = state.open !== "git";
   // Folded, the six close up where they stand rather than vanishing — the stylesheet
@@ -693,6 +702,7 @@ function render() {
   // key three along from the one that owns it.
   for (const [node, anchor] of [
     [el.flyShape, buttons.shape],
+    [el.flyTools, buttons.exact],
     [el.flyDesign, buttons.design],
     [el.flyGit, buttons.git],
     [el.flyRecord, buttons.record],
@@ -1347,6 +1357,9 @@ async function start() {
   listenForDrops();
   listenForDrag();
   recall();
+  // The exact tools are in the grid whatever an older toolbar remembered about folding them.
+  state.tucked = true;
+  loadKit();
   // What only this toolbar knew about those conversations — which marks travelled, what
   // was pointed at. Read before the list arrives, so it is ready to be laid over it.
   recallWork();

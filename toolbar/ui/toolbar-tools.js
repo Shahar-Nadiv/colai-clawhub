@@ -804,6 +804,8 @@ function sheeted(mark) {
 
 /** What a mark is called in the message: for a design mark, which kind it is. */
 function labelOf(mark) {
+  // A tool somebody made is called what they called it.
+  if (mark.kit && mark.kit.name) return mark.kit.name;
   if (mark.tool === "design") return kindOf(mark).label;
   // "Draw" says nothing about what was drawn. An arrow points at something and a
   // highlighter runs over it, and an agent reading the message should be told which.
@@ -2239,6 +2241,13 @@ function summaryFor(marks, mode, text, surface, files) {
           ? kind.brings(`mark-${at + 1}.png`, asGiven(homeOf(mark)), chosen)
           : kind.says(`mark-${at + 1}.png`, asGiven(homeOf(mark))),
       );
+    });
+    // And what a made tool is for: its own prompt, per mark, the way a git mark says its command.
+    // Named by the mark rather than renumbered, for the same reason.
+    marks.forEach((mark, at) => {
+      if (!mark.kit || !mark.kit.prompt) return;
+      said.push("");
+      said.push(`Mark ${at + 1} (${asGiven(mark.kit.name)}): ${asGiven(mark.kit.prompt)}`);
     });
     // And what a git mark is asking for. Its own sentence per mark, the way a design
     // mark gets one: two marks in one batch can be two different commands, and folding

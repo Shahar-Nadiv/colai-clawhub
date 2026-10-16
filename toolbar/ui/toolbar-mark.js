@@ -221,6 +221,10 @@ function addMark(mark) {
   // address is read after the picture is taken, so it is stamped on in `shoot` where
   // the rest of the address is.
   if (mark.tool === "git") mark.git = state.gitKind;
+  // Made with a tool somebody made: the mark carries it, name and prompt, so the message says what
+  // the tool is for even after the tool has been changed or deleted. See toolbar-kit.js.
+  const kit = kitInHand();
+  if (kit) mark.kit = { id: kit.id, name: kit.name, prompt: kit.prompt };
   // Until there is a photograph of what it is about. See `drawMarks`.
   mark.shooting = true;
   state.marks.push(mark);
@@ -228,7 +232,10 @@ function addMark(mark) {
   state.undone = [];
   // Back to the pointer, unless Shift asked to keep marking — see `keepingTheTool`. Recording
   // runs its own course and is left alone.
-  if (!keepingTheTool && state.tool !== "record") state.tool = "pointer";
+  if (!keepingTheTool && state.tool !== "record") {
+    state.tool = "pointer";
+    state.kitTool = null;
+  }
   render();
   void shoot(mark);
 }

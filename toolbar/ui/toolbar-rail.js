@@ -163,7 +163,7 @@ function buildRail() {
   // is shorter — not that somewhere else is a better home for them.
   const utilities = document.createDocumentFragment();
   utilities.append(
-    key("exact", "Measure, colour, record, screenshot…", "more", toggleTucked, MENU),
+    key("exact", "Tools: measure, colour, record, screenshot, and your own", "more", openKit, MENU),
     key("measure", "Measure · M", "measure", () => use("measure")),
     key("colour", "Colour · C", "colour", () => use("colour")),
     key("record", "Record · R", "record", () => flyout("record"), MENU),
@@ -333,13 +333,10 @@ function lengthRow(into, seconds) {
 /** The tools that fold away together, in the order they sit on the rail. */
 const EXACT = ["measure", "colour", "record", "screenshot"];
 
-/** Fold them shut, or open them out, and remember which. */
-function toggleTucked() {
-  state.tucked = !state.tucked;
-  state.open = null;
-  remember();
-  render();
-  followTheFold();
+/** Open the tools grid — the exact tools and the ones people make. See toolbar-kit.js. */
+function openKit() {
+  state.kitEditing = null;
+  flyout("tools");
 }
 
 /**
@@ -508,6 +505,8 @@ function use(tool) {
   state.tool = asked;
   state.open = null;
   if (away) flyToWork(state.marks);
+  // Any tool picked up this way is a built-in one; a made tool sets itself after this.
+  state.kitTool = null;
   render();
 }
 

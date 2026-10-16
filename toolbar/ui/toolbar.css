@@ -4506,3 +4506,219 @@ body {
 .resp-open-desktop:hover {
   background: var(--accent-hover);
 }
+
+/* ── the tools grid (toolbar-kit.js) ─────────────────────────────────────── */
+.flyout.kit {
+  width: 300px;
+  padding: 10px;
+}
+.kit-head {
+  padding: 2px 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.kit-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  /* Scrolls inside itself once there are more tools than fit; the popup never grows past this. */
+  max-height: 252px;
+  overflow-y: auto;
+}
+.kit-cell {
+  all: unset;
+  box-sizing: border-box;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 70px;
+  padding: 8px 4px;
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--text);
+}
+.kit-cell:hover {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+  color: var(--text-strong);
+}
+.kit-cell[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--fg) 12%, transparent);
+  color: var(--text-strong);
+}
+.kit-cell:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.kit-face {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+}
+.kit-face img {
+  max-width: 24px;
+  max-height: 24px;
+  object-fit: contain;
+}
+/* The first cell is the reason the grid exists: a dashed slot, in clay. */
+.kit-plus {
+  border: 1.5px dashed color-mix(in srgb, var(--accent) 70%, transparent);
+  border-radius: 8px;
+  color: var(--accent);
+  font-size: 18px;
+  line-height: 1;
+}
+.kit-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1.2;
+}
+.kit-edit {
+  all: unset;
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 18px;
+  cursor: pointer;
+  color: var(--muted);
+  background: var(--popover);
+}
+.kit-cell:hover .kit-edit,
+.kit-edit:focus-visible {
+  display: block;
+}
+.kit-edit:hover {
+  color: var(--text-strong);
+}
+
+/* The editor: name, how you mark, prompt, icon. */
+.kit-label {
+  display: grid;
+  gap: 5px;
+  margin-top: 8px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.kit-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 12.5px;
+}
+.kit-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.kit-prompt {
+  resize: vertical;
+  min-height: 60px;
+  line-height: 1.45;
+}
+.kit-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.kit-chip {
+  all: unset;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  font-size: 11.5px;
+  color: var(--text);
+  cursor: pointer;
+}
+.kit-chip[aria-pressed="true"] {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--fg) 14%, transparent);
+  color: var(--text-strong);
+}
+.kit-icons {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.kit-icon {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+}
+.kit-icon:hover {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+.kit-icon[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--fg) 14%, transparent);
+  color: var(--text-strong);
+}
+.kit-import {
+  grid-column: span 2;
+  font-size: 11px;
+  border: 1px dashed var(--border-strong);
+}
+.kit-trouble {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: var(--danger);
+}
+.kit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 12px;
+}
+.kit-cancel {
+  all: unset;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+}
+.kit-delete {
+  all: unset;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-right: auto;
+  color: var(--danger);
+}
+.kit-save {
+  all: unset;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--accent-foreground);
+  background: var(--accent-fill);
+}
+.kit-save:hover {
+  background: var(--accent-hover);
+}
