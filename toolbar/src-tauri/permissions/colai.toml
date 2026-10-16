@@ -61,6 +61,9 @@ commands.allow = [
   # The rail's close key. The toolbar outlives the session that started it, so it needs a way to
   # be done with it that is not a command somebody has to know.
   "colai_quit",
+  # Bring Claude Desktop forward once a mark reaches a chat open there: the conversation goes on
+  # in the app, which has what the toolbar's card does not. See `colai_desktop`.
+  "colai_open_desktop",
   # The Context map's local store: list saved contexts, save this conversation as one,
   # resolve a set into a drop manifest, and clear the staged set.
   "colai_contexts_list",

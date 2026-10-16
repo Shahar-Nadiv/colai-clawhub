@@ -1101,6 +1101,69 @@ describe("the receiver's name cannot push Send out of the popup", () => {
  * default, that turning Review on actually makes the session ask, and that a change with no
  * picture to show opens the code on its own rather than showing nothing.
  */
+describe("the desk stays usable beside the toolbar", () => {
+  test("a mark puts the tool down, so the screen is clickable again", async () => {
+    // A tool left in hand kept the overlay catching every press on every screen, which made the
+    // window beside it — Claude Desktop — unreachable while somebody wrote their note.
+    const page = openTheToolbar();
+    await settle();
+    page.run(`state.tool = "shape"; keepingTheTool = false;
+      addMark({ tool: "shape", region: { shape: "box", box: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 } }, points: [] })`);
+    await settle();
+    expect(page.run("state.tool")).toBe("pointer");
+  });
+
+  test("Shift as the mark is finished keeps the tool for the next one", async () => {
+    const page = openTheToolbar();
+    await settle();
+    page.run(`state.tool = "shape"; keepingTheTool = true;
+      addMark({ tool: "shape", region: { shape: "box", box: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 } }, points: [] })`);
+    await settle();
+    expect(page.run("state.tool")).toBe("shape");
+  });
+});
+
+describe("a chat open in Claude Desktop is answered there", () => {
+  const CARD = `
+    state.responding = { turnId: "d1", who: "my desktop chat", said: "make it blue", marks: [] };
+    state.turns.d1 = { kind: "answer", state: "working", steps: [], body: "a long answer the app shows better" };
+    render();
+  `;
+
+  test("delivery brings the app forward and the card becomes a receipt with the way in", async () => {
+    const page = openTheToolbar();
+    await settle();
+    page.run(CARD);
+    page.heard["colai:delivery"]({ payload: { sessionKey: "d1", step: "delivered", via: "bridge", host: "claude-desktop" } });
+    await settle();
+    expect(page.asked, "the app is brought forward on delivery").toContain("colai_open_desktop");
+    const doc = page.dom.document;
+    expect(doc.querySelector("#response .resp-open-desktop")?.textContent).toBe("Open in Claude Desktop");
+    expect(doc.querySelector("#response .resp-where")?.textContent).toBe("In my desktop chat, as your message.");
+    expect(doc.querySelector("#response .resp-answer"), "no second copy of the reply").toBeNull();
+    expect(doc.querySelector("#response .ask-box"), "and no reply box: you reply in the app").toBeNull();
+  });
+
+  test("a terminal chat keeps the full card, and the app is not brought forward", async () => {
+    const page = openTheToolbar();
+    await settle();
+    page.run(CARD);
+    page.heard["colai:delivery"]({ payload: { sessionKey: "d1", step: "delivered", via: "relay", host: "cli" } });
+    await settle();
+    expect(page.asked).not.toContain("colai_open_desktop");
+    expect(page.dom.document.querySelector("#response .resp-open-desktop")).toBeNull();
+  });
+
+  test("later replies in a desktop chat raise no toast or unread count here", async () => {
+    const page = openTheToolbar();
+    await settle();
+    page.run(`state.hosts.d1 = "claude-desktop"`);
+    page.run(`heardLaterReply({ sessionKey: "d1", id: "r1", said: "done" })`);
+    await settle();
+    expect(page.run("state.toasts.length")).toBe(0);
+  });
+});
+
 describe("the card says where a handed-over mark has got to", () => {
   const CARD = `
     state.responding = { turnId: "s1", who: "fix-login-page", said: "make it blue", marks: [] };

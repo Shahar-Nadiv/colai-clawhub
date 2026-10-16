@@ -38,7 +38,19 @@ function listenForMarking() {
   el.capture.addEventListener("pointercancel", release);
 }
 
+/*
+ * Whether the tool stays in hand after this mark.
+ *
+ * A marking tool used to stay picked up until the mark was sent, and while it was, the overlay
+ * caught every press on every screen so it could be drawn on — which left the window beside it
+ * (Claude Desktop, most of all) unreachable for as long as somebody was writing their note. One
+ * mark, then back to the pointer, so the desk is the desk again the moment the shape is drawn.
+ * Holding Shift as the mark is finished keeps the tool, for somebody marking several things.
+ */
+let keepingTheTool = false;
+
 function startGesture(event) {
+  keepingTheTool = Boolean(event.shiftKey);
   // Only the primary button. A right-click over somebody's desktop belongs to whatever
   // is underneath, and swallowing it is how an overlay earns a reputation.
   if (event.button !== 0) return;
@@ -97,7 +109,8 @@ function extendGesture(event) {
   gesture.points[1] = point;
 }
 
-function release() {
+function release(event) {
+  if (event && typeof event.shiftKey === "boolean") keepingTheTool = keepingTheTool || event.shiftKey;
   const finished = gesture;
   gesture = null;
   cancelAnimationFrame(liveFrame);
@@ -213,6 +226,9 @@ function addMark(mark) {
   state.marks.push(mark);
   // A new mark ends the redo trail: what was undone is no longer what comes next.
   state.undone = [];
+  // Back to the pointer, unless Shift asked to keep marking — see `keepingTheTool`. Recording
+  // runs its own course and is left alone.
+  if (!keepingTheTool && state.tool !== "record") state.tool = "pointer";
   render();
   void shoot(mark);
 }

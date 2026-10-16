@@ -26,6 +26,7 @@ mod colai;
 mod colai_attach;
 mod colai_capture;
 mod colai_context;
+mod colai_desktop;
 mod colai_files;
 // Cross-platform: the D-Bus/AT-SPI body inside is Linux-gated, but `colai_showing` has a
 // non-Linux arm that answers `None`, and the command is registered on every platform.
@@ -505,6 +506,7 @@ fn main() {
             colai_receivers::colai_sessions,
             colai::colai_came_from,
             colai::colai_quit,
+            colai_desktop::colai_open_desktop,
             colai_send::colai_said,
             colai_send::colai_send,
             colai_send::colai_stop,

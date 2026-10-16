@@ -382,6 +382,36 @@ function drawResponse() {
     bits.push(where);
   }
 
+  /*
+   * A chat open in Claude Desktop is answered in Claude Desktop.
+   *
+   * The app has what this card never will — artifacts, the diff pane, the whole thread — so for
+   * such a chat the card is a receipt and a door, not a second, smaller copy of the reply: where
+   * the mark went, whether it has been answered, and the way into the app.
+   */
+  if ((state.hosts || {})[String(active.turnId)] === "claude-desktop") {
+    if (settled) {
+      const done = document.createElement("p");
+      done.className = "resp-where";
+      done.textContent = failed ? "Something went wrong — see the chat in Claude Desktop." : "Claude answered in Claude Desktop.";
+      bits.push(done);
+    }
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "resp-open-desktop";
+    open.textContent = "Open in Claude Desktop";
+    open.addEventListener("click", () => {
+      void invoke("colai_open_desktop").catch((trouble) => {
+        state.trouble = String(trouble);
+        render();
+      });
+    });
+    bits.push(open);
+    el.response.replaceChildren(...bits);
+    placeResponse();
+    return;
+  }
+
   // The prompt, collapsed to a one-line quote so the question stays above its answer.
   const quote = document.createElement("p");
   quote.className = "resp-quote";

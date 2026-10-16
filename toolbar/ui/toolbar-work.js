@@ -1811,6 +1811,9 @@ function heardLaterReply(said) {
   if (!text || laterHeard.has(said.id)) return;
   laterHeard.add(said.id);
   const key = said.sessionKey;
+  // A chat open in Claude Desktop is read in Claude Desktop. A toast and a red count here for
+  // every reply the person can already see there would be the toolbar shouting over the app.
+  if ((state.hosts || {})[String(key)] === "claude-desktop") return;
 
   // The row, or a bare one the way `loadWork` would have built it — the next refresh lays
   // the session list over it and keeps the answer and the view, so nothing here is lost.

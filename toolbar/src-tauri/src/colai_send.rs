@@ -231,6 +231,9 @@ pub(crate) async fn colai_send(
             let app = app.clone();
             let session_id = held.session_id.clone();
             let hint = held.name.clone();
+            // Where the chat lives — `claude-desktop`, `cli`, an editor — so the page can hand the
+            // conversation to the desktop app rather than keep a copy of it.
+            let host = held.entrypoint.clone();
             let said = staged.said.clone();
             let staged_at = staged.at.clone();
             std::thread::spawn(move || {
@@ -247,7 +250,7 @@ pub(crate) async fn colai_send(
                     let _ = app.emit_to(
                         crate::colai::OVERLAY_LABEL,
                         DELIVERY_EVENT,
-                        serde_json::json!({ "sessionKey": session_id, "step": step, "via": via, "why": why }),
+                        serde_json::json!({ "sessionKey": session_id, "step": step, "via": via, "why": why, "host": host }),
                     );
                 };
                 tell("handing", "", None);

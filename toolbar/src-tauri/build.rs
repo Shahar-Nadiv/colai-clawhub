@@ -18,6 +18,7 @@ fn main() {
         "colai_describe_files",
         "colai_frontmost",
         "colai_in_front",
+        "colai_open_desktop",
         "colai_pick_files",
         "colai_pick_folder",
         "colai_quit",

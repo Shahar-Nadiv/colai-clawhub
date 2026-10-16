@@ -4489,3 +4489,20 @@ body {
 .resp-signin-copy:hover {
   background: var(--accent-hover);
 }
+
+/* The way into Claude Desktop, for a mark answered there: the card's one action. */
+.resp-open-desktop {
+  all: unset;
+  cursor: pointer;
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent-foreground);
+  background: var(--accent-fill);
+}
+.resp-open-desktop:hover {
+  background: var(--accent-hover);
+}

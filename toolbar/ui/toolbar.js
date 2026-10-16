@@ -241,6 +241,11 @@ const state = {
   asking: null,
   // Where each handed-over mark has got to, by chat: `{ step, via, why }` from `colai:delivery`.
   delivery: {},
+  // Where each chat lives, by session key: `claude-desktop`, `cli`, an editor's name.
+  hosts: {},
+  // Bring Claude Desktop forward when a mark reaches a chat open there. On by default: a person
+  // working in the app wants the answer where the app can show all of it.
+  desktopFirst: true,
   // Set once a `claude` call came back signed out; the card says how to sign in.
   signedOut: false,
   // "No, and tell Claude what to do differently" is open for this request id, and what has
@@ -1686,7 +1691,14 @@ async function start() {
   void listen("colai:delivery", (event) => {
     const said = event && event.payload;
     if (!said || !said.sessionKey) return;
-    state.delivery[String(said.sessionKey)] = { step: said.step, via: said.via || "", why: said.why || "" };
+    const key = String(said.sessionKey);
+    state.delivery[key] = { step: said.step, via: said.via || "", why: said.why || "" };
+    if (said.host) state.hosts[key] = String(said.host);
+    // Delivered to a chat open in Claude Desktop: the conversation goes on there, so the app comes
+    // forward — once, on delivery — rather than the person being kept in the toolbar's own card.
+    if (said.step === "delivered" && said.host === "claude-desktop" && state.desktopFirst) {
+      void invoke("colai_open_desktop").catch(() => {});
+    }
     scheduleRender();
   }).catch(() => {});
 
