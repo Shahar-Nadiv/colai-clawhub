@@ -7,6 +7,18 @@ is not a record of anything.
 
 ## Unreleased
 
+## 0.5.0 — 2026-10-16
+
+Tools you make yourself.
+
+- **The tools grid.** The ⋯ key opens a popup instead of folding keys out of the rail: a
+  scrollable grid with Measure, Colour, Record and Screenshot, every tool you have made, and
+  first, New tool. The rail is four keys shorter.
+- **Make a tool.** Give it a name, how you mark (point, box, circle, draw or the whole screen), a
+  prompt saying what Claude should do with what you mark, and an icon: one of the toolbar's own,
+  or a small picture you import. Use it like any other tool; its prompt goes with every mark it
+  makes. Change or delete it from the grid with the pencil on its tile.
+
 ## 0.4.9 — 2026-10-16
 
 The toolbar and Claude Desktop, side by side.
