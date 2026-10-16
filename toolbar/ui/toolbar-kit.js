@@ -217,7 +217,51 @@ function kitGrid() {
       event.stopPropagation();
       editKitTool(tool.id);
     });
-    cell.append(kitFace(tool.icon), name, edit);
+    /*
+     * Remove: only on a tool the person made — Colai's own tools are not theirs to lose. One
+     * question first, on the tile itself, because a made tool's prompt is not written down
+     * anywhere else and cannot be got back.
+     */
+    if (state.kitRemoving === tool.id) {
+      const ask = document.createElement("div");
+      ask.className = "kit-confirm";
+      const said = document.createElement("span");
+      said.textContent = "Remove?";
+      const yes = document.createElement("button");
+      yes.type = "button";
+      yes.className = "kit-confirm-yes";
+      yes.textContent = "Remove";
+      yes.addEventListener("click", (event) => {
+        event.stopPropagation();
+        state.kitRemoving = null;
+        deleteKitTool(tool.id);
+      });
+      const no = document.createElement("button");
+      no.type = "button";
+      no.className = "kit-confirm-no";
+      no.textContent = "Keep";
+      no.addEventListener("click", (event) => {
+        event.stopPropagation();
+        state.kitRemoving = null;
+        render();
+      });
+      ask.append(said, yes, no);
+      cell.append(kitFace(tool.icon), name, ask);
+      grid.append(cell);
+      continue;
+    }
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "kit-remove";
+    remove.title = `Remove ${tool.name}`;
+    remove.setAttribute("aria-label", `Remove ${tool.name}`);
+    remove.textContent = "×";
+    remove.addEventListener("click", (event) => {
+      event.stopPropagation();
+      state.kitRemoving = tool.id;
+      render();
+    });
+    cell.append(kitFace(tool.icon), name, edit, remove);
     cell.addEventListener("click", () => useKitTool(tool.id));
     cell.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {

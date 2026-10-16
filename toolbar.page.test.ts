@@ -1135,6 +1135,26 @@ describe("the tools grid, and tools people make", () => {
     ]);
   });
 
+  test("only a tool the person made can be removed, and it asks first", async () => {
+    const page = openTheToolbar();
+    await settle();
+    page.run(`state.kit = [{ id: "t1", name: "Mine", pointer: "box", prompt: "Do it.", icon: { glyph: "box" } }]; openKit()`);
+    const doc = page.dom.document;
+    // Colai's own tools carry no remove; the made one does.
+    expect(doc.querySelectorAll("#fly-tools .kit-remove").length).toBe(1);
+    expect(doc.querySelector("#fly-tools .kit-mine .kit-remove")).toBeTruthy();
+    click(page, "#fly-tools .kit-remove");
+    expect(page.run("state.kit.length"), "asked, not yet removed").toBe(1);
+    expect(doc.querySelector("#fly-tools .kit-confirm")?.textContent).toContain("Remove?");
+    click(page, "#fly-tools .kit-confirm-no");
+    expect(page.run("state.kit.length"), "Keep keeps it").toBe(1);
+    click(page, "#fly-tools .kit-remove");
+    click(page, "#fly-tools .kit-confirm-yes");
+    expect(page.run("state.kit.length"), "Remove removes it").toBe(0);
+    const names = [...doc.querySelectorAll("#fly-tools .kit-name")].map((n) => n.textContent);
+    expect(names).toEqual(["New tool", "Measure", "Colour", "Record", "Screenshot"]);
+  });
+
   test("a tool needs a name and a prompt before it is made", async () => {
     const page = openTheToolbar();
     await settle();

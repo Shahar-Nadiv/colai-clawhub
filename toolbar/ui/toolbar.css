@@ -4598,8 +4598,61 @@ body {
   background: var(--popover);
 }
 .kit-cell:hover .kit-edit,
-.kit-edit:focus-visible {
+.kit-edit:focus-visible,
+.kit-cell:hover .kit-remove,
+.kit-remove:focus-visible {
   display: block;
+}
+/* Remove sits opposite the pencil, on made tools only. */
+.kit-remove {
+  all: unset;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  display: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 18px;
+  cursor: pointer;
+  color: var(--muted);
+  background: var(--popover);
+}
+.kit-remove:hover {
+  color: var(--danger);
+}
+/* The one question before a made tool goes, asked on its own tile. */
+.kit-confirm {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border-radius: 10px;
+  background: var(--popover);
+  font-size: 11px;
+  color: var(--text-strong);
+}
+.kit-confirm-yes {
+  all: unset;
+  padding: 1px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  color: var(--accent-foreground);
+  background: var(--danger);
+}
+.kit-confirm-no {
+  all: unset;
+  padding: 1px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  color: var(--text);
 }
 .kit-edit:hover {
   color: var(--text-strong);

@@ -187,6 +187,8 @@ const state = {
   kitTool: null,
   kitEditing: null,
   kitTrouble: "",
+  // The made tool whose tile is asking "Remove?".
+  kitRemoving: null,
   // Whether a picture is being taken right now.
   //
   // The overlay makes itself invisible to photograph what is behind it, which briefly

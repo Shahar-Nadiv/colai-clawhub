@@ -336,6 +336,7 @@ const EXACT = ["measure", "colour", "record", "screenshot"];
 /** Open the tools grid — the exact tools and the ones people make. See toolbar-kit.js. */
 function openKit() {
   state.kitEditing = null;
+  state.kitRemoving = null;
   flyout("tools");
 }
 
