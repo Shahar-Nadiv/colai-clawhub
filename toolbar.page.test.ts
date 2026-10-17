@@ -1114,7 +1114,7 @@ describe("the artifact keys: designs, docs, slides, dashboards", () => {
     const page = openTheToolbar();
     await settle();
     const titles = [...page.dom.document.querySelectorAll("#rail .key")].map((k) => k.getAttribute("title"));
-    expect(titles).toEqual(expect.arrayContaining(["Designs", "Docs", "Slides", "Dashboards"]));
+    expect(titles).toEqual(expect.arrayContaining(["Claude Design ↗", "Docs", "Slides", "Dashboards"]));
     expect(titles.some((t) => String(t).startsWith("Undo"))).toBe(false);
   });
 
@@ -1152,6 +1152,32 @@ describe("the artifact keys: designs, docs, slides, dashboards", () => {
     expect(page.asked).toContain("colai_send");
     const sent = JSON.stringify(page.askedWith.find(([name]) => name === "colai_send")?.[1]);
     expect(sent).toContain("Create a new Dashboard artifact — weekly signups");
+  });
+
+  test("the Design key is a door to Claude Design, not a shelf of artifacts", async () => {
+    const page = openTheToolbar();
+    await settle();
+    click(page, page.dom.document.querySelector("#rail .key[title=\"Claude Design ↗\"]"));
+    await settle();
+    const opened = page.askedWith.find(([name]) => name === "colai_open_artifact")?.[1];
+    expect(opened).toMatchObject({ url: "https://claude.ai/design" });
+    expect(page.asked).not.toContain("colai_artifacts");
+  });
+
+  test("a shelf switches to all artifacts, untyped ones included", async () => {
+    const page = openTheToolbar({ answers: { colai_artifacts: LISTED } });
+    await settle();
+    page.run(`openArtifacts("Docs")`);
+    await settle();
+    const tabs = [...page.dom.document.querySelectorAll("#fly-art .art-seg-tab")];
+    expect(tabs.map((t) => t.textContent)).toEqual(["Docs", "All"]);
+    click(page, tabs[1]);
+    await settle();
+    const kinds = page.askedWith.filter(([name]) => name === "colai_artifacts").map(([, a]) => (a as { kind: string }).kind);
+    expect(kinds).toEqual(["Docs", "All"]);
+    expect(page.dom.document.querySelector("#fly-art .art-seg-tab[data-on=\"true\"]")?.textContent).toBe("All");
+    const names = [...page.dom.document.querySelectorAll("#fly-art .kit-name")].map((n) => n.textContent);
+    expect(names).toEqual(["New doc", "Q3 Pitch", "Onboarding deck"]);
   });
 
   test("when it cannot be listed, the shelf says why and still offers New", async () => {
@@ -1973,7 +1999,7 @@ describe("the rail groups", () => {
       expect.arrayContaining(["Measure · M", "Colour · C", "Screenshot"]),
     );
     expect(groups[3].length, "utilities is the fold key plus the exact tools").toBe(5);
-    expect(groups[4], "artifacts, where undo and redo were").toEqual(["Designs", "Docs", "Slides", "Dashboards"]);
+    expect(groups[4], "artifacts, where undo and redo were").toEqual(["Claude Design ↗", "Docs", "Slides", "Dashboards"]);
     expect(groups[5][0], "work leads with the clock, to the left of Work").toMatch(/^Scheduled tasks/);
     expect(groups[5].some((t) => t.startsWith("Work")), "the Work key is in the group").toBe(true);
     expect(groups[5], "work holds the conversation key").toContain("Who receives this?");

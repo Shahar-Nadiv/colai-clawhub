@@ -194,6 +194,8 @@ const state = {
   artifacts: {},
   artNew: null,
   artAbout: "",
+  // Whether the shelf shows every artifact, not just the open key's kind.
+  artAll: false,
   // Whether a picture is being taken right now.
   //
   // The overlay makes itself invisible to photograph what is behind it, which briefly
@@ -713,7 +715,7 @@ function render() {
   for (const [node, anchor] of [
     [el.flyShape, buttons.shape],
     [el.flyTools, buttons.exact],
-    [el.flyArt, buttons[`art${artifactsOpen() || "Design"}`]],
+    [el.flyArt, buttons[`art${artifactsOpen() || "Docs"}`]],
     [el.flyDesign, buttons.design],
     [el.flyGit, buttons.git],
     [el.flyRecord, buttons.record],

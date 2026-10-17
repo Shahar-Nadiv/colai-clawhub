@@ -182,7 +182,12 @@ function buildRail() {
   // and redo stood — those are Ctrl+Z and Ctrl+Shift+Z still, without spending two keys on it.
   const artifacts = document.createDocumentFragment();
   for (const kind of ARTIFACT_KINDS) {
-    artifacts.append(key(`art${kind.id}`, kind.title, kind.glyph, () => openArtifacts(kind.id), MENU));
+    // A door (Claude Design) opens its own place; the rest open a shelf.
+    artifacts.append(
+      kind.door
+        ? key(`art${kind.id}`, kind.title, kind.glyph, () => openDoor(kind.door))
+        : key(`art${kind.id}`, kind.title, kind.glyph, () => openArtifacts(kind.id), MENU),
+    );
   }
   dividers[4].after(artifacts);
 

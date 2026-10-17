@@ -10,7 +10,8 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 /// The core artifact types, exactly as Claude names them.
-const KINDS: &[&str] = &["Design", "Docs", "Slides", "Dashboard"];
+/// `All` is every artifact, typed or not.
+const KINDS: &[&str] = &["Design", "Docs", "Slides", "Dashboard", "All"];
 
 /// How long to wait for the bridge. It looks every second and a half; the rest is the listing.
 const ANSWER_WITHIN: Duration = Duration::from_secs(12);

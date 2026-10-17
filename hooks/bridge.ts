@@ -45,7 +45,7 @@ function isAMark(name: string): boolean {
 }
 
 /** The artifact types the toolbar may ask for — Claude's own core types, and nothing else. */
-const ARTIFACT_KINDS = ['Design', 'Docs', 'Slides', 'Dashboard']
+const ARTIFACT_KINDS = ['Design', 'Docs', 'Slides', 'Dashboard', 'All']
 
 /*
  * The toolbar's questions, answered from inside the session.
@@ -72,7 +72,11 @@ async function answerAsks($: Engine, room: string) {
       const asked = JSON.parse(await $.fs.read(`${asks}/${entry.name}`)) as { artifacts?: string }
       const kind = String(asked.artifacts || '')
       if (!ARTIFACT_KINDS.includes(kind)) throw new Error(`not an artifact type colai lists: ${kind}`)
-      const listed = await $.tool.call({ tool: 'Artifact', action: 'list', type: kind, limit: 60 } as never)
+      // `All` is every artifact the person made, typed or not — the plain pages most of theirs are.
+      const asking = kind === 'All'
+        ? { tool: 'Artifact', action: 'list', limit: 100 }
+        : { tool: 'Artifact', action: 'list', type: kind, limit: 60 }
+      const listed = await $.tool.call(asking as never)
       said = { text: String((listed as { text?: string }).text ?? '') }
     } catch (trouble) {
       said = { error: trouble instanceof Error ? trouble.message : String(trouble) }

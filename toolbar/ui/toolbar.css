@@ -4782,6 +4782,33 @@ body {
   align-items: center;
   justify-content: space-between;
 }
+/* The kind, or all of them: two tabs in one pill. */
+.art-seg {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+.art-seg-tab {
+  all: unset;
+  padding: 0 10px;
+  line-height: 20px;
+  border-radius: 9999px;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.art-seg-tab[data-on="true"] {
+  background: var(--card);
+  color: var(--text-strong);
+}
+.art-seg-tab:focus-visible {
+  outline: 2px solid var(--accent);
+}
 .art-refresh {
   all: unset;
   width: 22px;

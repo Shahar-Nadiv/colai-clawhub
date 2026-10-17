@@ -1,4 +1,8 @@
-// The person's artifacts, one key per kind: Design, Docs, Slides, Dashboard.
+// The person's artifacts, one key per kind: Docs, Slides, Dashboard — and a door to Claude Design.
+//
+// Claude Design projects are not artifacts, and nothing a plugin can call lists them, so the Design
+// key does not pretend to: it opens claude.ai/design, where they live. Each shelf can also show
+// every artifact — most are plain pages of no type, and would otherwise be on no shelf at all.
 //
 // Each key opens a scrollable popup like the tools grid: "New <kind>" first, then the person's own
 // artifacts of that kind, newest first, each opening in the browser. They are listed through the
@@ -23,6 +27,9 @@ const ARTIFACT_PREVIEWS = {
     '<rect x="16" y="12" width="128" height="76" rx="5" class="ap-sheet"/><rect x="26" y="22" width="30" height="12" rx="3" class="ap-soft"/><rect x="62" y="22" width="30" height="12" rx="3" class="ap-soft"/><rect x="98" y="22" width="36" height="12" rx="3" class="ap-soft"/><rect x="28" y="62" width="9" height="18" rx="2" class="ap-soft"/><rect x="42" y="52" width="9" height="28" rx="2" class="ap-soft"/><rect x="56" y="58" width="9" height="22" rx="2" class="ap-soft"/><rect x="70" y="44" width="9" height="36" rx="2" class="ap-accent"/><path d="M90 74 L104 60 L116 66 L132 46" class="ap-line"/>',
   Design:
     '<rect x="12" y="20" width="62" height="62" rx="5" class="ap-sheet"/><rect x="84" y="12" width="64" height="44" rx="5" class="ap-sheet"/><rect x="84" y="62" width="64" height="26" rx="5" class="ap-sheet"/><circle cx="43" cy="44" r="12" class="ap-accent"/><rect x="26" y="64" width="34" height="4" rx="2" class="ap-soft"/><rect x="94" y="24" width="30" height="5" rx="2" class="ap-ink"/><rect x="94" y="34" width="44" height="3.5" rx="1.75" class="ap-soft"/><rect x="94" y="72" width="22" height="5" rx="2.5" class="ap-soft"/>',
+  // Any page: a browser window, its address bar, a heading and some text.
+  All:
+    '<rect x="16" y="10" width="128" height="80" rx="5" class="ap-sheet"/><circle cx="26" cy="20" r="2.2" class="ap-soft"/><circle cx="33" cy="20" r="2.2" class="ap-soft"/><circle cx="40" cy="20" r="2.2" class="ap-soft"/><rect x="50" y="17" width="80" height="6" rx="3" class="ap-soft"/><rect x="28" y="36" width="56" height="7" rx="2" class="ap-ink"/><rect x="28" y="50" width="104" height="4" rx="2" class="ap-soft"/><rect x="28" y="59" width="92" height="4" rx="2" class="ap-soft"/><rect x="28" y="72" width="24" height="8" rx="4" class="ap-accent"/>',
 };
 
 function artifactPreview(kind, seed) {
@@ -65,13 +72,16 @@ function varyPreview(holder, seed) {
 
 /** The kinds, in rail order, with how each is drawn and spoken of. */
 const ARTIFACT_KINDS = [
-  // `title` is the key's name: plural, because it is a shelf of them — and so "Designs" here is never
-  // confused with the Design key beside it, which makes wireframes and redlines.
-  { id: "Design", title: "Designs", glyph: "artDesign", many: "designs", one: "design" },
+  // Not a shelf: a door to Claude Design, whose projects no plugin can list.
+  { id: "Design", title: "Claude Design ↗", glyph: "artDesign", door: "https://claude.ai/design" },
+  // `title` is the key's name: plural, because it is a shelf of them.
   { id: "Docs", title: "Docs", glyph: "artDocs", many: "docs", one: "doc" },
   { id: "Slides", title: "Slides", glyph: "artSlides", many: "slide decks", one: "slide deck" },
   { id: "Dashboard", title: "Dashboards", glyph: "artDashboard", many: "dashboards", one: "dashboard" },
 ];
+
+/** Every artifact, typed or not — the shelf's other half. */
+const ALL_ARTIFACTS = { id: "All", title: "All artifacts", many: "artifacts", one: "artifact" };
 
 function artifactKind(id) {
   return ARTIFACT_KINDS.find((one) => one.id === id) || null;
@@ -86,7 +96,22 @@ function artifactsOpen() {
 function openArtifacts(kind) {
   state.artNew = null;
   flyout(`art:${kind}`);
-  if (artifactsOpen() === kind) void loadArtifacts(kind);
+  if (artifactsOpen() === kind) void loadArtifacts(shelfOf(kind));
+}
+
+/** What the open shelf lists: the key's kind, or everything. */
+function shelfOf(kind) {
+  return state.artAll ? "All" : kind;
+}
+
+/** Open a claude.ai place in the browser — Claude Design, or one artifact. */
+function openDoor(url) {
+  state.open = null;
+  void invoke("colai_open_artifact", { url: url }).catch((trouble) => {
+    state.trouble = String(trouble);
+    render();
+  });
+  render();
 }
 
 async function loadArtifacts(kind) {
@@ -151,19 +176,34 @@ function drawArtifacts() {
   el.flyArt.hidden = !kind;
   if (!kind) return;
   const named = artifactKind(kind);
-  const listed = state.artifacts[kind] || { items: [], loading: false, error: "" };
+  const shelf = shelfOf(kind);
+  const shown = shelf === "All" ? ALL_ARTIFACTS : named;
+  const listed = state.artifacts[shelf] || { items: [], loading: false, error: "" };
 
   const head = document.createElement("div");
   head.className = "kit-head art-head";
+  // The key's kind, or all of them: a segmented switch, the way Claude's own filters read.
   const title = document.createElement("span");
-  title.textContent = named.title;
+  title.className = "art-seg";
+  for (const [id, said] of [[kind, named.title], ["All", "All"]]) {
+    const tab = document.createElement("button");
+    tab.type = "button";
+    tab.className = "art-seg-tab";
+    tab.dataset.on = String(shelf === id);
+    tab.textContent = said;
+    tab.addEventListener("click", () => {
+      state.artAll = id === "All";
+      void loadArtifacts(shelfOf(kind));
+    });
+    title.append(tab);
+  }
   const again = document.createElement("button");
   again.type = "button";
   again.className = "art-refresh";
-  again.title = `Look up your ${named.many} again`;
+  again.title = `Look up your ${shown.many} again`;
   again.setAttribute("aria-label", again.title);
   again.textContent = "↻";
-  again.addEventListener("click", () => void loadArtifacts(kind));
+  again.addEventListener("click", () => void loadArtifacts(shelf));
   head.append(title, again);
 
   if (state.artNew === kind) {
@@ -210,29 +250,25 @@ function drawArtifacts() {
     name.textContent = item.title;
     const sub = document.createElement("span");
     sub.className = "art-sub";
-    sub.textContent = item.updated ? `${named.title} · ${item.updated}` : named.title;
+    const what = shelf === "All" ? "Artifact" : named.title;
+    sub.textContent = item.updated ? `${what} · ${item.updated}` : what;
     meta.append(name, sub);
     const open = document.createElement("span");
     open.className = "art-open";
     open.setAttribute("aria-hidden", "true");
     open.textContent = "↗";
-    card.append(artifactPreview(kind, item.title + item.url), meta, open);
-    card.addEventListener("click", () => {
-      void invoke("colai_open_artifact", { url: item.url }).catch((trouble) => {
-        state.trouble = String(trouble);
-        render();
-      });
-    });
+    card.append(artifactPreview(shelf, item.title + item.url), meta, open);
+    card.addEventListener("click", () => openDoor(item.url));
     grid.append(card);
   }
 
   const bits = [head, grid];
   const note = listed.loading
-    ? `Looking up your ${named.many}…`
+    ? `Looking up your ${shown.many}…`
     : listed.error
       ? listed.error
       : listed.items.length === 0
-        ? `No ${named.many} yet. Make one with +.`
+        ? `No ${shown.many} yet. Make one with +.`
         : "";
   if (note) {
     const said = document.createElement("p");
