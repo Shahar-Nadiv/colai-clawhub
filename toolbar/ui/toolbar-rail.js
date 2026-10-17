@@ -47,6 +47,11 @@ const GLYPHS = {
   // Scheduled tasks: a clock. The hands point to the top-right, the way a clock face is drawn
   // when it is standing in for "later" rather than telling a particular time.
   clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3.4 2"/>',
+  // The four artifact kinds: an artboard, a page, a screen on a stand, a bar chart.
+  artDesign: '<rect x="3" y="4" width="18" height="16" rx="2"/><rect x="6" y="7" width="7" height="5" rx="1"/><path d="M15.5 8h2.5M15.5 11h2.5M6 15.5h12"/>',
+  artDocs: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M8.5 12.5h7M8.5 16h5"/>',
+  artSlides: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/><path d="M7 8.5h6M7 11.5h4"/>',
+  artDashboard: '<path d="M6 19v-6M11 19V6M16 19v-9"/><path d="M3.5 20.5h17"/>',
   close: '<path d="M7 7l10 10M17 7L7 17"/>',
   folder:
     '<path d="M3 7.5a2 2 0 0 1 2-2h3.6l2 2.4H19a2 2 0 0 1 2 2v7.6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
@@ -173,13 +178,13 @@ function buildRail() {
   );
   dividers[3].after(utilities);
 
-  // History: step the marks back and forward.
-  const history = document.createDocumentFragment();
-  history.append(
-    key("undo", "Undo · Ctrl Z", "undo", undo),
-    key("redo", "Redo · Ctrl Shift Z", "redo", redo),
-  );
-  dividers[4].after(history);
+  // Artifacts: the person's designs, docs, slides and dashboards, and making new ones. Where undo
+  // and redo stood — those are Ctrl+Z and Ctrl+Shift+Z still, without spending two keys on it.
+  const artifacts = document.createDocumentFragment();
+  for (const kind of ARTIFACT_KINDS) {
+    artifacts.append(key(`art${kind.id}`, kind.title, kind.glyph, () => openArtifacts(kind.id), MENU));
+  }
+  dividers[4].after(artifacts);
 
   const chat = document.createElement("button");
   chat.type = "button";

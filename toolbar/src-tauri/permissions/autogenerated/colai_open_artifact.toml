@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-open-artifact"
+description = "Enables the colai_open_artifact command without any pre-configured scope."
+commands.allow = ["colai_open_artifact"]
+
+[[permission]]
+identifier = "deny-colai-open-artifact"
+description = "Denies the colai_open_artifact command without any pre-configured scope."
+commands.deny = ["colai_open_artifact"]

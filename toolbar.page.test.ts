@@ -33,7 +33,7 @@ const { parseHTML } = require("linkedom");
 const UI = new URL("./toolbar/ui/", import.meta.url);
 const read = (name: string) => readFileSync(new URL(name, UI), "utf8");
 
-const ORDER = ["toolbar-tools.js","toolbar-markdown.js","toolbar-jelly.js","toolbar-rail.js","toolbar-kit.js","toolbar-mark.js","toolbar-live.js",
+const ORDER = ["toolbar-tools.js","toolbar-markdown.js","toolbar-jelly.js","toolbar-rail.js","toolbar-kit.js","toolbar-artifacts.js","toolbar-mark.js","toolbar-live.js",
   "toolbar-answers.js","toolbar-compose.js","toolbar-work.js",
   "toolbar-toast.js","toolbar-send.js","toolbar-dock.js","toolbar-shell.js","toolbar-context.js","toolbar-settings.js","toolbar-schedule.js","toolbar-response.js","toolbar.js"];
 
@@ -1101,6 +1101,78 @@ describe("the receiver's name cannot push Send out of the popup", () => {
  * default, that turning Review on actually makes the session ask, and that a change with no
  * picture to show opens the code on its own rather than showing nothing.
  */
+describe("the artifact keys: designs, docs, slides, dashboards", () => {
+  const LISTED = [
+    "Showing 2 of 2 published artifacts:",
+    "- (mine) Q3 Pitch — https://claude.ai/artifact/AAA111 — updated 2026-10-01",
+    "- (mine) Onboarding deck — https://claude.ai/artifact/BBB222 — updated 2026-09-20",
+  ].join("\n");
+  const click = (page: ReturnType<typeof openTheToolbar>, el: Element | null | undefined) =>
+    (el as unknown as { dispatchEvent: (e: unknown) => void }).dispatchEvent(new page.dom.window.Event("click"));
+
+  test("undo and redo left the rail; the four artifact keys took their place", async () => {
+    const page = openTheToolbar();
+    await settle();
+    const titles = [...page.dom.document.querySelectorAll("#rail .key")].map((k) => k.getAttribute("title"));
+    expect(titles).toEqual(expect.arrayContaining(["Designs", "Docs", "Slides", "Dashboards"]));
+    expect(titles.some((t) => String(t).startsWith("Undo"))).toBe(false);
+  });
+
+  test("a key opens its shelf: New first, then the person's own, newest first", async () => {
+    const page = openTheToolbar({ answers: { colai_artifacts: LISTED } });
+    await settle();
+    page.run(`openArtifacts("Slides")`);
+    await settle();
+    const asked = page.askedWith.find(([name]) => name === "colai_artifacts")?.[1];
+    expect(asked).toMatchObject({ kind: "Slides" });
+    const names = [...page.dom.document.querySelectorAll("#fly-art .kit-name")].map((n) => n.textContent);
+    expect(names).toEqual(["New slide deck", "Q3 Pitch", "Onboarding deck"]);
+  });
+
+  test("an artifact opens its own page", async () => {
+    const page = openTheToolbar({ answers: { colai_artifacts: LISTED } });
+    await settle();
+    page.run(`openArtifacts("Slides")`);
+    await settle();
+    click(page, page.dom.document.querySelectorAll("#fly-art .art-card")[0]);
+    await settle();
+    const opened = page.askedWith.find(([name]) => name === "colai_open_artifact")?.[1];
+    expect(opened).toMatchObject({ url: "https://claude.ai/artifact/AAA111" });
+  });
+
+  test("New asks the receiving chat to make one, with what it is about", async () => {
+    const page = openTheToolbar({
+      answers: { colai_artifacts: LISTED, colai_send: { sessionKey: "chat-1", prompt: "p", watching: true, pictures: 0, sentTo: true } },
+    });
+    await settle();
+    page.run(`state.receiving = { kind: "session", id: "chat-1", name: "Claude" }; openArtifacts("Dashboard")`);
+    await settle();
+    page.run(`createArtifact("Dashboard", "weekly signups")`);
+    await settle();
+    expect(page.asked).toContain("colai_send");
+    const sent = JSON.stringify(page.askedWith.find(([name]) => name === "colai_send")?.[1]);
+    expect(sent).toContain("Create a new Dashboard artifact — weekly signups");
+  });
+
+  test("when it cannot be listed, the shelf says why and still offers New", async () => {
+    const page = openTheToolbar();
+    await settle();
+    page.run(`state.artifacts.Docs = { items: [], loading: false, error: "Open a chat in Claude Desktop" }; state.open = "art:Docs"; render()`);
+    expect(page.dom.document.querySelector("#fly-art .art-trouble")?.textContent).toContain("Open a chat in Claude Desktop");
+    expect(page.dom.document.querySelector("#fly-art .kit-add")).toBeTruthy();
+  });
+
+  test("the listing is read line by line, and nothing else counts as a row", async () => {
+    const page = openTheToolbar();
+    await settle();
+    const rows = page.run(`parseArtifacts(${JSON.stringify(LISTED + "\n(3 more not shown)")})`) as unknown[];
+    expect(rows).toEqual([
+      { title: "Q3 Pitch", url: "https://claude.ai/artifact/AAA111", updated: "2026-10-01" },
+      { title: "Onboarding deck", url: "https://claude.ai/artifact/BBB222", updated: "2026-09-20" },
+    ]);
+  });
+});
+
 describe("the tools grid, and tools people make", () => {
   const click = (page: ReturnType<typeof openTheToolbar>, selector: string) =>
     (page.dom.document.querySelector(selector) as unknown as { dispatchEvent: (e: unknown) => void }).dispatchEvent(
@@ -1886,7 +1958,7 @@ describe("the rail groups", () => {
       expect.arrayContaining(["Measure · M", "Colour · C", "Screenshot"]),
     );
     expect(groups[3].length, "utilities is the fold key plus the exact tools").toBe(5);
-    expect(groups[4], "history").toEqual(["Undo · Ctrl Z", "Redo · Ctrl Shift Z"]);
+    expect(groups[4], "artifacts, where undo and redo were").toEqual(["Designs", "Docs", "Slides", "Dashboards"]);
     expect(groups[5][0], "work leads with the clock, to the left of Work").toMatch(/^Scheduled tasks/);
     expect(groups[5].some((t) => t.startsWith("Work")), "the Work key is in the group").toBe(true);
     expect(groups[5], "work holds the conversation key").toContain("Who receives this?");

@@ -44,6 +44,43 @@ function isAMark(name: string): boolean {
   return !name.startsWith('.') && !name.endsWith('.part') && !name.endsWith('.relaying')
 }
 
+/** The artifact types the toolbar may ask for — Claude's own core types, and nothing else. */
+const ARTIFACT_KINDS = ['Design', 'Docs', 'Slides', 'Dashboard']
+
+/*
+ * The toolbar's questions, answered from inside the session.
+ *
+ * The toolbar shows the person's artifacts (Design, Docs, Slides, Dashboard), and only a session
+ * signed in to claude.ai can list them. A `claude` the toolbar starts has its own sign-in, which the
+ * desktop app's does not share and which lapses; this module already runs inside the person's own
+ * session, so it asks there — the Artifact tool, called directly, no model turn, no cost.
+ *
+ * `<room>/.ask/<id>.json` is a question (`{ "artifacts": "<kind>" }`); `<id>.answer.json` beside
+ * it is the answer (`{ text }` or `{ error }`). The toolbar writes the one, waits for the other,
+ * and clears both.
+ */
+async function answerAsks($: Engine, room: string) {
+  const asks = `${room}/.ask`
+  if (!(await $.fs.exists(asks))) return
+  for (const entry of await $.fs.list(asks)) {
+    if (entry.kind !== 'file' || !entry.name.endsWith('.json') || entry.name.endsWith('.answer.json')) continue
+    const id = entry.name.slice(0, -'.json'.length)
+    const answer = `${asks}/${id}.answer.json`
+    if (await $.fs.exists(answer)) continue
+    let said: { text?: string; error?: string }
+    try {
+      const asked = JSON.parse(await $.fs.read(`${asks}/${entry.name}`)) as { artifacts?: string }
+      const kind = String(asked.artifacts || '')
+      if (!ARTIFACT_KINDS.includes(kind)) throw new Error(`not an artifact type colai lists: ${kind}`)
+      const listed = await $.tool.call({ tool: 'Artifact', action: 'list', type: kind, limit: 60 } as never)
+      said = { text: String((listed as { text?: string }).text ?? '') }
+    } catch (trouble) {
+      said = { error: trouble instanceof Error ? trouble.message : String(trouble) }
+    }
+    await $.fs.write(answer, JSON.stringify(said))
+  }
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const started = await next(e)
@@ -59,6 +96,7 @@ export const register: Register = on => {
           if (tick++ % BEAT_EVERY === 0) {
             await $.fs.write(`${room}/.bridge`, String(Date.now()))
           }
+          await answerAsks($, room)
           const marks = (await $.fs.list(room))
             .filter(entry => entry.kind === 'dir' && isAMark(entry.name))
             .map(entry => entry.name)

@@ -5,6 +5,7 @@ fn main() {
     const COMMANDS: &[&str] = &[
         "colai_allow_now",
         "colai_answer",
+        "colai_artifacts",
         "colai_at_work",
         "colai_came_from",
         "colai_capture_mark",
@@ -18,6 +19,7 @@ fn main() {
         "colai_describe_files",
         "colai_frontmost",
         "colai_in_front",
+        "colai_open_artifact",
         "colai_open_desktop",
         "colai_pick_files",
         "colai_pick_folder",

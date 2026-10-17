@@ -22,6 +22,7 @@ const el = {
   grip: document.getElementById("grip"),
   flyShape: document.getElementById("fly-shape"),
   flyTools: document.getElementById("fly-tools"),
+  flyArt: document.getElementById("fly-art"),
   flyDesign: document.getElementById("fly-design"),
   flyGit: document.getElementById("fly-git"),
   flyRecord: document.getElementById("fly-record"),
@@ -189,6 +190,10 @@ const state = {
   kitTrouble: "",
   // The made tool whose tile is asking "Remove?".
   kitRemoving: null,
+  // The person's artifacts by kind (toolbar-artifacts.js), the kind being made, and what it is about.
+  artifacts: {},
+  artNew: null,
+  artAbout: "",
   // Whether a picture is being taken right now.
   //
   // The overlay makes itself invisible to photograph what is behind it, which briefly
@@ -515,8 +520,10 @@ function render() {
       button.setAttribute("aria-expanded", String(state.open === id));
     }
   }
-  buttons.undo.disabled = state.marks.length === 0;
-  buttons.redo.disabled = state.undone.length === 0;
+  for (const kind of ARTIFACT_KINDS) {
+    const button = buttons[`art${kind.id}`];
+    if (button) button.setAttribute("aria-pressed", String(state.open === `art:${kind.id}`));
+  }
 
   // What is actually still running, rather than what was last started. A run that has
   // gone quiet for minutes is one the toolbar has lost track of, and claiming it is
@@ -628,6 +635,7 @@ function render() {
 
   el.flyShape.hidden = state.open !== "shape";
   drawKit();
+  drawArtifacts();
   el.flyDesign.hidden = state.open !== "design";
   el.flyGit.hidden = state.open !== "git";
   // Folded, the six close up where they stand rather than vanishing — the stylesheet
@@ -705,6 +713,7 @@ function render() {
   for (const [node, anchor] of [
     [el.flyShape, buttons.shape],
     [el.flyTools, buttons.exact],
+    [el.flyArt, buttons[`art${artifactsOpen() || "Design"}`]],
     [el.flyDesign, buttons.design],
     [el.flyGit, buttons.git],
     [el.flyRecord, buttons.record],

@@ -64,6 +64,10 @@ commands.allow = [
   # Bring Claude Desktop forward once a mark reaches a chat open there: the conversation goes on
   # in the app, which has what the toolbar's card does not. See `colai_desktop`.
   "colai_open_desktop",
+  # The person's artifacts for the rail's Design / Docs / Slides / Dashboard keys: listed through
+  # the bridge inside their own session, and opened — claude.ai links only. See `colai_artifacts`.
+  "colai_artifacts",
+  "colai_open_artifact",
   # The Context map's local store: list saved contexts, save this conversation as one,
   # resolve a set into a drop manifest, and clear the staged set.
   "colai_contexts_list",
