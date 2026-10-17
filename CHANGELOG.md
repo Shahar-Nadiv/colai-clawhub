@@ -7,6 +7,14 @@ is not a record of anything.
 
 ## Unreleased
 
+## 0.5.4 — 2026-10-17
+
+- **Claude Design, one click away.** Claude Design projects are not artifacts, and nothing a plugin
+  can call lists them, so the Design key no longer shows a shelf of Design-type artifacts: it opens
+  claude.ai/design, where your projects are.
+- **All artifacts.** Each shelf (Docs, Slides, Dashboards) switches between its own kind and every
+  artifact you have made, so plain pages of no type are on a shelf too.
+
 ## 0.5.3 — 2026-10-17
 
 - **Artifact shelves that read like Claude's gallery.** Two across, a preview, the title, the kind
