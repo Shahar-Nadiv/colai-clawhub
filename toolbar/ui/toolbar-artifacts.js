@@ -6,6 +6,63 @@
 // to claude.ai — and a new one is asked of the chat that is receiving, so Claude makes it with the
 // whole conversation and any marks to draw on, rather than the toolbar making an empty shell.
 
+/*
+ * A preview per kind, drawn — not a picture of the artifact.
+ *
+ * Claude keeps each artifact's thumbnail to itself: neither the listing nor a read of one hands a
+ * plugin an image, and the pages need the person's claude.ai sign-in to render. So each card
+ * shows what kind of thing it is, the way Claude's own gallery reads at a glance: a slide in its
+ * frame, a page of text, a chart, artboards on a canvas. Quiet ink on the card's own tint.
+ */
+const ARTIFACT_PREVIEWS = {
+  Slides:
+    '<rect x="18" y="14" width="124" height="70" rx="5" class="ap-sheet"/><rect x="32" y="30" width="58" height="7" rx="2" class="ap-ink"/><rect x="32" y="44" width="80" height="4" rx="2" class="ap-soft"/><rect x="32" y="53" width="66" height="4" rx="2" class="ap-soft"/><rect x="106" y="28" width="22" height="22" rx="4" class="ap-accent"/><circle cx="74" cy="92" r="2" class="ap-ink"/><circle cx="82" cy="92" r="2" class="ap-soft"/><circle cx="90" cy="92" r="2" class="ap-soft"/>',
+  Docs:
+    '<rect x="48" y="8" width="64" height="86" rx="5" class="ap-sheet"/><rect x="58" y="20" width="34" height="6" rx="2" class="ap-ink"/><rect x="58" y="34" width="44" height="3.5" rx="1.75" class="ap-soft"/><rect x="58" y="42" width="40" height="3.5" rx="1.75" class="ap-soft"/><rect x="58" y="50" width="44" height="3.5" rx="1.75" class="ap-soft"/><rect x="58" y="62" width="30" height="3.5" rx="1.75" class="ap-accent"/><rect x="58" y="70" width="42" height="3.5" rx="1.75" class="ap-soft"/><rect x="58" y="78" width="36" height="3.5" rx="1.75" class="ap-soft"/>',
+  Dashboard:
+    '<rect x="16" y="12" width="128" height="76" rx="5" class="ap-sheet"/><rect x="26" y="22" width="30" height="12" rx="3" class="ap-soft"/><rect x="62" y="22" width="30" height="12" rx="3" class="ap-soft"/><rect x="98" y="22" width="36" height="12" rx="3" class="ap-soft"/><rect x="28" y="62" width="9" height="18" rx="2" class="ap-soft"/><rect x="42" y="52" width="9" height="28" rx="2" class="ap-soft"/><rect x="56" y="58" width="9" height="22" rx="2" class="ap-soft"/><rect x="70" y="44" width="9" height="36" rx="2" class="ap-accent"/><path d="M90 74 L104 60 L116 66 L132 46" class="ap-line"/>',
+  Design:
+    '<rect x="12" y="20" width="62" height="62" rx="5" class="ap-sheet"/><rect x="84" y="12" width="64" height="44" rx="5" class="ap-sheet"/><rect x="84" y="62" width="64" height="26" rx="5" class="ap-sheet"/><circle cx="43" cy="44" r="12" class="ap-accent"/><rect x="26" y="64" width="34" height="4" rx="2" class="ap-soft"/><rect x="94" y="24" width="30" height="5" rx="2" class="ap-ink"/><rect x="94" y="34" width="44" height="3.5" rx="1.75" class="ap-soft"/><rect x="94" y="72" width="22" height="5" rx="2.5" class="ap-soft"/>',
+};
+
+function artifactPreview(kind, seed) {
+  const holder = document.createElement("span");
+  holder.className = "art-thumb";
+  holder.dataset.kind = kind;
+  holder.innerHTML = `<svg viewBox="0 0 160 100" aria-hidden="true">${ARTIFACT_PREVIEWS[kind] || ""}</svg>`;
+  if (seed) varyPreview(holder, seed);
+  return holder;
+}
+
+/*
+ * The same drawing would make every card look like one artifact. Each is varied a little by its
+ * own title — bar heights, line lengths, where the accent sits — so a shelf reads as several
+ * things, and the same artifact always looks the same.
+ */
+function varyPreview(holder, seed) {
+  let hash = 2166136261;
+  for (const ch of String(seed)) hash = Math.imul(hash ^ ch.charCodeAt(0), 16777619) >>> 0;
+  const next = () => {
+    hash = Math.imul(hash ^ (hash >>> 15), 2246822507) >>> 0;
+    return (hash % 1000) / 1000;
+  };
+  for (const bar of holder.querySelectorAll("rect.ap-soft, rect.ap-ink")) {
+    const wide = Number(bar.getAttribute("width"));
+    const tall = Number(bar.getAttribute("height"));
+    if (tall > wide) {
+      // A chart bar: grow or shrink it from its base.
+      const base = Number(bar.getAttribute("y")) + tall;
+      const grown = Math.max(6, Math.round(tall * (0.55 + next() * 0.7)));
+      bar.setAttribute("height", String(grown));
+      bar.setAttribute("y", String(base - grown));
+    } else if (wide > 14) {
+      bar.setAttribute("width", String(Math.round(wide * (0.6 + next() * 0.4))));
+    }
+  }
+  const accent = holder.querySelector(".ap-accent");
+  if (accent && accent.tagName.toLowerCase() === "rect" && next() < 0.35) accent.remove();
+}
+
 /** The kinds, in rail order, with how each is drawn and spoken of. */
 const ARTIFACT_KINDS = [
   // `title` is the key's name: plural, because it is a shelf of them — and so "Designs" here is never
@@ -58,8 +115,16 @@ async function loadArtifacts(kind) {
 function parseArtifacts(text) {
   const rows = [];
   for (const line of String(text || "").split("\n")) {
-    const found = line.match(/^-\s+(?:\([^)]*\)\s+)?(.+?)\s+—\s+(https:\/\/claude\.ai\/\S+)(?:\s+—\s+updated\s+(\S+))?/);
-    if (found) rows.push({ title: found[1], url: found[2], updated: found[3] || "" });
+    if (!line.startsWith("- ")) continue;
+    // Parts by what they are, not where they sit: the per-type listing carries the type's
+    // description between title and link (`(mine) Title — what the type is — link`), the plain
+    // one an "updated" date after the link. The title is first; the link is the claude.ai part.
+    const parts = line.slice(2).split(" — ").map((part) => part.trim());
+    const url = parts.find((part) => /^https:\/\/claude\.ai\/\S+$/.test(part));
+    if (!url) continue;
+    const title = parts[0].replace(/^(?:\([^)]*\)\s*)+/, "").trim() || "Untitled";
+    const dated = parts.find((part) => part.startsWith("updated "));
+    rows.push({ title, url, updated: dated ? dated.slice("updated ".length) : "" });
   }
   return rows;
 }
@@ -107,19 +172,25 @@ function drawArtifacts() {
   }
 
   const grid = document.createElement("div");
-  grid.className = "kit-grid art-grid";
+  grid.className = "art-grid";
 
   const add = document.createElement("button");
   add.type = "button";
-  add.className = "kit-cell kit-add";
+  add.className = "art-card kit-add";
   add.title = `Ask Claude to make a new ${named.one}`;
   const plus = document.createElement("span");
-  plus.className = "kit-face kit-plus";
+  plus.className = "art-thumb art-new";
   plus.textContent = "+";
+  const addMeta = document.createElement("span");
+  addMeta.className = "art-meta";
   const addSaid = document.createElement("span");
-  addSaid.className = "kit-name";
+  addSaid.className = "kit-name art-title";
   addSaid.textContent = `New ${named.one}`;
-  add.append(plus, addSaid);
+  const addSub = document.createElement("span");
+  addSub.className = "art-sub";
+  addSub.textContent = "Made in your chat";
+  addMeta.append(addSaid, addSub);
+  add.append(plus, addMeta);
   add.addEventListener("click", () => {
     state.artNew = kind;
     render();
@@ -129,15 +200,23 @@ function drawArtifacts() {
   for (const item of listed.items) {
     const card = document.createElement("button");
     card.type = "button";
-    card.className = "kit-cell art-card";
-    card.title = item.updated ? `${item.title} · updated ${item.updated}` : item.title;
+    card.className = "art-card";
+    card.title = `Open ${item.title}`;
+    const meta = document.createElement("span");
+    meta.className = "art-meta";
     const name = document.createElement("span");
-    name.className = "kit-name";
+    name.className = "kit-name art-title";
+    name.dataset.untitled = String(item.title === "Untitled");
     name.textContent = item.title;
-    const when = document.createElement("span");
-    when.className = "art-when";
-    when.textContent = item.updated;
-    card.append(kitFace({ glyph: named.glyph }), name, when);
+    const sub = document.createElement("span");
+    sub.className = "art-sub";
+    sub.textContent = item.updated ? `${named.title} · ${item.updated}` : named.title;
+    meta.append(name, sub);
+    const open = document.createElement("span");
+    open.className = "art-open";
+    open.setAttribute("aria-hidden", "true");
+    open.textContent = "↗";
+    card.append(artifactPreview(kind, item.title + item.url), meta, open);
     card.addEventListener("click", () => {
       void invoke("colai_open_artifact", { url: item.url }).catch((trouble) => {
         state.trouble = String(trouble);

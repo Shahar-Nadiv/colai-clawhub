@@ -1134,7 +1134,7 @@ describe("the artifact keys: designs, docs, slides, dashboards", () => {
     await settle();
     page.run(`openArtifacts("Slides")`);
     await settle();
-    click(page, page.dom.document.querySelectorAll("#fly-art .art-card")[0]);
+    click(page, page.dom.document.querySelectorAll("#fly-art .art-card:not(.kit-add)")[0]);
     await settle();
     const opened = page.askedWith.find(([name]) => name === "colai_open_artifact")?.[1];
     expect(opened).toMatchObject({ url: "https://claude.ai/artifact/AAA111" });
@@ -1169,6 +1169,21 @@ describe("the artifact keys: designs, docs, slides, dashboards", () => {
     expect(rows).toEqual([
       { title: "Q3 Pitch", url: "https://claude.ai/artifact/AAA111", updated: "2026-10-01" },
       { title: "Onboarding deck", url: "https://claude.ai/artifact/BBB222", updated: "2026-09-20" },
+    ]);
+  });
+
+  test("the per-type listing, with the type's description in the middle, still reads as title and link", async () => {
+    // What the Artifact tool really returns for `list` with a type, seen live.
+    const typed = [
+      "2 Artifacts made from the type \"Design\" (https://claude.ai/artifact/QKN21) that this user can open. Each row leads with (mine)...:",
+      "- (mine) Untitled — Design canvas for websites, landing pages — https://claude.ai/artifact/7AkKJ",
+      "- (mine) Launch page — Design canvas for websites, landing pages — https://claude.ai/artifact/QgzvG",
+    ].join("\n");
+    const page = openTheToolbar();
+    await settle();
+    expect(page.run(`parseArtifacts(${JSON.stringify(typed)})`)).toEqual([
+      { title: "Untitled", url: "https://claude.ai/artifact/7AkKJ", updated: "" },
+      { title: "Launch page", url: "https://claude.ai/artifact/QgzvG", updated: "" },
     ]);
   });
 });
