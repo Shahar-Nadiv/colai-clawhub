@@ -7,6 +7,17 @@ is not a record of anything.
 
 ## Unreleased
 
+## 0.5.2 — 2026-10-17
+
+Your artifacts, on the rail.
+
+- **Designs, Docs, Slides, Dashboards.** Four keys where undo and redo were (Ctrl+Z and
+  Ctrl+Shift+Z still work). Each opens a scrollable shelf of your own artifacts of that kind,
+  newest first; click one to open it. New, first on the shelf, asks the chat you are sending to
+  to make one, from what it should be about and anything you have marked.
+- **Listed through your own session.** The bridge asks Claude's Artifact tool from inside your
+  Claude Desktop (or terminal) session, so it needs no separate sign-in and costs nothing.
+
 ## 0.5.1 — 2026-10-16
 
 - **Remove a tool you made, from its tile.** Hover a tool you made in the tools grid and press ×;
