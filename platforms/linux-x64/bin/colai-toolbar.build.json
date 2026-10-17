@@ -2,5 +2,5 @@
   "image": "colai-release-build:jammy",
   "glibc": "2.35",
   "at": "2026-10-17",
-  "sha256": "fc20f8ce59f56322d8378a275f6c4d5e80f6077b96448c6e1c7eca10303cbf3b"
+  "sha256": "b2e0468387a6387dbee85a5f3e00e843f6aee1d29ec2a3e8f55ccc47e33eaca8"
 }

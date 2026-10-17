@@ -7,6 +7,15 @@ is not a record of anything.
 
 ## Unreleased
 
+## 0.5.3 — 2026-10-17
+
+- **Artifact shelves that read like Claude's gallery.** Two across, a preview, the title, the kind
+  and date beneath; New first as a dashed card. Claude does not give plugins an artifact's
+  thumbnail, so each preview is a drawing of its kind, varied by the artifact so a shelf reads as
+  several things.
+- **Real titles.** The per-type listing carries the type's description in each row, which had
+  turned every title into that description; titles now read correctly.
+
 ## 0.5.2 — 2026-10-17
 
 Your artifacts, on the rail.
