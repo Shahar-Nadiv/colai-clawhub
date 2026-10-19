@@ -2,6 +2,6 @@
   "image": "aarch64-apple-darwin",
   "glibc": null,
   "macos": "11.0",
-  "at": "2026-10-05",
-  "sha256": "03eb7f684c840d4d9450d654a41f03d7075834dba31f4fda2b2c39d1de9d8ea6"
+  "at": "2026-10-19",
+  "sha256": "2022f5132200a570a43467527aaf4ea943581d824bb6b27c3146ffcf426bf68e"
 }
