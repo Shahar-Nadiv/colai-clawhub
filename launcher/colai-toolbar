@@ -167,7 +167,7 @@ start() {
 # already unpacked and already this machine's, so neither needs the cache below. Somebody
 # working on the toolbar gets the one they just compiled, not a stale copy of the shipped
 # one.
-for built in "$here/colai-toolbar.built$exe" "$plugin/platforms/$which/bin/colai-toolbar$exe"; do
+for built in "$plugin/bin/colai-toolbar.built$exe" "$plugin/platforms/$which/bin/colai-toolbar$exe"; do
   if [ -x "$built" ]; then
     start "$built" "$@"
   fi

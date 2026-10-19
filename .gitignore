@@ -1,9 +1,8 @@
 # Build output.
 #
-# `bin/` is not ignored wholesale any more, because one file in it is now source: the
-# launcher `/colai:show` reaches on PATH. Everything a build drops beside it still is.
-bin/*
-!bin/colai-toolbar
+# `bin/` is where a local build is staged, and nothing in it is source. The launcher lives in
+# `launcher/`: a top-level `bin/` in the plugin stops Claude's apps (chat and Cowork) installing it.
+bin/
 
 dist/
 node_modules/

@@ -26,7 +26,7 @@ A plugin's `bin/` directory is added to PATH for the session, so the hook can na
 `SessionStart` hook, which starts the toolbar — so whatever the clone contains is the whole
 of what the user gets.
 
-That is the reason `bin/colai-toolbar` is a shell script and not the binary. The toolbar has
+That is the reason `launcher/colai-toolbar` is a shell script and not the binary. The toolbar has
 to be found or unpacked on first use, from inside the install, with no network. See the
 comments in that file; the short version is that the 5 MB archive is tracked in git, the
 13 MB binary it unpacks to is not, and the digest beside it is what says they are the same

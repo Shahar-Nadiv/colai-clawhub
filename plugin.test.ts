@@ -33,7 +33,7 @@ const root = dirname(fileURLToPath(import.meta.url));
 const read = (...where: string[]) => readFileSync(join(root, ...where), "utf8");
 const readJson = (...where: string[]) => JSON.parse(read(...where));
 
-const LAUNCHER = join(root, "bin", "colai-toolbar");
+const LAUNCHER = join(root, "launcher", "colai-toolbar");
 const ARCHIVE = join("platforms", "linux-x64", "bin", "colai-toolbar.gz");
 const PROMISED = join("platforms", "linux-x64", "bin", "colai-toolbar.sha256");
 
@@ -300,9 +300,9 @@ describe("what a marketplace hands out", () => {
      */
     const plugin = mkdtempSync(join(tmpdir(), "colai-hook-in-"));
     const asked = join(plugin, "asked");
-    mkdirSync(join(plugin, "bin"));
+    mkdirSync(join(plugin, "launcher"));
     writeFileSync(
-      join(plugin, "bin", "colai-toolbar"),
+      join(plugin, "launcher", "colai-toolbar"),
       `#!/bin/sh\n[ "$1" = check ] && exit 0\nprintf '%s\\n' "$*" > "${toPosix(asked)}"\n`,
     );
     const config = mkdtempSync(join(tmpdir(), "colai-hook-cfg-"));
@@ -336,10 +336,10 @@ describe("the launcher that stands in for the binary", () => {
    */
   function installedWith(toolbar: string, digest?: string, which = "linux-x64") {
     const where = mkdtempSync(join(tmpdir(), "colai-front-door-"));
-    mkdirSync(join(where, "bin"), { recursive: true });
+    mkdirSync(join(where, "launcher"), { recursive: true });
     mkdirSync(join(where, "platforms", which, "bin"), { recursive: true });
-    writeFileSync(join(where, "bin", "colai-toolbar"), readFileSync(LAUNCHER));
-    chmodSync(join(where, "bin", "colai-toolbar"), 0o755);
+    writeFileSync(join(where, "launcher", "colai-toolbar"), readFileSync(LAUNCHER));
+    chmodSync(join(where, "launcher", "colai-toolbar"), 0o755);
 
     const bytes = Buffer.from(toolbar);
     writeFileSync(join(where, "platforms", which, "bin", "colai-toolbar.gz"), gzipSync(bytes));
@@ -354,7 +354,7 @@ describe("the launcher that stands in for the binary", () => {
 
   test.skipIf(!haveSh)("unpacks on first use, and hands the arguments on", () => {
     const { where, cache } = installedWith(A_TOOLBAR);
-    const said = runLauncher(join(where, "bin", "colai-toolbar"), ["show", "--pidfile", "/tmp/x"], {
+    const said = runLauncher(join(where, "launcher", "colai-toolbar"), ["show", "--pidfile", "/tmp/x"], {
       env: { ...process.env, XDG_CACHE_HOME: cache, COLAI_TOOLBAR_BIN: "" },
       encoding: "utf8",
     });
@@ -375,7 +375,7 @@ describe("the launcher that stands in for the binary", () => {
      * file with the right name — so it goes in the directory.
      */
     const { where, cache } = installedWith(A_TOOLBAR);
-    runLauncher(join(where, "bin", "colai-toolbar"), [], {
+    runLauncher(join(where, "launcher", "colai-toolbar"), [], {
       env: { ...process.env, XDG_CACHE_HOME: cache, COLAI_TOOLBAR_BIN: "" },
     });
 
@@ -390,7 +390,7 @@ describe("the launcher that stands in for the binary", () => {
     // closes is the case where the two disagree — a truncated clone, a half-finished
     // download, a swapped file — and the only safe answer there is to run nothing at all.
     const { where, cache } = installedWith(A_TOOLBAR, "0".repeat(64));
-    const ran = spawnLauncher(join(where, "bin", "colai-toolbar"), [], {
+    const ran = spawnLauncher(join(where, "launcher", "colai-toolbar"), [], {
       env: { ...process.env, XDG_CACHE_HOME: cache, COLAI_TOOLBAR_BIN: "" },
       encoding: "utf8",
     });
@@ -415,7 +415,7 @@ describe("the launcher that stands in for the binary", () => {
     // The SessionStart hook asks this before it promises anything, so it must answer from the
     // launcher's own logic — the build for this machine, unpacked and verified — and start nothing.
     const { where, cache } = installedWith(A_TOOLBAR);
-    const ran = spawnLauncher(join(where, "bin", "colai-toolbar"), ["check"], {
+    const ran = spawnLauncher(join(where, "launcher", "colai-toolbar"), ["check"], {
       env: { ...process.env, ...anX11Desktop, XDG_CACHE_HOME: cache, COLAI_TOOLBAR_BIN: "" },
       encoding: "utf8",
     }, linuxWithX11Tools());
@@ -426,7 +426,7 @@ describe("the launcher that stands in for the binary", () => {
 
   test.skipIf(!haveSh)("`check` names a Wayland session instead of pretending", () => {
     const { where, cache } = installedWith(A_TOOLBAR);
-    const ran = spawnLauncher(join(where, "bin", "colai-toolbar"), ["check"], {
+    const ran = spawnLauncher(join(where, "launcher", "colai-toolbar"), ["check"], {
       env: { ...process.env, ...anX11Desktop, WAYLAND_DISPLAY: "wayland-0", XDG_CACHE_HOME: cache, COLAI_TOOLBAR_BIN: "" },
       encoding: "utf8",
     }, linuxWithX11Tools());
@@ -437,7 +437,7 @@ describe("the launcher that stands in for the binary", () => {
 
   test.skipIf(!haveSh)("`check` says when there is no screen to draw on", () => {
     const { where, cache } = installedWith(A_TOOLBAR);
-    const ran = spawnLauncher(join(where, "bin", "colai-toolbar"), ["check"], {
+    const ran = spawnLauncher(join(where, "launcher", "colai-toolbar"), ["check"], {
       env: { ...process.env, ...anX11Desktop, DISPLAY: "", XDG_CACHE_HOME: cache, COLAI_TOOLBAR_BIN: "" },
       encoding: "utf8",
     }, linuxWithX11Tools());
@@ -448,7 +448,7 @@ describe("the launcher that stands in for the binary", () => {
   test.skipIf(!haveSh)("`check` on a machine with no build explains why, and fails", () => {
     // A Mac whose copy of colai carries no macOS toolbar: the hook must hear why, not "starting".
     const { where, cache } = installedWith(A_TOOLBAR);
-    const ran = spawnLauncher(join(where, "bin", "colai-toolbar"), ["check"], {
+    const ran = spawnLauncher(join(where, "launcher", "colai-toolbar"), ["check"], {
       env: { ...process.env, XDG_CACHE_HOME: cache, COLAI_TOOLBAR_BIN: "" },
       encoding: "utf8",
     }, machineShim("Darwin", "arm64"));
@@ -483,7 +483,7 @@ describe("the launcher that stands in for the binary", () => {
     test.skipIf(!haveSh)(`${mac.said} runs the ${mac.which} build`, () => {
       const { where, cache } = installedWith(A_TOOLBAR, undefined, mac.which);
       const said = runLauncher(
-        join(where, "bin", "colai-toolbar"),
+        join(where, "launcher", "colai-toolbar"),
         ["show"],
         { env: { ...process.env, XDG_CACHE_HOME: cache, COLAI_TOOLBAR_BIN: "" }, encoding: "utf8" },
         machineShim(mac.system, mac.machine, mac.translated),
@@ -497,7 +497,7 @@ describe("the launcher that stands in for the binary", () => {
     // refusal names the platform it looked for and the two commands that would fill it.
     const { where, cache } = installedWith(A_TOOLBAR); // linux-x64 only
     const ran = spawnLauncher(
-      join(where, "bin", "colai-toolbar"),
+      join(where, "launcher", "colai-toolbar"),
       ["show"],
       { env: { ...process.env, XDG_CACHE_HOME: cache, COLAI_TOOLBAR_BIN: "" }, encoding: "utf8" },
       machineShim("Darwin", "arm64"),
@@ -511,7 +511,7 @@ describe("the launcher that stands in for the binary", () => {
   test.skipIf(!haveSh)("a machine nobody has built for is told so in a sentence", () => {
     const { where, cache } = installedWith(A_TOOLBAR);
     const ran = spawnLauncher(
-      join(where, "bin", "colai-toolbar"),
+      join(where, "launcher", "colai-toolbar"),
       ["show"],
       { env: { ...process.env, XDG_CACHE_HOME: cache, COLAI_TOOLBAR_BIN: "" }, encoding: "utf8" },
       machineShim("FreeBSD", "riscv64"),
@@ -522,7 +522,7 @@ describe("the launcher that stands in for the binary", () => {
 
   /** Run the launcher with a home of our own and read back what the toolbar was handed. */
   function argvFrom(where: string, cache: string, args: string[], home: string) {
-    const said = runLauncher(join(where, "bin", "colai-toolbar"), args, {
+    const said = runLauncher(join(where, "launcher", "colai-toolbar"), args, {
       env: {
         ...process.env,
         HOME: home,
@@ -577,7 +577,7 @@ describe("the launcher that stands in for the binary", () => {
     mkdirSync(stale, { recursive: true });
     writeFileSync(join(stale, "colai-toolbar"), "an earlier release");
 
-    runLauncher(join(where, "bin", "colai-toolbar"), ["show"], {
+    runLauncher(join(where, "launcher", "colai-toolbar"), ["show"], {
       env: { ...process.env, XDG_CACHE_HOME: cache, COLAI_TOOLBAR_BIN: "" },
       encoding: "utf8",
     });
@@ -600,7 +600,7 @@ describe("the launcher that stands in for the binary", () => {
 
     let refused = false;
     try {
-      runLauncher(join(where, "bin", "colai-toolbar"), ["show"], {
+      runLauncher(join(where, "launcher", "colai-toolbar"), ["show"], {
         env: { ...process.env, XDG_CACHE_HOME: cache, COLAI_TOOLBAR_BIN: "" },
         encoding: "utf8",
         stdio: "pipe",
@@ -633,13 +633,14 @@ describe("the launcher that stands in for the binary", () => {
     const built = join(where, "colai-toolbar.fake");
     writeFileSync(built, A_TOOLBAR);
     chmodSync(built, 0o755);
-    const explicit = runLauncher(join(where, "bin", "colai-toolbar"), ["show"], {
+    const explicit = runLauncher(join(where, "launcher", "colai-toolbar"), ["show"], {
       env: { ...process.env, HOME: "/home/somebody", XDG_CONFIG_HOME: "", COLAI_TOOLBAR_BIN: built },
       encoding: "utf8",
     });
     expect(explicit, "COLAI_TOOLBAR_BIN").toContain("--pidfile /home/somebody/.config/");
 
-    // One already lying around beside the launcher.
+    // One already lying around in the build folder.
+    mkdirSync(join(where, "bin"), { recursive: true });
     const beside = join(where, "bin", "colai-toolbar.built");
     writeFileSync(beside, A_TOOLBAR);
     chmodSync(beside, 0o755);
@@ -662,7 +663,9 @@ describe("what actually travels in a clone", () => {
 
     expect(ignored(ARCHIVE), "the shipped archive must reach an install").toBe(false);
     expect(ignored(PROMISED), "and so must the digest that vouches for it").toBe(false);
-    expect(ignored(join("bin", "colai-toolbar")), "the launcher is source, not output").toBe(false);
+    expect(ignored(join("launcher", "colai-toolbar")), "the launcher is source, not output").toBe(false);
+    // And there is no top-level `bin/` in what travels: Claude's apps refuse a plugin that has one.
+    expect(ignored(join("bin", "colai-toolbar")), "nothing in bin/ travels").toBe(true);
     expect(ignored(join("platforms", "linux-x64", "bin", "colai-toolbar"))).toBe(true);
     expect(ignored(join("bin", "colai-toolbar.built")), "a local build is nobody else's").toBe(true);
   });

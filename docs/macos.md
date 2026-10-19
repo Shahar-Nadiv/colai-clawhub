@@ -27,7 +27,7 @@ answers come from AppKit and CoreGraphics:
 | Is that process still alive | `/proc` | process handle | `kill(pid, 0)` |
 | Which binary to run | `Linux-x86_64` | `MINGW*-x86_64` | `Darwin-arm64` → `darwin-arm64`, `Darwin-x86_64` → `darwin-x64`, Rosetta → `darwin-arm64` |
 
-The launcher (`bin/colai-toolbar`) is the same POSIX shell script on every platform. It
+The launcher (`launcher/colai-toolbar`) is the same POSIX shell script on every platform. It
 already finds `shasum` where Linux has `sha256sum`, and caches under `~/.cache/colai/`.
 
 ## Permissions a Mac will ask for
@@ -70,7 +70,7 @@ npm run build:toolbar                   # bin/colai-toolbar.built
 
 ### Checklist
 
-Run the toolbar with `bin/colai-toolbar show` (it prefers the build you just made), then:
+Run the toolbar with `launcher/colai-toolbar show` (it prefers the build you just made), then:
 
 1. **It appears.** The toolbar is drawn over the desktop, the rest of the window is fully
    transparent — no grey or white sheet — and it stays above other windows, including when
@@ -97,7 +97,7 @@ Run the toolbar with `bin/colai-toolbar show` (it prefers the build you just mad
     the toolbar and confirm a new Claude Code session's SessionStart hook brings it back,
     and that a second launch does not open a second toolbar.
 11. **The shipped path.** `npm run stage:macos`, delete `bin/colai-toolbar.built`, run
-    `bin/colai-toolbar show` again: it unpacks into `~/.cache/colai/<digest>/` and runs.
+    `launcher/colai-toolbar show` again: it unpacks into `~/.cache/colai/<digest>/` and runs.
 
 Write down anything that misbehaves with the macOS version, the VM, and the display scale.
 

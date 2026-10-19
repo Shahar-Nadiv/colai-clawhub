@@ -49,7 +49,7 @@ of that conversation, so closing the session leaves it on screen.
 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Space</kbd> shows it and hides it again, from anywhere,
 including while you are typing in Claude Code; set `COLAI_HOTKEY` to change the shortcut, and
 double-click the grip to put it away. Set `COLAI_AUTOSTART=0` if you would rather it not
-start on its own (then run `colai-toolbar show` yourself to bring it up).
+start on its own (then run `launcher/colai-toolbar show` from the plugin's folder (`~/.claude/plugins/cache/colai/colai/<version>/`) to bring it up).
 
 It opens pointed at the conversation it started in, so the first thing you mark already has
 somewhere to go — and you can hand a mark to any other conversation from the toolbar's own
@@ -72,7 +72,7 @@ and arrives with your next message instead.
 colai starts from a `SessionStart` hook — a line Claude Code runs when a session begins,
 before anything reaches the model — so the toolbar is simply there, with no command to
 remember and nothing for Claude to do but mention it. To stop it entirely rather than hide
-it, run `colai-toolbar quit`.
+it, press the × at the end of the rail.
 
 It talks to the `claude` you are already signed in to. There is no API key to paste, no
 second account, and no service to run — it starts a Claude Code session of its own behind
@@ -184,7 +184,7 @@ Everything colai does, by the piece that does it.
 
 **The `SessionStart` hook** (`hooks/say-colai-is-here.sh`) reads the session id from the hook's
 input, checks whether the toolbar is already running (its PID file in
-`~/.config/ai.colai.toolbar/`), and if not starts it with `bin/colai-toolbar show --in <session>`.
+`~/.config/ai.colai.toolbar/`), and if not starts it with `launcher/colai-toolbar show --in <session>`.
 It prints one status line, the `🪼 Colai is running` message you see at the start of a session.
 Set `COLAI_AUTOSTART=0` to stop it starting the toolbar.
 
@@ -228,7 +228,7 @@ It sends nothing over the network itself, apart from loading preview pictures fr
 
 ## Troubleshooting
 
-**Nothing appears.** Run `colai-toolbar show` in a terminal and read what it says — the two
+**Nothing appears.** Run `launcher/colai-toolbar show` from the plugin's folder (`~/.claude/plugins/cache/colai/colai/<version>/`) in a terminal and read what it says — the two
 usual causes, a Wayland session and a missing `libwebkit2gtk-4.1`, both name themselves
 there. Started from a snap-packaged terminal or editor, the toolbar drops that snap's
 library paths and restarts itself; the line saying so is expected.
@@ -238,7 +238,7 @@ toolbar says so on startup, in the log.
 
 **The hotkey does nothing.** Something else on the desktop holds it — the toolbar says so
 on startup, naming the chord. Set `COLAI_HOTKEY` to a free one and restart it. Running
-`colai-toolbar show` always works regardless: a second launch hands its argument to the
+the launcher with `show` always works regardless: a second launch hands its argument to the
 copy already on screen.
 
 ## Glossary

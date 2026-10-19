@@ -59,7 +59,7 @@ fi
 # The launcher beside this hook, which resolves the right binary for the platform, unpacks and
 # verifies it, and runs it. `$CLAUDE_PLUGIN_ROOT` is set for hooks; fall back to this file's dir.
 ROOT="${CLAUDE_PLUGIN_ROOT:-$(CDPATH= cd "$(dirname "$0")/.." 2>/dev/null && pwd)}"
-LAUNCHER="$ROOT/bin/colai-toolbar"
+LAUNCHER="$ROOT/launcher/colai-toolbar"
 
 # Which conversation this is, so the toolbar opens pointed at it.
 #

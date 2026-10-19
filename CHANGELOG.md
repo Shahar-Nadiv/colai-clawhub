@@ -7,6 +7,13 @@ is not a record of anything.
 
 ## Unreleased
 
+## 0.5.6 — 2026-10-19
+
+- **Installs in Claude's apps.** The launcher moved from `bin/` to `launcher/`: a plugin with a
+  top-level `bin/` folder can't be installed in Claude's apps (chat and Cowork) at all. Nothing
+  else changes. To start the toolbar by hand, run `launcher/colai-toolbar show` from the plugin's
+  folder; to quit it, press the × on the rail.
+
 ## 0.5.5 — 2026-10-19
 
 - **Icons in Claude's own style.** Every key on the rail is redrawn the way Claude Desktop draws
