@@ -3811,7 +3811,8 @@ describe("one light for every agent at once", () => {
     // app's own window and Quick Chat's as well. The toolbar stands alone now. What the
     // count guards is that the sweep found something at all — a directory that has moved
     // and a directory with nothing to check look identical from here.
-    expect(pages).toEqual(["toolbar.html"]);
+    // And a VM's screen, in a window of its own (vm.html, a module page with noVNC).
+    expect(pages).toEqual(["toolbar.html", "vm.html"]);
     const found: { page: string; script: string; isModule: boolean }[] = [];
     for (const page of pages) {
       const html = readFileSync(new URL(page, dir), "utf8");

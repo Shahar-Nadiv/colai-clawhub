@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-vm-reset"
+description = "Enables the colai_vm_reset command without any pre-configured scope."
+commands.allow = ["colai_vm_reset"]
+
+[[permission]]
+identifier = "deny-colai-vm-reset"
+description = "Denies the colai_vm_reset command without any pre-configured scope."
+commands.deny = ["colai_vm_reset"]

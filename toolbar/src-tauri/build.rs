@@ -44,6 +44,20 @@ fn main() {
         "colai_summon",
         "colai_take_keyboard",
         "colai_undo",
+        "colai_vm_bind",
+        "colai_vm_build",
+        "colai_vm_create",
+        "colai_vm_delete",
+        "colai_vm_list",
+        "colai_vm_open",
+        "colai_vm_reset",
+        "colai_vm_restore",
+        "colai_vm_save",
+        "colai_vm_screen",
+        "colai_vm_setup",
+        "colai_vm_start",
+        "colai_vm_stop",
+        "colai_vm_thumb",
     ];
     // The one capability lives inline in `tauri.conf.json`, yet `tauri-build` still tells
     // cargo to rerun this script whenever `capabilities/` changes. A path that does not

@@ -56,6 +56,8 @@ windows-sys = { version = "0.59", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
     "Win32_UI_WindowsAndMessaging",
+    # GetDpiForWindow: the overlay's live scale, for the click-through hit test.
+    "Win32_UI_HiDpi",
     "Win32_System_Threading",
 ] }
 # Screen capture's encode/decode/resize, in place of Linux's gdk-pixbuf. PNG only — the

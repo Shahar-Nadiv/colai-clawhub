@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-vm-list"
+description = "Enables the colai_vm_list command without any pre-configured scope."
+commands.allow = ["colai_vm_list"]
+
+[[permission]]
+identifier = "deny-colai-vm-list"
+description = "Denies the colai_vm_list command without any pre-configured scope."
+commands.deny = ["colai_vm_list"]

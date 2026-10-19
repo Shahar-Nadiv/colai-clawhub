@@ -114,6 +114,16 @@ pub(crate) async fn colai_send(
      */
     let key = (!receiver.id.trim().is_empty()).then(|| receiver.id.clone());
 
+    // A conversation with a VM of its own is told so, every time, with how to reach it — and
+    // the machine is woken first if it was stopped. See `colai_vm::brief_for`.
+    let message = match key.clone() {
+        Some(owner) => match tauri::async_runtime::spawn_blocking(move || crate::colai_vm::brief_for(&owner)).await {
+            Ok(Some(brief)) => format!("{brief}\n\n{message}"),
+            _ => message,
+        },
+        None => message,
+    };
+
     /*
      * Nothing here chooses a model or an effort.
      *

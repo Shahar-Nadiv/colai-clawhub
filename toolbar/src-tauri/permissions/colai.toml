@@ -68,10 +68,39 @@ commands.allow = [
   # the bridge inside their own session, and opened — claude.ai links only. See `colai_artifacts`.
   "colai_artifacts",
   "colai_open_artifact",
+  # Virtual machines for agents, run here by Colai's own engine: get ready (the engine and the
+  # base machine), create, run, stop, delete, give one to a conversation, take its thumbnail, and
+  # open its screen in a window. See `colai_vm`.
+  "colai_vm_bind",
+  "colai_vm_build",
+  "colai_vm_create",
+  "colai_vm_delete",
+  "colai_vm_list",
+  "colai_vm_open",
+  "colai_vm_reset",
+  "colai_vm_restore",
+  "colai_vm_save",
+  "colai_vm_setup",
+  "colai_vm_start",
+  "colai_vm_stop",
+  "colai_vm_thumb",
   # The Context map's local store: list saved contexts, save this conversation as one,
   # resolve a set into a drop manifest, and clear the staged set.
   "colai_contexts_list",
   "colai_context_save_session",
   "colai_context_resolve",
   "colai_context_clear_staged",
+]
+
+# The VM window: a machine's screen, and nothing of the toolbar's. It may ask where that screen is,
+# stop the machine, and keep or go back to its save point, no more.
+[[permission]]
+identifier = "allow-colai-vm-window"
+description = "Lets a VM window find its machine's screen, stop it, and save or reset it."
+commands.allow = [
+  "colai_vm_reset",
+  "colai_vm_restore",
+  "colai_vm_save",
+  "colai_vm_screen",
+  "colai_vm_stop",
 ]

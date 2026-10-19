@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-vm-stop"
+description = "Enables the colai_vm_stop command without any pre-configured scope."
+commands.allow = ["colai_vm_stop"]
+
+[[permission]]
+identifier = "deny-colai-vm-stop"
+description = "Denies the colai_vm_stop command without any pre-configured scope."
+commands.deny = ["colai_vm_stop"]

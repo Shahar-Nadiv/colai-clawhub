@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-vm-thumb"
+description = "Enables the colai_vm_thumb command without any pre-configured scope."
+commands.allow = ["colai_vm_thumb"]
+
+[[permission]]
+identifier = "deny-colai-vm-thumb"
+description = "Denies the colai_vm_thumb command without any pre-configured scope."
+commands.deny = ["colai_vm_thumb"]

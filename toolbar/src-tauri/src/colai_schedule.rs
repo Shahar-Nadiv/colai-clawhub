@@ -82,7 +82,7 @@ fn now_ms() -> u64 {
 }
 
 /// `~/.claude/colai`, created if missing. `None` only when there is no home at all.
-fn colai_dir() -> Option<PathBuf> {
+pub(crate) fn colai_dir() -> Option<PathBuf> {
     let home = std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
         .map(PathBuf::from)?;

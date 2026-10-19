@@ -23,6 +23,7 @@ const el = {
   flyShape: document.getElementById("fly-shape"),
   flyTools: document.getElementById("fly-tools"),
   flyArt: document.getElementById("fly-art"),
+  flyVm: document.getElementById("fly-vm"),
   flyDesign: document.getElementById("fly-design"),
   flyGit: document.getElementById("fly-git"),
   flyRecord: document.getElementById("fly-record"),
@@ -196,6 +197,19 @@ const state = {
   artAbout: "",
   // Whether the shelf shows every artifact, not just the open key's kind.
   artAll: false,
+  // Whether the artifacts menu was clicked open (stays down) rather than only hovered.
+  artPinned: false,
+  // Virtual machines (toolbar-vm.js): how far getting ready has got, the machines, their pictures,
+  // the New VM form, the one asking "Delete?", what it is doing now, and what last went wrong.
+  vmSetup: null,
+  vms: [],
+  vmThumbs: {},
+  vmNew: null,
+  vmRemoving: null,
+  vmBusy: "",
+  vmTrouble: "",
+  // A Windows VM waiting for Windows to be ready, made as soon as it is.
+  vmPending: null,
   // Whether a picture is being taken right now.
   //
   // The overlay makes itself invisible to photograph what is behind it, which briefly
@@ -522,10 +536,7 @@ function render() {
       button.setAttribute("aria-expanded", String(state.open === id));
     }
   }
-  for (const kind of ARTIFACT_KINDS) {
-    const button = buttons[`art${kind.id}`];
-    if (button) button.setAttribute("aria-pressed", String(state.open === `art:${kind.id}`));
-  }
+  if (buttons.artifacts) buttons.artifacts.setAttribute("aria-expanded", String(artMenuOpen()));
 
   // What is actually still running, rather than what was last started. A run that has
   // gone quiet for minutes is one the toolbar has lost track of, and claiming it is
@@ -638,6 +649,7 @@ function render() {
   el.flyShape.hidden = state.open !== "shape";
   drawKit();
   drawArtifacts();
+  drawVms();
   el.flyDesign.hidden = state.open !== "design";
   el.flyGit.hidden = state.open !== "git";
   // Folded, the six close up where they stand rather than vanishing — the stylesheet
@@ -715,7 +727,8 @@ function render() {
   for (const [node, anchor] of [
     [el.flyShape, buttons.shape],
     [el.flyTools, buttons.exact],
-    [el.flyArt, buttons[`art${artifactsOpen() || "Docs"}`]],
+    [el.flyArt, buttons.artifacts],
+    [el.flyVm, buttons.vm],
     [el.flyDesign, buttons.design],
     [el.flyGit, buttons.git],
     [el.flyRecord, buttons.record],
@@ -731,6 +744,8 @@ function render() {
   ]) {
     if (node && anchor) placeFlyout(node, vertical, vertical ? anchor.offsetTop : anchor.offsetLeft);
   }
+  // The artifact shelf sits beyond the menu, on whichever side the menu opened toward.
+  if (el.flyArt) el.flyArt.dataset.toward = el.flyArt.style.right ? "left" : "right";
   // The Context-map dropdown, only when its key is on the rail.
   if (buttons.context && el.flyContext) {
     placeFlyout(
@@ -919,7 +934,10 @@ function shape() {
   if (state.zoom && el.zoom && !el.zoom.hidden) {
     rects.push({ x: 0, y: 0, width: window.innerWidth, height: window.innerHeight });
   }
-  const key = JSON.stringify(rects);
+  // With the page's pixel ratio: the backend hit-tests the pointer in physical pixels, and the
+  // window's own idea of its scale has been wrong. A changed ratio is a new shape, too.
+  const scale = window.devicePixelRatio || 1;
+  const key = JSON.stringify(rects) + "@" + scale;
   if (key === shaped) return;
   shaped = key;
   /*
@@ -931,7 +949,7 @@ function shape() {
    * remembered key is cleared so the next render tries again rather than believing a
    * shape that was never applied.
    */
-  invoke("colai_shape", { rects }).catch((error) => {
+  invoke("colai_shape", { rects: rects, scale: scale }).catch((error) => {
     shaped = "";
     sayFailed(
       `The toolbar could not claim its own shape — ${error && error.message ? error.message : String(error)}`,
@@ -1690,6 +1708,18 @@ async function start() {
     // "done"/"failed" settle the turn without renaming its kind.
     if ((said.state === "done" || said.state === "failed") && prev.kind) next.kind = prev.kind;
     state.turns[turnId] = next;
+    /*
+     * A turn that has settled is a run that has ended — now, not four minutes from now.
+     *
+     * A turn handed to a chat open in Claude Desktop is mirrored off its transcript, and the
+     * Gateway-wide snapshot never lists that chat, so nothing else says it finished: the
+     * jellyfish and the chat key went on working for RUN_QUIET after the agent had plainly
+     * stopped. The mirror's "done"/"failed" is the agent's own end of turn.
+     */
+    if ((said.state === "done" || said.state === "failed") && said.sessionKey) {
+      state.runs = state.runs.filter((run) => run.sessionKey !== said.sessionKey);
+      if (state.doing && state.doing.sessionKey === said.sessionKey) state.doing = null;
+    }
     // And the edits it made go onto its Work row, which outlives this card and is where a
     // "Rewind to here" reads them from until the conversation's transcript is read.
     keepTurnChanges(turnId, prev, next);

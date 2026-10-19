@@ -39,6 +39,7 @@ mod colai_render;
 mod colai_revert;
 mod colai_schedule;
 mod colai_send;
+mod colai_vm;
 mod commands;
 mod outbox;
 mod relay;
@@ -510,6 +511,20 @@ fn main() {
             colai_desktop::colai_open_desktop,
             colai_artifacts::colai_artifacts,
             colai_artifacts::colai_open_artifact,
+            colai_vm::colai_vm_bind,
+            colai_vm::colai_vm_build,
+            colai_vm::colai_vm_create,
+            colai_vm::colai_vm_delete,
+            colai_vm::colai_vm_list,
+            colai_vm::colai_vm_open,
+            colai_vm::colai_vm_reset,
+            colai_vm::colai_vm_restore,
+            colai_vm::colai_vm_save,
+            colai_vm::colai_vm_screen,
+            colai_vm::colai_vm_setup,
+            colai_vm::colai_vm_start,
+            colai_vm::colai_vm_stop,
+            colai_vm::colai_vm_thumb,
             colai_send::colai_said,
             colai_send::colai_send,
             colai_send::colai_stop,

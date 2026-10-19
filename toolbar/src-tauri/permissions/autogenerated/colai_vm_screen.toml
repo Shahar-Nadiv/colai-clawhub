@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-colai-vm-screen"
+description = "Enables the colai_vm_screen command without any pre-configured scope."
+commands.allow = ["colai_vm_screen"]
+
+[[permission]]
+identifier = "deny-colai-vm-screen"
+description = "Denies the colai_vm_screen command without any pre-configured scope."
+commands.deny = ["colai_vm_screen"]

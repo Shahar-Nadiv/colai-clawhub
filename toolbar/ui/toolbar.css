@@ -4826,8 +4826,48 @@ body {
   color: var(--text-strong);
   background: color-mix(in srgb, var(--fg) 8%, transparent);
 }
-.flyout.art {
+/* The artifacts key's drop: a short menu, and the hovered kind's shelf beside it — two cards, one
+   holder. The holder draws nothing; the shelf sits on the far side from the rail. */
+.flyout.kit.art {
+  width: auto;
+  padding: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+.flyout.art[data-toward="left"] {
+  flex-direction: row-reverse;
+}
+.art-menu {
+  border-radius: 12px;
+  background: var(--chrome-strong);
+  border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 60%);
+  flex: none;
+  width: 176px;
+  padding: 6px;
+}
+.art-row svg {
+  flex: none;
+  color: var(--muted);
+}
+.art-row[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+}
+.art-row[aria-pressed="true"] svg {
+  color: var(--text-strong);
+}
+.art-shelf {
+  border-radius: 12px;
+  background: var(--chrome-strong);
+  border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 60%);
+  flex: none;
   width: 340px;
+  padding: 10px;
 }
 /* Two across, like the gallery: a preview, then the name, then what it is. */
 .art-grid {
@@ -4951,4 +4991,153 @@ body {
 }
 .art-trouble {
   color: var(--text);
+}
+
+/* ── virtual machines (toolbar-vm.js): the artifacts shelf's shape, a machine per card ── */
+.flyout.kit.vms {
+  width: 360px;
+}
+.vm-count {
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted);
+}
+.vm-card {
+  cursor: default;
+}
+.vm-screen {
+  font-size: 11px;
+  color: var(--muted);
+  background: #0f1115;
+}
+.vm-shot {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.vm-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.vm-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--muted);
+}
+.vm-dot[data-on="true"] {
+  background: #7fb069;
+}
+/* Open / Stop / Delete: shown on the card under the pointer, or while it asks "Delete?". */
+.vm-acts {
+  display: none;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.vm-card:hover .vm-acts,
+.vm-card:focus-within .vm-acts {
+  display: flex;
+}
+.vm-sizes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.vm-size {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.vm-size[data-on="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.vm-size:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.vm-size-label {
+  color: var(--text-strong);
+  font-weight: 600;
+  font-size: 12px;
+}
+/* Microsoft's evaluation terms, under the Windows choice: a link, quiet. */
+.vm-terms {
+  all: unset;
+  align-self: flex-start;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.vm-terms:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.vm-agent {
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  color: var(--text-strong);
+  font-size: 12.5px;
+}
+.vm-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--text-strong);
+}
+.vm-step[data-done="true"] {
+  color: var(--muted);
+}
+.vm-tick {
+  flex: none;
+  width: 14px;
+  color: #7fb069;
+}
+.vm-step-said {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.vm-copy {
+  all: unset;
+  flex: none;
+  padding: 3px 9px;
+  border-radius: 7px;
+  font-size: 11px;
+  cursor: pointer;
+  color: var(--text-strong);
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+}
+.vm-copy:focus-visible {
+  outline: 2px solid var(--accent);
+}
+/* How many machines are running, on the key itself. */
+.key[data-running]:not([data-running=""])::after {
+  content: attr(data-running);
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  min-width: 12px;
+  padding: 0 3px;
+  border-radius: 6px;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 12px;
+  text-align: center;
+  color: #10140c;
+  background: #7fb069;
 }

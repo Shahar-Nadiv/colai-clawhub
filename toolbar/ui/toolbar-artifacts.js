@@ -4,7 +4,9 @@
 // key does not pretend to: it opens claude.ai/design, where they live. Each shelf can also show
 // every artifact — most are plain pages of no type, and would otherwise be on no shelf at all.
 //
-// Each key opens a scrollable popup like the tools grid: "New <kind>" first, then the person's own
+// One key on the rail, so the rail stays short: hovering or clicking it drops a menu of the four, and
+// hovering one of those opens its shelf beside the menu. Each shelf is a scrollable popup like the
+// tools grid: "New <kind>" first, then the person's own
 // artifacts of that kind, newest first, each opening in the browser. They are listed through the
 // bridge inside the person's own Claude session (see colai_artifacts.rs) — the only place signed in
 // to claude.ai — and a new one is asked of the chat that is receiving, so Claude makes it with the
@@ -87,16 +89,58 @@ function artifactKind(id) {
   return ARTIFACT_KINDS.find((one) => one.id === id) || null;
 }
 
-/** Which kind's popup is open, if one is. */
+/** Which kind's shelf is open, if one is. */
 function artifactsOpen() {
   return typeof state.open === "string" && state.open.startsWith("art:") ? state.open.slice(4) : null;
 }
 
-/** Open (or close) a kind's popup, and look the list up fresh when it opens. */
+/** Whether the artifacts menu is down — on its own (`artifacts`) or with a shelf open beside it. */
+function artMenuOpen() {
+  return state.open === "artifacts" || artifactsOpen() !== null;
+}
+
+/** The rail key, clicked: the menu stays down until it is clicked again (or anything else opens). */
+function toggleArtMenu() {
+  if (artMenuOpen() && state.artPinned) {
+    state.artPinned = false;
+    state.artNew = null;
+    state.open = null;
+    render();
+    return;
+  }
+  state.artPinned = true;
+  if (!artMenuOpen()) flyout("artifacts");
+  else render();
+}
+
+/** The rail key, hovered: down while the pointer is on the key, the menu or a shelf. */
+function hoverArtMenu() {
+  clearTimeout(artLeaving);
+  if (state.open === null) flyout("artifacts");
+}
+
+let artLeaving = 0;
+/** The pointer left: put it away after a moment, unless it was clicked open or is being typed in. */
+function leaveArtMenu() {
+  clearTimeout(artLeaving);
+  artLeaving = setTimeout(() => {
+    if (!artMenuOpen() || state.artPinned || state.artNew) return;
+    state.open = null;
+    render();
+  }, 350);
+}
+
+/** Open a kind's shelf beside the menu (again: back to the menu alone), and look it up fresh. */
 function openArtifacts(kind) {
   state.artNew = null;
-  flyout(`art:${kind}`);
-  if (artifactsOpen() === kind) void loadArtifacts(shelfOf(kind));
+  if (artifactsOpen() === kind) {
+    state.open = "artifacts";
+    render();
+    return;
+  }
+  if (!artMenuOpen()) flyout(`art:${kind}`);
+  else state.open = `art:${kind}`;
+  void loadArtifacts(shelfOf(kind));
 }
 
 /** What the open shelf lists: the key's kind, or everything. */
@@ -107,6 +151,7 @@ function shelfOf(kind) {
 /** Open a claude.ai place in the browser — Claude Design, or one artifact. */
 function openDoor(url) {
   state.open = null;
+  state.artPinned = false;
   void invoke("colai_open_artifact", { url: url }).catch((trouble) => {
     state.trouble = String(trouble);
     render();
@@ -172,9 +217,67 @@ function createArtifact(kind, about) {
 
 function drawArtifacts() {
   if (!el.flyArt) return;
+  if (!el.flyArt.dataset.hovers) {
+    el.flyArt.dataset.hovers = "true";
+    el.flyArt.addEventListener("mouseenter", () => clearTimeout(artLeaving));
+    el.flyArt.addEventListener("mouseleave", leaveArtMenu);
+  }
+  const down = artMenuOpen();
+  el.flyArt.hidden = !down;
+  if (!down) {
+    state.artPinned = false;
+    return;
+  }
   const kind = artifactsOpen();
-  el.flyArt.hidden = !kind;
-  if (!kind) return;
+
+  const menu = document.createElement("div");
+  menu.className = "art-menu";
+  for (const one of ARTIFACT_KINDS) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "row art-row";
+    row.dataset.kind = one.id;
+    row.setAttribute("aria-pressed", String(kind === one.id));
+    row.innerHTML = icon(one.glyph, 16);
+    const said = document.createElement("span");
+    said.textContent = one.door ? one.title.replace(/\s*↗$/, "") : one.title;
+    row.append(said);
+    if (one.door) {
+      const out = document.createElement("span");
+      out.className = "row-key art-out";
+      out.textContent = "↗";
+      row.append(out);
+      row.addEventListener("click", () => openDoor(one.door));
+      // A door has no shelf: hovering it puts away whichever shelf was open.
+      row.addEventListener("mouseenter", () => {
+        if (artifactsOpen() && !state.artNew) {
+          state.open = "artifacts";
+          render();
+        }
+      });
+    } else {
+      row.addEventListener("click", () => {
+        state.artPinned = true;
+        if (artifactsOpen() !== one.id) openArtifacts(one.id);
+      });
+      row.addEventListener("mouseenter", () => {
+        if (artifactsOpen() !== one.id && !state.artNew) openArtifacts(one.id);
+      });
+    }
+    menu.append(row);
+  }
+  if (!kind) {
+    el.flyArt.replaceChildren(menu);
+    return;
+  }
+  const shelfBox = document.createElement("div");
+  shelfBox.className = "art-shelf";
+  shelfBox.replaceChildren(...drawShelf(kind));
+  el.flyArt.replaceChildren(menu, shelfBox);
+}
+
+/** One kind's shelf: its own artifacts or all of them, New first — or the New form. */
+function drawShelf(kind) {
   const named = artifactKind(kind);
   const shelf = shelfOf(kind);
   const shown = shelf === "All" ? ALL_ARTIFACTS : named;
@@ -206,10 +309,7 @@ function drawArtifacts() {
   again.addEventListener("click", () => void loadArtifacts(shelf));
   head.append(title, again);
 
-  if (state.artNew === kind) {
-    el.flyArt.replaceChildren(head, ...artifactForm(kind, named));
-    return;
-  }
+  if (state.artNew === kind) return [head, ...artifactForm(kind, named)];
 
   const grid = document.createElement("div");
   grid.className = "art-grid";
@@ -226,10 +326,7 @@ function drawArtifacts() {
   const addSaid = document.createElement("span");
   addSaid.className = "kit-name art-title";
   addSaid.textContent = `New ${named.one}`;
-  const addSub = document.createElement("span");
-  addSub.className = "art-sub";
-  addSub.textContent = "Made in your chat";
-  addMeta.append(addSaid, addSub);
+  addMeta.append(addSaid);
   add.append(plus, addMeta);
   add.addEventListener("click", () => {
     state.artNew = kind;
@@ -268,7 +365,7 @@ function drawArtifacts() {
     : listed.error
       ? listed.error
       : listed.items.length === 0
-        ? `No ${shown.many} yet. Make one with +.`
+        ? `No ${shown.many} yet.`
         : "";
   if (note) {
     const said = document.createElement("p");
@@ -276,7 +373,7 @@ function drawArtifacts() {
     said.textContent = note;
     bits.push(said);
   }
-  el.flyArt.replaceChildren(...bits);
+  return bits;
 }
 
 function artifactForm(kind, named) {
@@ -300,12 +397,6 @@ function artifactForm(kind, named) {
     state.artAbout = about.value;
   });
   label.append(about);
-  const marks = typeof chosenMarks === "function" ? chosenMarks().length : 0;
-  const hint = document.createElement("p");
-  hint.className = "art-note";
-  hint.textContent = marks
-    ? `Goes to your chat with ${marks} mark${marks === 1 ? "" : "s"} as material.`
-    : "Goes to your chat; Claude makes it there.";
   const row = document.createElement("div");
   row.className = "kit-actions";
   const cancel = document.createElement("button");
@@ -326,5 +417,5 @@ function artifactForm(kind, named) {
     createArtifact(kind, wish);
   });
   row.append(cancel, make);
-  return [label, hint, row];
+  return [label, row];
 }

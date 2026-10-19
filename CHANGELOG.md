@@ -7,6 +7,8 @@ is not a record of anything.
 
 ## Unreleased
 
+- **Quieter artifact popups.** The explanatory lines are gone from the shelves and the New form.
+
 ## 0.5.4 — 2026-10-17
 
 - **Claude Design, one click away.** Claude Design projects are not artifacts, and nothing a plugin

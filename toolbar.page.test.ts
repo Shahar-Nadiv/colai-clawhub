@@ -33,7 +33,7 @@ const { parseHTML } = require("linkedom");
 const UI = new URL("./toolbar/ui/", import.meta.url);
 const read = (name: string) => readFileSync(new URL(name, UI), "utf8");
 
-const ORDER = ["toolbar-tools.js","toolbar-markdown.js","toolbar-jelly.js","toolbar-rail.js","toolbar-kit.js","toolbar-artifacts.js","toolbar-mark.js","toolbar-live.js",
+const ORDER = ["toolbar-tools.js","toolbar-markdown.js","toolbar-jelly.js","toolbar-rail.js","toolbar-kit.js","toolbar-artifacts.js","toolbar-vm.js","toolbar-mark.js","toolbar-live.js",
   "toolbar-answers.js","toolbar-compose.js","toolbar-work.js",
   "toolbar-toast.js","toolbar-send.js","toolbar-dock.js","toolbar-shell.js","toolbar-context.js","toolbar-settings.js","toolbar-schedule.js","toolbar-response.js","toolbar.js"];
 
@@ -1101,6 +1101,143 @@ describe("the receiver's name cannot push Send out of the popup", () => {
  * default, that turning Review on actually makes the session ask, and that a change with no
  * picture to show opens the code on its own rather than showing nothing.
  */
+describe("virtual machines", () => {
+  const READY = { state: "ready", said: "" };
+  const MACHINES = [
+    { id: "vm-1", name: "colai-build", size: "medium", cpus: 2, memoryMb: 4096, owner: "chat-1", ownerTitle: "Fix toolbar", createdAt: 2, running: true },
+    { id: "vm-2", name: "staging", size: "small", cpus: 2, memoryMb: 2048, createdAt: 1, running: false },
+  ];
+  const click = (page: ReturnType<typeof openTheToolbar>, el: Element | null | undefined) =>
+    (el as unknown as { dispatchEvent: (e: unknown) => void }).dispatchEvent(new page.dom.window.Event("click"));
+  const buttonsIn = (page: ReturnType<typeof openTheToolbar>, selector: string) =>
+    [...page.dom.document.querySelectorAll(selector + " button")] as Element[];
+
+  test("the first look gets VMs ready by itself: no install, no account, no key", async () => {
+    const page = openTheToolbar({ answers: { colai_vm_setup: { state: "missing", said: "" } } });
+    await settle();
+    click(page, page.dom.document.querySelector('#rail .key[title="Virtual machines"]'));
+    await settle();
+    expect(page.asked).toContain("colai_vm_build");
+    const text = page.dom.document.querySelector("#fly-vm")?.textContent || "";
+    expect(text).not.toMatch(/install|key|account|sign/i);
+    expect(page.dom.document.querySelector("#fly-vm input")).toBeNull();
+  });
+
+  test("while it gets ready, the popup says how far it has got", async () => {
+    const page = openTheToolbar({ answers: { colai_vm_setup: { state: "building", said: "Downloading the VM engine · 40 of 197 MB" } } });
+    await settle();
+    page.run(`openVms()`);
+    await settle();
+    expect(page.dom.document.querySelector("#fly-vm")?.textContent).toContain("Downloading the VM engine · 40 of 197 MB");
+  });
+
+  test("once ready, the shelf shows New first, then each machine with whose it is", async () => {
+    const page = openTheToolbar({ answers: { colai_vm_setup: READY, colai_vm_list: MACHINES, colai_vm_thumb: "data:image/png;base64,AA==" } });
+    await settle();
+    click(page, page.dom.document.querySelector('#rail .key[title="Virtual machines"]'));
+    await settle();
+    const names = [...page.dom.document.querySelectorAll("#fly-vm .kit-name")].map((n) => n.textContent);
+    expect(names).toEqual(["New VM", "colai-build", "staging"]);
+    expect(page.dom.document.querySelector("#fly-vm .vm-card")?.textContent).toContain("Fix toolbar");
+    expect(page.asked).toContain("colai_vm_thumb");
+  });
+
+  test("Open asks for the machine's window", async () => {
+    const page = openTheToolbar({ answers: { colai_vm_setup: READY, colai_vm_list: MACHINES } });
+    await settle();
+    page.run(`openVms()`);
+    await settle();
+    click(page, buttonsIn(page, '#fly-vm .vm-card[data-id="vm-2"]').find((b) => b.textContent === "Open"));
+    await settle();
+    expect(page.askedWith.find(([name]) => name === "colai_vm_open")?.[1]).toMatchObject({ id: "vm-2" });
+  });
+
+  test("New VM is made with its size and given to the chat being sent to", async () => {
+    const page = openTheToolbar({ answers: { colai_vm_setup: READY, colai_vm_list: [], colai_vm_create: MACHINES[0] } });
+    await settle();
+    page.run(`state.receiving = { kind: "session", id: "chat-1", name: "Fix toolbar" }; openVms()`);
+    await settle();
+    click(page, page.dom.document.querySelector("#fly-vm .kit-add"));
+    await settle();
+    page.run(`state.vmNew.name = "checkout"`);
+    click(page, [...page.dom.document.querySelectorAll("#fly-vm .vm-size")].find((b) => b.textContent?.startsWith("Large")));
+    await settle();
+    click(page, buttonsIn(page, "#fly-vm .kit-actions").find((b) => b.textContent === "Create VM"));
+    await settle();
+    expect(page.askedWith.find(([name]) => name === "colai_vm_create")?.[1]).toMatchObject({
+      name: "checkout",
+      size: "large",
+      owner: "chat-1",
+      ownerTitle: "Fix toolbar",
+    });
+  });
+
+  test("a free machine can be given to the chat being sent to", async () => {
+    const page = openTheToolbar({ answers: { colai_vm_setup: READY, colai_vm_list: MACHINES } });
+    await settle();
+    page.run(`state.receiving = { kind: "session", id: "chat-9", name: "Checkout" }; openVms()`);
+    await settle();
+    click(page, buttonsIn(page, '#fly-vm .vm-card[data-id="vm-2"]').find((b) => b.textContent === "Give to this chat"));
+    await settle();
+    expect(page.askedWith.find(([name]) => name === "colai_vm_bind")?.[1]).toMatchObject({ id: "vm-2", owner: "chat-9", ownerTitle: "Checkout" });
+  });
+
+  test("Send here points the toolbar at the machine's own agent", async () => {
+    const page = openTheToolbar({ answers: { colai_vm_setup: READY, colai_vm_list: MACHINES } });
+    await settle();
+    page.run(`state.receiving = { kind: "session", id: "chat-9", name: "Checkout" }; openVms()`);
+    await settle();
+    click(page, buttonsIn(page, '#fly-vm .vm-card[data-id="vm-1"]').find((b) => b.textContent === "Send here"));
+    await settle();
+    expect(page.run(`state.receiving.id`)).toBe("chat-1");
+  });
+
+  test("Windows is a choice; asking for it before it is ready builds it, then makes the VM", async () => {
+    const page = openTheToolbar({
+      answers: { colai_vm_setup: { ...READY, windows: { state: "missing", said: "" } }, colai_vm_list: [] },
+    });
+    await settle();
+    page.run(`openVms()`);
+    await settle();
+    click(page, page.dom.document.querySelector("#fly-vm .kit-add"));
+    await settle();
+    page.run(`state.vmNew.name = "win-box"`);
+    click(page, [...page.dom.document.querySelectorAll("#fly-vm .vm-size")].find((b) => b.textContent?.startsWith("Windows")));
+    await settle();
+    const sizes = [...page.dom.document.querySelectorAll("#fly-vm .vm-size")].map((b) => b.textContent);
+    expect(sizes.some((s) => s?.startsWith("Small"))).toBe(false);
+    expect(page.dom.document.querySelector("#fly-vm .vm-terms")?.textContent).toContain("Microsoft evaluation terms");
+    click(page, buttonsIn(page, "#fly-vm .kit-actions").find((b) => b.textContent === "Create VM"));
+    await settle();
+    expect(page.askedWith.find(([name]) => name === "colai_vm_build")?.[1]).toMatchObject({ os: "windows" });
+    expect(page.asked).not.toContain("colai_vm_create");
+    expect(page.run(`state.vmPending && state.vmPending.name`)).toBe("win-box");
+  });
+
+  test("a waiting Windows VM is made as soon as Windows is ready", async () => {
+    const page = openTheToolbar({
+      answers: { colai_vm_setup: { ...READY, windows: { state: "ready", said: "" } }, colai_vm_list: [], colai_vm_create: MACHINES[1] },
+    });
+    await settle();
+    page.run(`state.vmPending = { name: "win-box", os: "windows", size: "medium", owner: "", ownerTitle: "" }; openVms()`);
+    await settle();
+    expect(page.askedWith.find(([name]) => name === "colai_vm_create")?.[1]).toMatchObject({ name: "win-box", os: "windows" });
+  });
+
+  test("Delete asks first, and only then deletes", async () => {
+    const page = openTheToolbar({ answers: { colai_vm_setup: READY, colai_vm_list: MACHINES } });
+    await settle();
+    page.run(`openVms()`);
+    await settle();
+    click(page, buttonsIn(page, '#fly-vm .vm-card[data-id="vm-2"]').find((b) => b.textContent === "Delete"));
+    await settle();
+    expect(page.asked).not.toContain("colai_vm_delete");
+    click(page, buttonsIn(page, '#fly-vm .vm-card[data-id="vm-2"]').find((b) => b.textContent === "Delete"));
+    await settle();
+    expect(page.askedWith.find(([name]) => name === "colai_vm_delete")?.[1]).toMatchObject({ id: "vm-2" });
+  });
+});
+
 describe("the artifact keys: designs, docs, slides, dashboards", () => {
   const LISTED = [
     "Showing 2 of 2 published artifacts:",
@@ -1110,12 +1247,30 @@ describe("the artifact keys: designs, docs, slides, dashboards", () => {
   const click = (page: ReturnType<typeof openTheToolbar>, el: Element | null | undefined) =>
     (el as unknown as { dispatchEvent: (e: unknown) => void }).dispatchEvent(new page.dom.window.Event("click"));
 
-  test("undo and redo left the rail; the four artifact keys took their place", async () => {
+  test("undo and redo left the rail; one Artifacts key took their place, its menu holding the four", async () => {
     const page = openTheToolbar();
     await settle();
     const titles = [...page.dom.document.querySelectorAll("#rail .key")].map((k) => k.getAttribute("title"));
-    expect(titles).toEqual(expect.arrayContaining(["Claude Design ↗", "Docs", "Slides", "Dashboards"]));
-    expect(titles.some((t) => String(t).startsWith("Undo"))).toBe(false);
+    expect(titles).toContain("Artifacts");
+    expect(titles.some((t) => /^(Undo|Docs|Slides|Dashboards)/.test(String(t)))).toBe(false);
+    click(page, page.dom.document.querySelector("#rail .key[title=\"Artifacts\"]"));
+    await settle();
+    const rows = [...page.dom.document.querySelectorAll("#fly-art .art-row")].map((r) => r.textContent);
+    expect(rows).toEqual(["Claude Design↗", "Docs", "Slides", "Dashboards"]);
+    expect(page.dom.document.querySelector("#fly-art .art-shelf")).toBeNull();
+  });
+
+  test("a kind in the menu opens its shelf beside the menu", async () => {
+    const page = openTheToolbar({ answers: { colai_artifacts: LISTED } });
+    await settle();
+    click(page, page.dom.document.querySelector("#rail .key[title=\"Artifacts\"]"));
+    await settle();
+    const slides = page.dom.document.querySelector("#fly-art .art-row[data-kind=\"Slides\"]");
+    (slides as unknown as { dispatchEvent: (e: unknown) => void }).dispatchEvent(new page.dom.window.Event("mouseenter"));
+    await settle();
+    expect(page.dom.document.querySelector("#fly-art .art-menu")).toBeTruthy();
+    expect(page.dom.document.querySelector("#fly-art .art-shelf .art-seg-tab")?.textContent).toBe("Slides");
+    expect(page.dom.document.querySelector("#fly-art .art-row[data-kind=\"Slides\"]")?.getAttribute("aria-pressed")).toBe("true");
   });
 
   test("a key opens its shelf: New first, then the person's own, newest first", async () => {
@@ -1157,7 +1312,9 @@ describe("the artifact keys: designs, docs, slides, dashboards", () => {
   test("the Design key is a door to Claude Design, not a shelf of artifacts", async () => {
     const page = openTheToolbar();
     await settle();
-    click(page, page.dom.document.querySelector("#rail .key[title=\"Claude Design ↗\"]"));
+    click(page, page.dom.document.querySelector("#rail .key[title=\"Artifacts\"]"));
+    await settle();
+    click(page, page.dom.document.querySelector("#fly-art .art-row[data-kind=\"Design\"]"));
     await settle();
     const opened = page.askedWith.find(([name]) => name === "colai_open_artifact")?.[1];
     expect(opened).toMatchObject({ url: "https://claude.ai/design" });
@@ -1999,7 +2156,7 @@ describe("the rail groups", () => {
       expect.arrayContaining(["Measure · M", "Colour · C", "Screenshot"]),
     );
     expect(groups[3].length, "utilities is the fold key plus the exact tools").toBe(5);
-    expect(groups[4], "artifacts, where undo and redo were").toEqual(["Claude Design ↗", "Docs", "Slides", "Dashboards"]);
+    expect(groups[4], "artifacts, where undo and redo were, and the VMs").toEqual(["Artifacts", "Virtual machines"]);
     expect(groups[5][0], "work leads with the clock, to the left of Work").toMatch(/^Scheduled tasks/);
     expect(groups[5].some((t) => t.startsWith("Work")), "the Work key is in the group").toBe(true);
     expect(groups[5], "work holds the conversation key").toContain("Who receives this?");
@@ -2874,6 +3031,24 @@ describe("the Work panel reads as a conversation", () => {
     // Once: a second "done" for the same turn adds nothing.
     page.heard["colai:response"]({ payload: { turnId: "s1", state: "done" } });
     expect(page.run("state.history[0].changes.length")).toBe(2);
+  });
+
+  test("a turn that settles ends its run at once, not after the quiet timeout", async () => {
+    const page = openTheToolbar();
+    await settle();
+    page.run(`
+      state.runs = [
+        { sessionKey: "desk-1", heard: Date.now(), started: Date.now() },
+        { sessionKey: "other", heard: Date.now(), started: Date.now() },
+      ];
+      state.doing = { said: "Editing index.html", sessionKey: "desk-1", at: Date.now() };
+    `);
+    // Still working: a streaming answer leaves the run alone.
+    page.heard["colai:response"]({ payload: { turnId: "desk-1", sessionKey: "desk-1", state: "streaming", body: "on it" } });
+    expect(page.run("state.runs.length")).toBe(2);
+    page.heard["colai:response"]({ payload: { turnId: "desk-1", sessionKey: "desk-1", state: "done" } });
+    expect(page.run("JSON.stringify(state.runs.map((run) => run.sessionKey))")).toBe(JSON.stringify(["other"]));
+    expect(page.run("state.doing")).toBeNull();
   });
 
   test("the undone frame keeps the prompt the confirmation is addressed by", async () => {

@@ -11,7 +11,7 @@
     "macOSPrivateApi": true,
     "windows": [],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https://cdn.21st.dev; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'",
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https://cdn.21st.dev; connect-src 'self' ipc: http://ipc.localhost ws://127.0.0.1:*; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'",
       "freezePrototype": true,
       "capabilities": [
         {
@@ -27,6 +27,17 @@
             "core:event:allow-unlisten",
             "opener:allow-open-url",
             "opener:allow-default-urls"
+          ]
+        },
+        {
+          "identifier": "colai-vm",
+          "description": "A VM window: the machine's screen over VNC, and a Stop button.",
+          "local": true,
+          "windows": [
+            "colai-vm-*"
+          ],
+          "permissions": [
+            "allow-colai-vm-window"
           ]
         }
       ]
