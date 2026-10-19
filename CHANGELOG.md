@@ -7,6 +7,13 @@ is not a record of anything.
 
 ## Unreleased
 
+## 0.5.7 — 2026-10-19
+
+- **A skill for marked-up screenshots, everywhere Claude is.** `marked-screenshots` teaches Claude
+  to read a screenshot with a circle, box, arrow, highlight or pin drawn on it — Colai's or any
+  other tool's — and answer about exactly what is marked. It is the part of Colai that works in
+  Claude's apps (web, desktop and mobile chat) too, where the toolbar itself can't run.
+
 ## 0.5.6 — 2026-10-19
 
 - **Installs in Claude's apps.** The launcher moved from `bin/` to `launcher/`: a plugin with a

@@ -182,6 +182,12 @@ to delete.
 
 Everything colai does, by the piece that does it.
 
+**The skill** (`skills/marked-screenshots/SKILL.md`) is instructions and nothing else: how to read
+a screenshot somebody has drawn on — a circle, box, arrow, highlight or pin, Colai's or any other
+tool's — and answer about what is marked. It runs nothing and reads nothing. It is the part of
+colai that also works in Claude's apps (web, desktop and mobile chat), where a plugin can't run
+anything on your computer, so the toolbar itself is Claude Code's.
+
 **The `SessionStart` hook** (`hooks/say-colai-is-here.sh`) reads the session id from the hook's
 input, checks whether the toolbar is already running (its PID file in
 `~/.config/ai.colai.toolbar/`), and if not starts it with `launcher/colai-toolbar show --in <session>`.
