@@ -1110,12 +1110,30 @@ describe("the artifact keys: designs, docs, slides, dashboards", () => {
   const click = (page: ReturnType<typeof openTheToolbar>, el: Element | null | undefined) =>
     (el as unknown as { dispatchEvent: (e: unknown) => void }).dispatchEvent(new page.dom.window.Event("click"));
 
-  test("undo and redo left the rail; the four artifact keys took their place", async () => {
+  test("undo and redo left the rail; one Artifacts key took their place, its menu holding the four", async () => {
     const page = openTheToolbar();
     await settle();
     const titles = [...page.dom.document.querySelectorAll("#rail .key")].map((k) => k.getAttribute("title"));
-    expect(titles).toEqual(expect.arrayContaining(["Claude Design ↗", "Docs", "Slides", "Dashboards"]));
-    expect(titles.some((t) => String(t).startsWith("Undo"))).toBe(false);
+    expect(titles).toContain("Artifacts");
+    expect(titles.some((t) => /^(Undo|Docs|Slides|Dashboards)/.test(String(t)))).toBe(false);
+    click(page, page.dom.document.querySelector("#rail .key[title=\"Artifacts\"]"));
+    await settle();
+    const rows = [...page.dom.document.querySelectorAll("#fly-art .art-row")].map((r) => r.textContent);
+    expect(rows).toEqual(["Claude Design↗", "Docs", "Slides", "Dashboards"]);
+    expect(page.dom.document.querySelector("#fly-art .art-shelf")).toBeNull();
+  });
+
+  test("a kind in the menu opens its shelf beside the menu", async () => {
+    const page = openTheToolbar({ answers: { colai_artifacts: LISTED } });
+    await settle();
+    click(page, page.dom.document.querySelector("#rail .key[title=\"Artifacts\"]"));
+    await settle();
+    const slides = page.dom.document.querySelector("#fly-art .art-row[data-kind=\"Slides\"]");
+    (slides as unknown as { dispatchEvent: (e: unknown) => void }).dispatchEvent(new page.dom.window.Event("mouseenter"));
+    await settle();
+    expect(page.dom.document.querySelector("#fly-art .art-menu")).toBeTruthy();
+    expect(page.dom.document.querySelector("#fly-art .art-shelf .art-seg-tab")?.textContent).toBe("Slides");
+    expect(page.dom.document.querySelector("#fly-art .art-row[data-kind=\"Slides\"]")?.getAttribute("aria-pressed")).toBe("true");
   });
 
   test("a key opens its shelf: New first, then the person's own, newest first", async () => {
@@ -1157,7 +1175,9 @@ describe("the artifact keys: designs, docs, slides, dashboards", () => {
   test("the Design key is a door to Claude Design, not a shelf of artifacts", async () => {
     const page = openTheToolbar();
     await settle();
-    click(page, page.dom.document.querySelector("#rail .key[title=\"Claude Design ↗\"]"));
+    click(page, page.dom.document.querySelector("#rail .key[title=\"Artifacts\"]"));
+    await settle();
+    click(page, page.dom.document.querySelector("#fly-art .art-row[data-kind=\"Design\"]"));
     await settle();
     const opened = page.askedWith.find(([name]) => name === "colai_open_artifact")?.[1];
     expect(opened).toMatchObject({ url: "https://claude.ai/design" });
@@ -1999,7 +2019,7 @@ describe("the rail groups", () => {
       expect.arrayContaining(["Measure · M", "Colour · C", "Screenshot"]),
     );
     expect(groups[3].length, "utilities is the fold key plus the exact tools").toBe(5);
-    expect(groups[4], "artifacts, where undo and redo were").toEqual(["Claude Design ↗", "Docs", "Slides", "Dashboards"]);
+    expect(groups[4], "artifacts, where undo and redo were").toEqual(["Artifacts"]);
     expect(groups[5][0], "work leads with the clock, to the left of Work").toMatch(/^Scheduled tasks/);
     expect(groups[5].some((t) => t.startsWith("Work")), "the Work key is in the group").toBe(true);
     expect(groups[5], "work holds the conversation key").toContain("Who receives this?");
@@ -2874,6 +2894,24 @@ describe("the Work panel reads as a conversation", () => {
     // Once: a second "done" for the same turn adds nothing.
     page.heard["colai:response"]({ payload: { turnId: "s1", state: "done" } });
     expect(page.run("state.history[0].changes.length")).toBe(2);
+  });
+
+  test("a turn that settles ends its run at once, not after the quiet timeout", async () => {
+    const page = openTheToolbar();
+    await settle();
+    page.run(`
+      state.runs = [
+        { sessionKey: "desk-1", heard: Date.now(), started: Date.now() },
+        { sessionKey: "other", heard: Date.now(), started: Date.now() },
+      ];
+      state.doing = { said: "Editing index.html", sessionKey: "desk-1", at: Date.now() };
+    `);
+    // Still working: a streaming answer leaves the run alone.
+    page.heard["colai:response"]({ payload: { turnId: "desk-1", sessionKey: "desk-1", state: "streaming", body: "on it" } });
+    expect(page.run("state.runs.length")).toBe(2);
+    page.heard["colai:response"]({ payload: { turnId: "desk-1", sessionKey: "desk-1", state: "done" } });
+    expect(page.run("JSON.stringify(state.runs.map((run) => run.sessionKey))")).toBe(JSON.stringify(["other"]));
+    expect(page.run("state.doing")).toBeNull();
   });
 
   test("the undone frame keeps the prompt the confirmation is addressed by", async () => {

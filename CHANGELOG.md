@@ -7,6 +7,21 @@ is not a record of anything.
 
 ## Unreleased
 
+## 0.5.5 — 2026-10-19
+
+- **Icons in Claude's own style.** Every key on the rail is redrawn the way Claude Desktop draws
+  its icons: a 20-point grid, hairline 1-pixel lines, round ends, one colour.
+- **One Artifacts key.** Claude Design, Docs, Slides and Dashboards sit under a single key: hover
+  or click it for the menu, hover a kind for its shelf beside it. A shorter rail, the same reach.
+- **Quieter popups.** The explanatory lines are gone from the shelves and the New form.
+- **The toolbar no longer freezes.** The watcher that lets the rail take the mouse could stop, and
+  every click then fell through to the desktop. It is now watched itself: restarted within a few
+  seconds if it ever goes quiet, with the reason written to `~/.config/ai.colai.toolbar/colai.log`.
+  The rail's clickable area also follows the page's own scale.
+- **"Working" ends when the work does.** A mark answered in a Claude Desktop chat kept the
+  jellyfish and the chat key working for up to four minutes after the agent had finished. The
+  agent's own end of turn now ends the run at once.
+
 ## 0.5.4 — 2026-10-17
 
 - **Claude Design, one click away.** Claude Design projects are not artifacts, and nothing a plugin

@@ -426,8 +426,16 @@ fn keep_composited(_window: &WebviewWindow) {}
 /// and is then undone the moment GTK re-applies its own input region on the next
 /// configure. The last writer wins, and GTK writes last. `input_shape_combine_region`
 /// makes the shape GTK's own idea of the window, so nothing overwrites it.
+/// The page's devicePixelRatio, as f64 bits (0 = not told yet). See `colai_shape`.
+static PAGE_SCALE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 #[tauri::command]
-pub(crate) fn colai_shape(app: AppHandle, rects: Vec<Rect>) -> Result<(), String> {
+pub(crate) fn colai_shape(app: AppHandle, rects: Vec<Rect>, scale: Option<f64>) -> Result<(), String> {
+    // The page's own pixel ratio: what one of its CSS pixels is on screen. The window's
+    // reported scale has been wrong (1.0 on a 125% display), which left the rail half dead.
+    if let Some(scale) = scale.filter(|scale| scale.is_finite() && *scale > 0.0) {
+        PAGE_SCALE.store(scale.to_bits(), std::sync::atomic::Ordering::Relaxed);
+    }
     let key: Vec<(i32, i32, i32, i32)> = rects
         .iter()
         .map(|r| (r.x, r.y, r.width, r.height))
@@ -545,6 +553,109 @@ fn apply_shape(_window: &WebviewWindow, _rects: &[(i32, i32, i32, i32)]) -> Resu
 /// is read on the next hit-test, which is exactly when it is needed. (`SetWindowPos`, which
 /// *does* reframe and message, is deliberately not called — that reframing was the original
 /// AppHang.)
+/*
+ * The watcher, watched.
+ *
+ * Once, the click-through thread simply stopped: the page was alive, the shape was current, and
+ * the overlay ignored the mouse everywhere — the toolbar "froze" with nothing on screen to say
+ * why, and a restart was the only cure. Nobody saw where it stopped. So the loop now beats a
+ * heartbeat with the step it is on, and a supervisor checks it every second: a watcher that has
+ * not ticked for a few seconds, or that has ended (a panic), is written down — which step it was
+ * in, in `colai.log` beside the outbox — and replaced. A stuck thread cannot be killed, only
+ * abandoned; a new one takes over the window, which is the part that matters to somebody
+ * clicking on the rail.
+ */
+#[cfg(target_os = "windows")]
+#[derive(Clone, Copy)]
+#[repr(u8)]
+enum Stage {
+    Sleeping = 0,
+    Pointer = 1,
+    HitTest = 2,
+    Style = 3,
+}
+
+#[cfg(target_os = "windows")]
+static LAST_BEAT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+#[cfg(target_os = "windows")]
+static LAST_STAGE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+#[cfg(target_os = "windows")]
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|at| at.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+#[cfg(target_os = "windows")]
+fn beat(stage: Stage) {
+    LAST_STAGE.store(stage as u8, std::sync::atomic::Ordering::Relaxed);
+    LAST_BEAT.store(now_ms(), std::sync::atomic::Ordering::Relaxed);
+}
+
+/// One line in `<config>/ai.colai.toolbar/colai.log`: what went wrong, when. Best effort.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub(crate) fn colai_log(said: &str) {
+    let Some(dir) = crate::outbox::outbox().and_then(|outbox| outbox.parent().map(|dir| dir.to_path_buf())) else {
+        return;
+    };
+    let at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|at| at.as_secs())
+        .unwrap_or(0);
+    use std::io::Write;
+    if let Ok(mut log) = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("colai.log")) {
+        let _ = writeln!(log, "{at} {said}");
+    }
+}
+
+/// Run `watch` on its own thread, and replace it whenever it stops ticking or ends.
+#[cfg(target_os = "windows")]
+fn supervise_clickthrough<F>(app: AppHandle, watch: F)
+where
+    F: Fn(AppHandle) + Send + Sync + Clone + 'static,
+{
+    const STALLED_AFTER_MS: u64 = 3000;
+    let start = |app: AppHandle, watch: F| {
+        beat(Stage::Sleeping);
+        std::thread::spawn(move || {
+            let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| watch(app)));
+            if let Err(panic) = ran {
+                let said = panic
+                    .downcast_ref::<&str>()
+                    .map(|said| said.to_string())
+                    .or_else(|| panic.downcast_ref::<String>().cloned())
+                    .unwrap_or_else(|| "unknown".to_string());
+                colai_log(&format!("click-through watcher panicked: {said}"));
+            }
+        })
+    };
+    std::thread::spawn(move || {
+        let mut running = start(app.clone(), watch.clone());
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            let quiet = now_ms().saturating_sub(LAST_BEAT.load(std::sync::atomic::Ordering::Relaxed));
+            let ended = running.is_finished();
+            if quiet < STALLED_AFTER_MS && !ended {
+                continue;
+            }
+            let stage = match LAST_STAGE.load(std::sync::atomic::Ordering::Relaxed) {
+                0 => "sleeping",
+                1 => "reading the pointer",
+                2 => "hit-testing the shape",
+                _ => "writing the window style",
+            };
+            colai_log(&format!(
+                "click-through watcher {} ({} ms quiet, last step: {stage}); starting a new one",
+                if ended { "ended" } else { "stalled" },
+                quiet
+            ));
+            running = start(app.clone(), watch.clone());
+        }
+    });
+}
+
 #[cfg(target_os = "windows")]
 pub(crate) fn watch_clickthrough(app: &AppHandle) {
     use windows_sys::Win32::Foundation::POINT;
@@ -553,7 +664,7 @@ pub(crate) fn watch_clickthrough(app: &AppHandle) {
     };
 
     let app = app.clone();
-    std::thread::spawn(move || {
+    supervise_clickthrough(app.clone(), move |app| {
         // Resolve the handle and the scale ONCE, up front, while the app is still calm. After
         // this the hot loop touches only bare Win32 on that handle — no `get_webview_window`,
         // no `outer_position`, no `scale_factor`. Those are Tauri calls that lock against the
@@ -588,13 +699,17 @@ pub(crate) fn watch_clickthrough(app: &AppHandle) {
          * is a cached attribute read, no messages, so it is as safe in this loop as the write.
          */
         loop {
+            beat(Stage::Sleeping);
             std::thread::sleep(std::time::Duration::from_millis(16));
             let mut point = POINT { x: 0, y: 0 };
+            beat(Stage::Pointer);
             // SAFETY: `point` is a plain out-parameter the call fills in.
             if unsafe { GetCursorPos(&mut point) } == 0 {
                 continue;
             }
+            beat(Stage::HitTest);
             let over_rail = over_rail_win(&app, hwnd, scale, point.x, point.y);
+            beat(Stage::Style);
             // Over the rail: take the mouse. Anywhere else: let it fall to the desktop.
             let ignore = !over_rail;
             // SAFETY: reading and writing this window's own extended style. The
@@ -644,7 +759,26 @@ pub(crate) fn watch_clickthrough(app: &AppHandle) {
         if unsafe { GetWindowRect(hwnd, &mut rc) } == 0 {
             return false;
         }
-        let scale = if scale <= 0.0 { 1.0 } else { scale };
+        /*
+         * The scale the rectangles were measured in: the page's own pixel ratio, which it sends
+         * with every shape — else the window's DPI now, else the scale read at startup. The
+         * startup read is taken before the window has settled on its monitor and is never
+         * revisited, so it is the last resort, not the first. GetDpiForWindow is a cached
+         * attribute read, no messages, as safe in this loop as the style read beside it.
+         */
+        // SAFETY: reads this window's own DPI; returns 0 for an invalid handle.
+        let dpi = unsafe { windows_sys::Win32::UI::HiDpi::GetDpiForWindow(hwnd) };
+        let told = f64::from_bits(PAGE_SCALE.load(std::sync::atomic::Ordering::Relaxed));
+        // The page's word first: it is the ratio the rectangles were measured in.
+        let scale = if told > 0.0 {
+            told
+        } else if dpi > 0 {
+            f64::from(dpi) / 96.0
+        } else if scale > 0.0 {
+            scale
+        } else {
+            1.0
+        };
         // Physical screen → overlay-relative CSS pixels, the space the rectangles are in.
         let x = f64::from(screen_x - rc.left) / scale;
         let y = f64::from(screen_y - rc.top) / scale;

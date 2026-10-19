@@ -178,6 +178,54 @@ keeps a second copy.
 `claude plugin uninstall colai` removes the plugin; the three directories above are yours
 to delete.
 
+## What the plugin runs, reads, writes and sends
+
+Everything colai does, by the piece that does it.
+
+**The `SessionStart` hook** (`hooks/say-colai-is-here.sh`) reads the session id from the hook's
+input, checks whether the toolbar is already running (its PID file in
+`~/.config/ai.colai.toolbar/`), and if not starts it with `bin/colai-toolbar show --in <session>`.
+It prints one status line, the `🪼 Colai is running` message you see at the start of a session.
+Set `COLAI_AUTOSTART=0` to stop it starting the toolbar.
+
+**The `UserPromptSubmit` hook** (`hooks/take-what-colai-staged.sh`) looks in
+`~/.config/ai.colai.toolbar/outbox/<this session>/` for marks you sent to this conversation. It
+adds the text of each one (`say.txt`, which the toolbar wrote) to the prompt you are submitting,
+then deletes that mark. It reads nothing else and sends nothing.
+
+**The mod** (`hooks/bridge.ts`) runs inside each Claude Code session. Every second and a half it:
+
+- writes the current time to `~/.config/ai.colai.toolbar/outbox/<session>/.bridge`, so the toolbar
+  knows a session is listening;
+- reads any mark waiting in that folder and submits its text (`say.txt`) to the session as your
+  own prompt — the words you typed in the toolbar, a description of what you pointed at, and the
+  paths of the pictures it saved — first writing a `delivered` file beside it, so no mark is ever
+  submitted twice;
+- answers the toolbar's questions about your artifacts: for a question file in `.ask/`, it calls
+  Claude's own `Artifact` tool with `action: "list"` (and the artifact type, when one is asked
+  for), and writes the listing back as `<id>.answer.json`. That is the only tool it calls.
+
+It reads `XDG_CONFIG_HOME`, `HOME` or `USERPROFILE` to find that folder, and nothing else from
+your environment.
+
+**The toolbar** is the program in `platforms/<system>/bin/`, unpacked on first run into
+`~/.cache/colai/` after its SHA-256 is checked against the `.sha256` file beside it. Its source is
+`toolbar/` in this repository. It:
+
+- captures the part of your screen you mark, and saves pictures for a chat to read in
+  `.colai/marks/` of that project;
+- reads which window is in front, and Claude Code's own session list and transcripts in
+  `~/.claude/` (to show your conversations and mirror their replies), never writing there;
+- runs the `claude` command you already have: to start a conversation you send a mark to, to hand
+  a mark to one already open, and to run a scheduled task you set up when it comes due;
+- opens pages in your browser: claude.ai pages from the Artifacts menu and Claude Code's
+  scheduled-tasks page, and brings Claude Desktop forward;
+- writes its own settings and state to the folders in the table above, and a short log of
+  problems to `~/.config/ai.colai.toolbar/colai.log`.
+
+It sends nothing over the network itself, apart from loading preview pictures from
+`cdn.21st.dev` when you open the component library (see [What a mark sends](#what-a-mark-sends)).
+
 ## Troubleshooting
 
 **Nothing appears.** Run `colai-toolbar show` in a terminal and read what it says — the two

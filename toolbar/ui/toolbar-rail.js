@@ -8,85 +8,62 @@
 // conversation key is a control on it, and the menu it opens is what makes the rest of this
 // mean anything. Sending is elsewhere; choosing is here.
 
+/*
+ * The toolbar's icons, in Claude's own icon language — taken from Claude Desktop's, so the rail
+ * reads as part of Claude: a 20×20 grid with the drawing inside about 3–17, hairline 1px lines
+ * on .5 coordinates, round caps and joins, 1.5 corner radii, one colour (currentColor), no fills
+ * but the odd dot. Each value is the inner markup; `icon()` wraps it.
+ */
 const GLYPHS = {
-  pointer: '<path d="M5 3.5l14.5 7.2-6.3 1.6-2.3 6.1z"/><path d="M12.4 12.3l5.6 5.7"/>',
-  pointAt:
-    '<path d="M12 21s-6-5.6-6-10.4a6 6 0 0 1 12 0C18 15.4 12 21 12 21z"/><circle cx="12" cy="10.5" r="2.2" fill="currentColor" stroke="none"/>',
-  draw: '<path d="M3 20.5c3-6 6-8 8.5-8 2 0 2 2.5 0 3.5-2.5 1.2-1.5 4 1 3 4-1.5 5-6 8.5-10.5"/><circle cx="21" cy="8.5" r="1.8" fill="currentColor" stroke="none"/>',
-  arrow: '<path d="M4.5 19.5L19 5"/><path d="M11.5 5H19v7.5"/>',
-  line: '<path d="M4.5 19.5L19.5 4.5"/>',
-  highlight:
-    '<path d="M4 20.5h16" stroke-width="3.4" opacity="0.45"/><path d="M8.5 15.5l6.6-9.6 3.6 2.6-6.6 9.6z"/><path d="M8.5 15.5l3.6 2.6"/>',
-  shape: '<rect x="3" y="3" width="11" height="11" rx="1.5"/><circle cx="15.5" cy="15.5" r="5.5"/>',
-  design:
-    '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/><circle cx="15" cy="15" r="1.4" fill="currentColor" stroke="none"/>',
-  undo: '<path d="M3.5 7v6h6"/><path d="M20.5 17a8.5 8.5 0 0 0-14.3-6.2L3.5 13"/>',
-  redo: '<path d="M20.5 7v6h-6"/><path d="M3.5 17a8.5 8.5 0 0 1 14.3-6.2L20.5 13"/>',
-  box: '<rect x="3" y="3" width="18" height="18" rx="2"/>',
-  circle: '<circle cx="12" cy="12" r="9"/>',
-  wireframe:
-    '<rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 2.5"/><path d="M7 8h10M7 12h6M7 16h8"/>',
-  component:
-    '<rect x="2.5" y="2.5" width="8.5" height="8.5" rx="1.6"/><rect x="13" y="13" width="8.5" height="8.5" rx="1.6"/><path d="M11 6.75h4.25a2 2 0 0 1 2 2V13"/>',
-  system:
-    '<rect x="3" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.6" fill="currentColor" stroke="none"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.6"/>',
-  // The design questions the toolbar PRD asks of a region: inspect is a magnifier, matching
-  // to a token is a target, and a redline is a dimension line with end ticks.
-  inspect: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.2 15.2L21 21"/>',
-  match: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.4"/>',
-  redline: '<path d="M4 7v10M20 7v10"/><path d="M4 12h16"/><path d="M7 9l-3 3 3 3M17 9l3 3-3 3"/>',
-  screenshot:
-    '<path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/>',
-  // Review: an eye over a card. What is about to change, seen before it does.
-  review:
-    '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 12c1.5-2 3.2-3 5-3s3.5 1 5 3c-1.5 2-3.2 3-5 3s-3.5-1-5-3z"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
-  // Context map: a small graph of connected nodes — slices of context, joined.
-  contextMap:
-    '<circle cx="6" cy="7" r="2"/><circle cx="17.5" cy="6" r="2"/><circle cx="12" cy="17.5" r="2"/><path d="M7.7 8.5l3.1 7.2M15.7 7.4l-2.8 8.3M8 6.7l7.5-.5"/>',
-  send: '<path d="M21 3L10.5 13.5"/><path d="M21 3l-6.8 18-3.7-7.5L3 9.8z"/>',
-  // Scheduled tasks: a clock. The hands point to the top-right, the way a clock face is drawn
-  // when it is standing in for "later" rather than telling a particular time.
-  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3.4 2"/>',
-  // The four artifact kinds: an artboard, a page, a screen on a stand, a bar chart.
-  artDesign: '<rect x="3" y="4" width="18" height="16" rx="2"/><rect x="6" y="7" width="7" height="5" rx="1"/><path d="M15.5 8h2.5M15.5 11h2.5M6 15.5h12"/>',
-  artDocs: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M8.5 12.5h7M8.5 16h5"/>',
-  artSlides: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/><path d="M7 8.5h6M7 11.5h4"/>',
-  artDashboard: '<path d="M6 19v-6M11 19V6M16 19v-9"/><path d="M3.5 20.5h17"/>',
-  close: '<path d="M7 7l10 10M17 7L7 17"/>',
-  folder:
-    '<path d="M3 7.5a2 2 0 0 1 2-2h3.6l2 2.4H19a2 2 0 0 1 2 2v7.6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
-  stop: '<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/>',
-  measure: '<path d="M4 6v12M20 6v12M4 12h16"/><path d="M8.5 9l-3 3 3 3M15.5 9l3 3-3 3"/>',
-  record:
-    '<rect x="2.5" y="5" width="14" height="14" rx="2.5"/><path d="M16.5 10.2l5-2.7v9l-5-2.7z"/>',
-  colour:
-    '<path d="M12 3.5s6 6.4 6 10.1a6 6 0 0 1-12 0C6 9.9 12 3.5 12 3.5z"/><path d="M8.6 14.4a3.4 3.4 0 0 0 3.4 3.2"/>',
-  // Git, drawn the way git draws itself: commits are nodes and branches are the lines
-  // between them. Six that read as one family at seventeen pixels, which is what a rail
-  // this size can carry.
-  gitBranch:
-    '<circle cx="6.5" cy="5.5" r="2.3"/><circle cx="6.5" cy="18.5" r="2.3"/><circle cx="17.5" cy="8.5" r="2.3"/><path d="M6.5 7.8v8.4"/><path d="M17.5 10.8c0 3.6-3.1 4.7-6.7 5.3"/>',
-  gitCommit: '<circle cx="12" cy="12" r="3.6"/><path d="M2.5 12h5.9M15.6 12h5.9"/>',
-  gitAdd:
-    '<path d="M13.5 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5z"/><path d="M13.5 3v5.5H19"/><path d="M12 12.5v5M9.5 15h5"/>',
-  gitIgnore:
-    '<path d="M13.5 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5z"/><path d="M13.5 3v5.5H19"/><path d="M8.8 17.2l6.4-7.4"/>',
-  gitPush: '<path d="M4 4h16"/><path d="M12 20.5V8.2"/><path d="M7.2 13L12 8.2l4.8 4.8"/>',
-  gitRebase:
-    '<circle cx="6.5" cy="5.5" r="2.2"/><circle cx="6.5" cy="18.5" r="2.2"/><circle cx="17.5" cy="12" r="2.2"/><path d="M6.5 7.7v8.6"/><path d="M8.7 5.5h3.6a3.5 3.5 0 0 1 3.5 3.5v.9"/>',
-  // The read side of git the toolbar PRD asks for. Same node-and-line family: blame is which
-  // commit a line came from (the middle node filled, a line out to what was marked); diff is
-  // a plus over a minus; a pull request is a branch merging with an arrow; history is time.
-  gitBlame:
-    '<circle cx="7" cy="6" r="2.1"/><circle cx="7" cy="12" r="2.1" fill="currentColor"/><circle cx="7" cy="18" r="2.1"/><path d="M7 8.1v1.8M7 14.1v1.8"/><path d="M10.6 12H19"/>',
-  gitDiff: '<path d="M6 8h5M8.5 5.5v5"/><path d="M13 16h5"/>',
-  gitPr: '<circle cx="6.5" cy="6" r="2.2"/><circle cx="6.5" cy="18" r="2.2"/><circle cx="17.5" cy="18" r="2.2"/><path d="M6.5 8.2v7.6"/><path d="M17.5 15.8V11a3 3 0 0 0-3-3h-3.4"/><path d="M12.7 5.6l-2 2.4 2.4 1z" fill="currentColor" stroke="none"/>',
-  gitHistory: '<circle cx="12" cy="12" r="8"/><path d="M12 7.6V12l3 1.8"/>',
-  more: '<circle cx="6" cy="6" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="6" r="1.7" fill="currentColor" stroke="none"/><circle cx="18" cy="6" r="1.7" fill="currentColor" stroke="none"/><circle cx="6" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="6" cy="18" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="18" r="1.7" fill="currentColor" stroke="none"/><circle cx="18" cy="18" r="1.7" fill="currentColor" stroke="none"/>',
+  pointer: '<path d="M5.5 3.5v11.5l3-2.8 2 4.5 1.8-.8-2-4.4h4.2z"/>',
+  pointAt: '<path d="M9.5 9.5l7 2.6-3 1.1 2.5 2.5-1.3 1.3-2.5-2.5-1.1 3z"/><path d="M7 3v2.5M3 7h2.5M4.2 4.2l1.6 1.6"/>',
+  draw: '<path d="M12.6 4.4a1.4 1.4 0 0 1 2 0l1 1a1.4 1.4 0 0 1 0 2L8 15l-3.5 1 1-3.5z"/><path d="M11.5 5.5l3 3"/><path d="M10.5 16.5c1.2-1.2 2-1.2 2.6-.3.6.9 1.5.9 2.9-.4"/>',
+  arrow: '<path d="M4.5 15.5l11-11"/><path d="M8.5 4.5h7v7"/>',
+  line: '<path d="M5.6 14.4l8.8-8.8"/><circle cx="4.5" cy="15.5" r="1.5"/><circle cx="15.5" cy="4.5" r="1.5"/>',
+  highlight: '<path d="M11.8 3.7l4.5 4.5-6.6 6.6-4.5-4.5z"/><path d="M5.2 10.3l-1.1 3.2 2.4 2.4 3.2-1.1"/><path d="M4.1 13.5L2.5 15.1"/><path d="M11.5 16.5h5"/>',
+  shape: '<rect x="3.5" y="3.5" width="2" height="2" rx=".5"/><rect x="14.5" y="3.5" width="2" height="2" rx=".5"/><rect x="3.5" y="14.5" width="2" height="2" rx=".5"/><rect x="14.5" y="14.5" width="2" height="2" rx=".5"/><path d="M5.5 4.5h9M5.5 15.5h9M4.5 5.5v9M15.5 5.5v9"/>',
+  design: '<path d="M10 3.5l4.5 5.5-2 5.5h-5l-2-5.5z"/><path d="M10 3.5v5"/><circle cx="10" cy="9.5" r="1"/><path d="M7.5 16.5h5"/>',
+  undo: '<path d="M7.5 4.5l-3 3 3 3"/><path d="M4.5 7.5h7a4 4 0 0 1 0 8h-4"/>',
+  redo: '<path d="M12.5 4.5l3 3-3 3"/><path d="M15.5 7.5h-7a4 4 0 0 0 0 8h4"/>',
+  box: '<rect x="3.5" y="4.5" width="13" height="11" rx="1.5"/>',
+  circle: '<ellipse cx="10" cy="10" rx="6.5" ry="5.5"/>',
+  wireframe: '<rect x="3.5" y="3.5" width="13" height="13" rx="1.5"/><path d="M3.5 7.5h13M7.5 7.5v9"/><path d="M10.5 10.5h3.5M10.5 13.5h2"/>',
+  component: '<path d="M10 2l2.8 2.8L10 7.6 7.2 4.8z"/><path d="M10 12.4l2.8 2.8L10 18l-2.8-2.8z"/><path d="M4.8 7.2L7.6 10l-2.8 2.8L2 10z"/><path d="M15.2 7.2L18 10l-2.8 2.8-2.8-2.8z"/>',
+  system: '<path d="M10 3.5l6.5 3.5-6.5 3.5-6.5-3.5z"/><path d="M3.5 10l6.5 3.5 6.5-3.5"/><path d="M3.5 13l6.5 3.5 6.5-3.5"/>',
+  inspect: '<path d="M8.5 15.5H5a1.5 1.5 0 0 1-1.5-1.5V5A1.5 1.5 0 0 1 5 3.5h9A1.5 1.5 0 0 1 15.5 5v3.5"/><circle cx="12.5" cy="12.5" r="2.5"/><path d="M14.3 14.3l2.2 2.2"/>',
+  match: '<rect x="3.5" y="4.5" width="5" height="7" rx="1.5"/><rect x="11.5" y="4.5" width="5" height="7" rx="1.5"/><path d="M5.5 15.5h9"/><path d="M7 14l-1.5 1.5L7 17M13 14l1.5 1.5L13 17"/>',
+  redline: '<path d="M3.5 5.5v10M16.5 5.5v10"/><path d="M5.5 10.5h9"/><path d="M7.5 8.5l-2 2 2 2M12.5 8.5l2 2-2 2"/>',
+  screenshot: '<path d="M3.5 6.5V5A1.5 1.5 0 0 1 5 3.5h1.5M13.5 3.5H15A1.5 1.5 0 0 1 16.5 5v1.5M16.5 13.5V15a1.5 1.5 0 0 1-1.5 1.5h-1.5M6.5 16.5H5A1.5 1.5 0 0 1 3.5 15v-1.5"/><circle cx="10" cy="10" r="2.5"/>',
+  review: '<path d="M2.5 10c1.8-3.3 4.3-5 7.5-5s5.7 1.7 7.5 5c-1.8 3.3-4.3 5-7.5 5s-5.7-1.7-7.5-5z"/><circle cx="10" cy="10" r="2.5"/>',
+  contextMap: '<circle cx="5" cy="5.5" r="2"/><circle cx="15" cy="5.5" r="2"/><circle cx="10" cy="15" r="2"/><path d="M7 5.5h6M5.9 7.3l3.2 5.9M14.1 7.3l-3.2 5.9"/>',
+  send: '<path d="M10 16V4.5"/><path d="M5 9.5l5-5 5 5"/>',
+  clock: '<circle cx="10" cy="10" r="6.5"/><path d="M10 6.5V10l2.5 1.5"/>',
+  artifacts: '<rect x="3.5" y="6.5" width="9" height="10" rx="1.5"/><path d="M6.5 6.5V5A1.5 1.5 0 0 1 8 3.5h7A1.5 1.5 0 0 1 16.5 5v7a1.5 1.5 0 0 1-1.5 1.5h-2.5"/>',
+  artDesign: '<rect x="6.5" y="6.5" width="7" height="7" rx="1"/><path d="M6.5 3.5V5M3.5 6.5H5M13.5 3.5V5M16.5 6.5H15M6.5 16.5V15M3.5 13.5H5M13.5 16.5V15M16.5 13.5H15"/>',
+  artDocs: '<path d="M11.5 3.5H6a1.5 1.5 0 0 0-1.5 1.5v10A1.5 1.5 0 0 0 6 16.5h8a1.5 1.5 0 0 0 1.5-1.5V7.5z"/><path d="M11.5 3.5V6a1.5 1.5 0 0 0 1.5 1.5h2.5"/><path d="M7.5 10.5h5M7.5 13.5h3"/>',
+  artSlides: '<rect x="3.5" y="3.5" width="13" height="9" rx="1.5"/><path d="M8 12.5l-1.5 4M12 12.5l1.5 4"/><path d="M6.5 6.5h4M6.5 9.5h7"/>',
+  artDashboard: '<path d="M3.5 3.5V15A1.5 1.5 0 0 0 5 16.5h11.5"/><path d="M7.5 13.5v-3M10.5 13.5v-6M13.5 13.5v-4"/>',
+  close: '<path d="M5.5 5.5l9 9M14.5 5.5l-9 9"/>',
+  folder: '<path d="M3.5 6A1.5 1.5 0 0 1 5 4.5h3l1.5 2H15A1.5 1.5 0 0 1 16.5 8v6.5A1.5 1.5 0 0 1 15 16H5a1.5 1.5 0 0 1-1.5-1.5z"/>',
+  stop: '<circle cx="10" cy="10" r="6.5"/><rect x="8" y="8" width="4" height="4" rx=".75" fill="currentColor" stroke="none"/>',
+  measure: '<rect x="3.5" y="6.5" width="13" height="7" rx="1.5"/><path d="M6.5 6.5V9M10 6.5v4M13.5 6.5V9"/>',
+  record: '<circle cx="10" cy="10" r="6.5"/><circle cx="10" cy="10" r="3" fill="currentColor" stroke="none"/>',
+  colour: '<path d="M13.5 8.5L7 15H5v-2l6.5-6.5"/><path d="M10.5 5.5l4 4"/><path d="M12.5 7.5L15 5a1.4 1.4 0 0 0-2-2l-2.5 2.5"/><path d="M5 15l-1.5 1.5"/>',
+  gitBranch: '<circle cx="6.5" cy="4.5" r="1.5"/><circle cx="6.5" cy="15.5" r="1.5"/><circle cx="13.5" cy="6.5" r="1.5"/><path d="M6.5 6v8"/><path d="M13.5 8c0 3.5-7 2.5-7 6"/>',
+  gitCommit: '<circle cx="10" cy="10" r="2.5"/><path d="M3 10h4.5M12.5 10H17"/>',
+  gitAdd: '<path d="M11.5 3.5H6a1.5 1.5 0 0 0-1.5 1.5v10A1.5 1.5 0 0 0 6 16.5h8a1.5 1.5 0 0 0 1.5-1.5V7.5z"/><path d="M11.5 3.5V6a1.5 1.5 0 0 0 1.5 1.5h2.5"/><path d="M10 9.5v5M7.5 12h5"/>',
+  gitIgnore: '<path d="M11.5 3.5H6a1.5 1.5 0 0 0-1.5 1.5v10A1.5 1.5 0 0 0 6 16.5h8a1.5 1.5 0 0 0 1.5-1.5V7.5z"/><path d="M11.5 3.5V6a1.5 1.5 0 0 0 1.5 1.5h2.5"/><path d="M7.5 14l5-4.5"/>',
+  gitPush: '<path d="M4.5 3.5h11"/><path d="M10 14V6.5"/><path d="M6.5 10L10 6.5l3.5 3.5"/><circle cx="10" cy="15.5" r="1.5"/>',
+  gitRebase: '<circle cx="6.5" cy="4.5" r="1.5"/><circle cx="6.5" cy="15.5" r="1.5"/><circle cx="13.5" cy="15.5" r="1.5"/><path d="M6.5 6v8"/><path d="M8 4.5h2a3.5 3.5 0 0 1 3.5 3.5v6"/><path d="M11.5 11.5l2 2 2-2"/>',
+  gitBlame: '<circle cx="5" cy="4.5" r="1.5"/><circle cx="5" cy="9.5" r="1.5"/><circle cx="5" cy="14.5" r="1.5"/><path d="M5 6v2M5 11v2"/><path d="M9.5 4.5h7M9.5 9.5h5M9.5 14.5h6"/>',
+  gitDiff: '<path d="M4 6.5h5M6.5 4v5"/><path d="M11 13.5h5"/><path d="M14.5 4.5l-9 11"/>',
+  gitPr: '<circle cx="5.5" cy="4.5" r="1.5"/><circle cx="5.5" cy="15.5" r="1.5"/><circle cx="14.5" cy="15.5" r="1.5"/><path d="M5.5 6v8"/><path d="M14.5 14V7.5a2 2 0 0 0-2-2h-3.5"/><path d="M11 3.5l-2 2 2 2"/>',
+  gitHistory: '<path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6L3.5 7.3"/><path d="M3.5 3.8v3.5H7"/><path d="M10 6.5V10l2.5 1.5"/>',
+  more: '<rect x="3.5" y="3.5" width="5" height="5" rx="1.5"/><circle cx="14" cy="6" r="2.5"/><path d="M6 11.5l2.6 5H3.4z"/><path d="M14 11.5v5M11.5 14h5"/>',
 };
 
 function icon(name, size) {
-  return `<svg width="${size || 17}" height="${size || 17}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${GLYPHS[name]}</svg>`;
+  return `<svg width="${size || 17}" height="${size || 17}" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${GLYPHS[name]}</svg>`;
 }
 
 /*
@@ -178,17 +155,11 @@ function buildRail() {
   );
   dividers[3].after(utilities);
 
-  // Artifacts: the person's designs, docs, slides and dashboards, and making new ones. Where undo
-  // and redo stood — those are Ctrl+Z and Ctrl+Shift+Z still, without spending two keys on it.
-  const artifacts = document.createDocumentFragment();
-  for (const kind of ARTIFACT_KINDS) {
-    // A door (Claude Design) opens its own place; the rest open a shelf.
-    artifacts.append(
-      kind.door
-        ? key(`art${kind.id}`, kind.title, kind.glyph, () => openDoor(kind.door))
-        : key(`art${kind.id}`, kind.title, kind.glyph, () => openArtifacts(kind.id), MENU),
-    );
-  }
+  // Artifacts: Claude Design, and the person's docs, slides and dashboards. One key, where undo and
+  // redo stood (Ctrl+Z and Ctrl+Shift+Z still): its menu holds the four, so the rail stays short.
+  const artifacts = key("artifacts", "Artifacts", "artifacts", () => toggleArtMenu(), MENU);
+  artifacts.addEventListener("mouseenter", hoverArtMenu);
+  artifacts.addEventListener("mouseleave", leaveArtMenu);
   dividers[4].after(artifacts);
 
   const chat = document.createElement("button");

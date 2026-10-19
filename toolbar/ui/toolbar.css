@@ -4826,8 +4826,48 @@ body {
   color: var(--text-strong);
   background: color-mix(in srgb, var(--fg) 8%, transparent);
 }
-.flyout.art {
+/* The artifacts key's drop: a short menu, and the hovered kind's shelf beside it — two cards, one
+   holder. The holder draws nothing; the shelf sits on the far side from the rail. */
+.flyout.kit.art {
+  width: auto;
+  padding: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+.flyout.art[data-toward="left"] {
+  flex-direction: row-reverse;
+}
+.art-menu {
+  border-radius: 12px;
+  background: var(--chrome-strong);
+  border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 60%);
+  flex: none;
+  width: 176px;
+  padding: 6px;
+}
+.art-row svg {
+  flex: none;
+  color: var(--muted);
+}
+.art-row[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+}
+.art-row[aria-pressed="true"] svg {
+  color: var(--text-strong);
+}
+.art-shelf {
+  border-radius: 12px;
+  background: var(--chrome-strong);
+  border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 60%);
+  flex: none;
   width: 340px;
+  padding: 10px;
 }
 /* Two across, like the gallery: a preview, then the name, then what it is. */
 .art-grid {
@@ -4952,3 +4992,4 @@ body {
 .art-trouble {
   color: var(--text);
 }
+
